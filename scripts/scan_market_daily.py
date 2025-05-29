@@ -1,0 +1,634 @@
+# Standard library imports
+import os
+import time
+import logging
+import datetime
+import functools
+import concurrent.futures
+import sys
+
+# Third-party imports
+import numpy as np  # Make sure numpy is properly imported
+import pandas as pd
+import pytz
+from dateutil.relativedelta import relativedelta
+from kiteconnect import KiteConnect
+
+# Add parent directory to path so we can access config
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import configuration
+from config import get_config
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs', 'scan_market_daily.log'))
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# -----------------------------
+# Settings & File Paths
+# -----------------------------
+# Get config
+config = get_config()
+
+# Zerodha Kite Connect credentials from config
+KITE_API_KEY = config.get('API', 'api_key')
+ACCESS_TOKEN = config.get('API', 'access_token')
+
+# Max workers for parallel processing
+MAX_WORKERS = 5  # Adjust based on your system capabilities
+
+# Global Parameters
+ACCOUNT_VALUE = config.get_float('Trading', 'account_value', fallback=100000.0)
+VOLUME_SPIKE_THRESHOLD = 4.0  # Modified threshold for volume spike (not used directly now)
+MAX_CONCURRENT_REQUESTS = 3  # Limit concurrent API requests
+REQUEST_DELAY = 0.5  # Add delay between API requests (seconds)
+
+# Define the input file path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DAILY_DIR = os.path.join(PROJECT_ROOT, "Daily")
+input_file_path = os.path.join(DAILY_DIR, "Ticker.xlsx")
+
+# Construct the output file paths with formatted date and time
+today = datetime.datetime.now()
+formatted_date = today.strftime("%d_%m_%Y")
+formatted_time = today.strftime("%H_%M")
+output_file_path = os.path.join(DAILY_DIR, f'Custom_Scanner_{formatted_date}_{formatted_time}.xlsx')
+
+# Mapping for interval to Kite Connect API parameters
+interval_mapping = {
+    '5m': '5minute',
+    '1h': '60minute',
+    '1d': 'day',
+    '1w': 'week'
+}
+
+# Define the required columns for the summary output
+required_columns = [
+    'Ticker', 'SL_New', 'TP_New', 'PosSize', 'Daily_Slope'
+]
+
+
+# -----------------------------
+# Data Cache Implementation
+# -----------------------------
+class DataCache:
+    def __init__(self):
+        self.instruments_df = None
+        self.instrument_tokens = {}
+        self.data_cache = {}
+
+
+cache = DataCache()
+
+# LTP cache to reduce API calls for current prices
+ltp_cache = {}
+ltp_timestamp = {}
+LTP_CACHE_TTL = 60  # seconds
+
+
+# -----------------------------
+# Kite Connect Client Initialization
+# -----------------------------
+def initialize_kite():
+    """Initialize Kite Connect client with error handling"""
+    try:
+        kite = KiteConnect(api_key=KITE_API_KEY)
+        kite.set_access_token(ACCESS_TOKEN)
+        return kite
+    except Exception as e:
+        logger.error(f"Failed to initialize Kite Connect: {e}")
+        raise
+
+
+kite = initialize_kite()
+
+
+# -----------------------------
+# Instrument Token Lookup Functions
+# -----------------------------
+def get_instruments_data():
+    """Fetch and cache instruments data from Zerodha"""
+    if cache.instruments_df is None:
+        try:
+            instruments = kite.instruments("NSE")
+            if instruments:
+                cache.instruments_df = pd.DataFrame(instruments)
+                logger.info("Fetched instruments data successfully.")
+            else:
+                # If instruments is empty, try to load from backup file
+                try:
+                    backup_file = os.path.join(DAILY_DIR, "instruments_backup.csv")
+                    if os.path.exists(backup_file):
+                        cache.instruments_df = pd.read_csv(backup_file)
+                        logger.info("Loaded instruments data from backup file.")
+                    else:
+                        cache.instruments_df = pd.DataFrame()
+                        logger.error("No instruments data available and no backup file found.")
+                except Exception as e:
+                    logger.error(f"Error loading backup instruments data: {e}")
+                    cache.instruments_df = pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error fetching instruments data: {e}")
+            # Try to load from backup file
+            try:
+                backup_file = os.path.join(DAILY_DIR, "instruments_backup.csv")
+                if os.path.exists(backup_file):
+                    cache.instruments_df = pd.read_csv(backup_file)
+                    logger.info("Loaded instruments data from backup file after API error.")
+                else:
+                    cache.instruments_df = pd.DataFrame()
+            except Exception as backup_e:
+                logger.error(f"Error loading backup instruments data: {backup_e}")
+                cache.instruments_df = pd.DataFrame()
+    return cache.instruments_df
+
+
+def save_instruments_data():
+    """Save instruments data to a backup file for future use"""
+    try:
+        instruments = kite.instruments("NSE")
+        if instruments:
+            df = pd.DataFrame(instruments)
+            backup_file = os.path.join(DAILY_DIR, "instruments_backup.csv")
+            df.to_csv(backup_file, index=False)
+            logger.info(f"Successfully saved instruments data to {backup_file}")
+            return True
+        else:
+            logger.error("No instruments data to save")
+            return False
+    except Exception as e:
+        logger.error(f"Error saving instruments data: {e}")
+        return False
+
+
+def get_instrument_token(ticker):
+    """Get instrument token for a ticker with caching"""
+    if ticker in cache.instrument_tokens:
+        return cache.instrument_tokens[ticker]
+
+    df = get_instruments_data()
+    if df.empty:
+        logger.warning("Instruments data is empty. Cannot lookup instrument token.")
+        return None
+
+    ticker_upper = ticker.upper()
+    
+    # Try to find by exact match on trading symbol first
+    if 'tradingsymbol' in df.columns:
+        df_filtered = df[df['tradingsymbol'].str.upper() == ticker_upper]
+        if not df_filtered.empty:
+            token = int(df_filtered.iloc[0]['instrument_token'])
+            cache.instrument_tokens[ticker] = token
+            return token
+    
+    # If not found and we have a manual mapping, use that
+    manual_tokens = {
+        "JYOTISTRUC": 2695937,
+        # Add more manual mappings as needed
+    }
+    
+    if ticker_upper in manual_tokens:
+        token = manual_tokens[ticker_upper]
+        cache.instrument_tokens[ticker] = token
+        logger.info(f"Using manually configured token {token} for {ticker}")
+        return token
+    
+    logger.warning(f"Instrument token for {ticker} not found.")
+    return None
+
+
+# -----------------------------
+# Data Fetching Functions
+# -----------------------------
+def fetch_data_kite(ticker, interval, from_date, to_date):
+    """Fetch historical data with caching and error handling"""
+    import time
+
+    cache_key = f"{ticker}_{interval}_{from_date}_{to_date}"
+
+    if cache_key in cache.data_cache:
+        return cache.data_cache[cache_key]
+
+    token = get_instrument_token(ticker)
+    if token is None:
+        logger.warning(f"Instrument token for {ticker} not found.")
+        return pd.DataFrame()
+
+    max_retries = 3
+    retry_delay = 2  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Fetching data for {ticker} with interval {interval} from {from_date} to {to_date}...")
+            data = kite.historical_data(token, from_date, to_date, interval)
+
+            if not data:
+                logger.warning(f"No data returned for {ticker}.")
+                return pd.DataFrame()
+
+            df = pd.DataFrame(data)
+            df.rename(columns={
+                "date": "Date",
+                "open": "Open",
+                "high": "High",
+                "low": "Low",
+                "close": "Close",
+                "volume": "Volume"
+            }, inplace=True)
+
+            df['Date'] = pd.to_datetime(df['Date'])
+            df['Ticker'] = ticker
+
+            cache.data_cache[cache_key] = df
+            logger.info(f"Data successfully fetched for {ticker}.")
+            return df
+
+        except Exception as e:
+            if "Too many requests" in str(e) and attempt < max_retries - 1:
+                wait_time = retry_delay * (attempt + 1)
+                logger.warning(
+                    f"Rate limit hit for {ticker}. Waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}...")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"Error fetching data for {ticker}: {e}")
+                return pd.DataFrame()
+
+    logger.error(f"Failed to fetch data for {ticker} after {max_retries} attempts.")
+    return pd.DataFrame()
+
+
+def fetch_current_close(ticker):
+    """Fetch current close price with caching to reduce API calls"""
+    current_time = time.time()
+
+    if ticker in ltp_cache and current_time - ltp_timestamp.get(ticker, 0) < LTP_CACHE_TTL:
+        return ltp_cache[ticker]
+
+    token = get_instrument_token(ticker)
+    if token is None:
+        logger.warning(f"Instrument token for {ticker} not found.")
+        return np.nan
+
+    try:
+        ltp_data = kite.ltp(f"NSE:{ticker}")
+        key = f"NSE:{ticker}"
+
+        if ltp_data and key in ltp_data:
+            current_close = ltp_data[key]["last_price"]
+            ltp_cache[ticker] = current_close
+            ltp_timestamp[ticker] = current_time
+            logger.info(f"[Real-time] Ticker {ticker} - Current Close: {current_close}")
+            return current_close
+        else:
+            logger.warning(f"No LTP data for {ticker}.")
+            return np.nan
+
+    except Exception as e:
+        logger.error(f"Error fetching current close for {ticker}: {e}")
+        return np.nan
+
+
+# -----------------------------
+# Technical Indicator Calculations
+# -----------------------------
+def calculate_weekly_vwap(data):
+    """Calculate Weekly Volume Weighted Average Price"""
+    data['Week'] = data['Date'].dt.isocalendar().week
+    data['Year'] = data['Date'].dt.isocalendar().year
+    data['TP'] = (data['High'] + data['Low'] + data['Close']) / 3
+    data['TPV'] = data['TP'] * data['Volume']
+    weekly_data = data.groupby(['Year', 'Week']).agg({
+        'TPV': 'sum',
+        'Volume': 'sum',
+        'Date': 'last'
+    }).reset_index()
+    weekly_data['Weekly_VWAP'] = weekly_data['TPV'] / weekly_data['Volume']
+    latest_vwap = weekly_data.iloc[-1]['Weekly_VWAP']
+    return latest_vwap
+
+
+def calculate_indicators_daily(daily_data):
+    """Calculate daily indicators including SMA, EMA, Keltner Channel, ATR, WM, etc."""
+    if len(daily_data) < 50:
+        logger.warning(
+            f"Insufficient daily data points. Only {len(daily_data)} records available, minimum of 50 required.")
+        return None
+
+    daily_data['Daily_20SMA'] = daily_data['Close'].rolling(window=20).mean()
+    daily_data['Daily_50EMA'] = daily_data['Close'].ewm(span=50, adjust=False).mean()
+
+    # Calculate additional EMA and WM (for condition 2)
+    daily_data['EMA21'] = daily_data['Close'].ewm(span=21, adjust=False).mean()
+    daily_data['WM'] = (daily_data['EMA21'] - daily_data['Daily_50EMA']) / 2
+
+    # Calculate ATR components
+    prev_close = daily_data['Close'].shift(1)
+    tr1 = daily_data['High'] - daily_data['Low']
+    tr2 = (daily_data['High'] - prev_close).abs()
+    tr3 = (daily_data['Low'] - prev_close).abs()
+    daily_data['TR'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    daily_data['ATR'] = daily_data['TR'].rolling(window=20).mean()
+
+    # Keltner Channel calculation (using 20-day SMA and 20-day ATR)
+    daily_data['KC_upper'] = daily_data['Daily_20SMA'] + (2 * daily_data['ATR'])
+    daily_data['KC_lower'] = daily_data['Daily_20SMA'] - (2 * daily_data['ATR'])
+
+    # Daily Slope calculation (8-day slope)
+    def calculate_slope(y):
+        if len(y) < 8 or y[-1] == 0:
+            return np.nan
+        return (np.polyfit(np.arange(len(y)), y, 1)[0] / y[-1]) * 100
+
+    daily_data['Daily_Slope'] = daily_data['Close'].rolling(window=8).apply(
+        calculate_slope, raw=True
+    )
+
+    # Calculate risk management parameters
+    daily_data['PosSize'] = ACCOUNT_VALUE / daily_data['Close']
+    daily_data['SL1'] = daily_data['Close'] - (1.2 * daily_data['ATR'])
+    daily_data['SL2'] = daily_data['Close'] - (3 * daily_data['ATR'])
+    daily_data['TP1'] = daily_data['Close'] + 2 * daily_data['ATR']
+
+    # Store previous day's low for SL adjustment
+    daily_data['Prev_Low'] = daily_data['Low'].shift(1)
+
+    return daily_data
+
+
+def calculate_hourly_indicators(hourly_data):
+    """Calculate hourly VWAP and ATR for SL and TP calculations"""
+    if len(hourly_data) < 20:
+        logger.warning(
+            f"Insufficient hourly data points. Only {len(hourly_data)} records available, minimum of 20 required.")
+        return None, None
+
+    hourly_data['Typical_Price'] = (hourly_data['High'] + hourly_data['Low'] + hourly_data['Close']) / 3
+    hourly_data['TPV'] = hourly_data['Typical_Price'] * hourly_data['Volume']
+    cumulative_tpv = hourly_data['TPV'].sum()
+    cumulative_volume = hourly_data['Volume'].sum()
+    hourly_vwap = cumulative_tpv / cumulative_volume if cumulative_volume > 0 else None
+
+    prev_close = hourly_data['Close'].shift(1)
+    tr1 = hourly_data['High'] - hourly_data['Low']
+    tr2 = (hourly_data['High'] - prev_close).abs()
+    tr3 = (hourly_data['Low'] - prev_close).abs()
+    hourly_data['TR'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    hourly_data['Hourly_ATR'] = hourly_data['TR'].rolling(window=14).mean()
+    latest_atr = hourly_data['Hourly_ATR'].iloc[-1]
+
+    return hourly_vwap, latest_atr
+
+
+# -----------------------------
+# Ticker Processing Functions
+# -----------------------------
+def process_ticker(ticker):
+    """Process a single ticker based on the modified screening conditions."""
+    if not isinstance(ticker, str) or ticker.strip() == "":
+        logger.warning(f"Skipping invalid ticker: {ticker}")
+        return None, None
+
+    logger.info(f"Processing {ticker} with daily timeframe analysis.")
+    now = datetime.datetime.now()
+
+    # Fetch data for different timeframes
+    from_date_weekly = (now - relativedelta(months=3)).strftime('%Y-%m-%d')
+    from_date_daily = (now - relativedelta(months=6)).strftime('%Y-%m-%d')
+    from_date_hourly = (now - relativedelta(days=10)).strftime('%Y-%m-%d')
+    to_date = now.strftime('%Y-%m-%d')
+
+    weekly_data = fetch_data_kite(ticker, interval_mapping['1w'], from_date_weekly, to_date)
+    daily_data = fetch_data_kite(ticker, interval_mapping['1d'], from_date_daily, to_date)
+    hourly_data = fetch_data_kite(ticker, interval_mapping['1h'], from_date_hourly, to_date)
+
+    if weekly_data.empty or daily_data.empty or hourly_data.empty:
+        logger.warning(f"Insufficient data for {ticker}, skipping.")
+        return ticker, None
+
+    try:
+        weekly_vwap = calculate_weekly_vwap(weekly_data)
+        daily_data_with_indicators = calculate_indicators_daily(daily_data)
+        hourly_vwap, hourly_atr = calculate_hourly_indicators(hourly_data)
+
+        if daily_data_with_indicators is None or hourly_vwap is None or hourly_atr is None:
+            logger.warning(f"Failed to calculate indicators for {ticker}.")
+            return ticker, None
+
+        current_bar = daily_data_with_indicators.iloc[-1]
+        current_close = current_bar['Close']
+
+        # Fetch real-time price if available
+        current_market_price = fetch_current_close(ticker)
+        if not np.isnan(current_market_price):
+            current_close = current_market_price
+
+        # --- Modified SL and TP Calculations ---
+        # Extra debug for ELECON
+        if ticker == 'ELECON':
+            logger.info(f"DEBUG - ELECON price: {current_close}, KC_upper: {current_bar['KC_upper']}, KC_lower: {current_bar['KC_lower']}, SMA20: {current_bar['Daily_20SMA']}, Prev_Low: {current_bar['Prev_Low']}")
+            
+        # Default SL is set as 98% of the daily KC lower channel
+        new_sl = current_bar['KC_lower'] * 0.98
+        
+        # New stop loss logic based on position relative to KC Upper and SMA20
+        if current_close > current_bar['KC_upper']:
+            # If price is above KC Upper Limit, SL should be adjusted to low of previous candle
+            new_sl = current_bar['Prev_Low']
+            logger.info(f"{ticker} - Price above KC Upper, setting SL to previous day's low: {new_sl}")
+        elif current_close > current_bar['Daily_20SMA'] and current_close < current_bar['KC_upper']:
+            # If price is above SMA20 and within KC Upper Channel, SL should be SMA20
+            new_sl = current_bar['Daily_20SMA']
+            logger.info(f"{ticker} - Price above SMA20 and within KC Upper, setting SL to SMA20: {new_sl}")
+        
+        # Extra debug for ELECON
+        if ticker == 'ELECON':
+            logger.info(f"DEBUG - ELECON final SL value: {new_sl}")
+            
+        risk = current_close - new_sl
+        new_tp = current_close + 2 * risk
+
+        # --- Screening Conditions ---
+        condition1 = current_close > weekly_vwap
+        condition2 = current_bar['WM'] > 0
+        condition3 = current_close > current_bar['Daily_20SMA']
+        condition4 = current_close >= current_bar['KC_upper']
+        spike_condition = False
+        if len(daily_data_with_indicators) >= 4:
+            avg_prev_current = daily_data_with_indicators['Volume'].iloc[-4:-1].mean()
+            spike_current = daily_data_with_indicators['Volume'].iloc[-1] >= 4 * avg_prev_current
+            spike_condition = spike_condition or spike_current
+        if len(daily_data_with_indicators) >= 5:
+            avg_prev_last = daily_data_with_indicators['Volume'].iloc[-5:-2].mean()
+            spike_last = daily_data_with_indicators['Volume'].iloc[-2] >= 4 * avg_prev_last
+            spike_condition = spike_condition or spike_last
+        condition5 = spike_condition
+
+        logger.info(f"{ticker} - Condition 1 (Current Close > Weekly VWAP): {condition1}")
+        logger.info(f"{ticker} - Condition 2 (WM > 0): {condition2}")
+        logger.info(f"{ticker} - Condition 3 (Current Close > SMA/Keltner Base): {condition3}")
+        logger.info(f"{ticker} - Condition 4 (Current Price >= Upper Keltner Channel): {condition4}")
+        logger.info(f"{ticker} - Condition 5 (4X Volume Spike): {condition5}")
+        logger.info(f"{ticker} - New SL: {new_sl}")
+        logger.info(f"{ticker} - New TP (Current Close + 2*Risk): {new_tp}")
+
+        if condition1 and condition2 and condition3 and condition4:
+            logger.info(f"{ticker} meets all screening conditions!")
+            # Build summary without the KC and Above_KC_Upper columns:
+            summary = pd.DataFrame({
+                'Ticker': [ticker],
+                'SL_New': [new_sl],
+                'TP_New': [new_tp],
+                'PosSize': [current_bar['PosSize']],
+                'Daily_Slope': [current_bar['Daily_Slope']]
+            })
+            return ticker, summary
+        else:
+            logger.info(f"{ticker} does not meet all screening conditions.")
+            return ticker, None
+
+    except Exception as e:
+        logger.error(f"Error processing {ticker}: {e}")
+        return ticker, None
+
+
+# -----------------------------
+# Parallel Processing Functions
+# -----------------------------
+def process_tickers_parallel(tickers):
+    """Process all tickers in parallel with rate limiting"""
+    results = []
+    missing_tickers = []
+    batch_size = MAX_CONCURRENT_REQUESTS
+    ticker_batches = [tickers[i:i + batch_size] for i in range(0, len(tickers), batch_size)]
+    logger.info(
+        f"Processing {len(tickers)} tickers in {len(ticker_batches)} batches of up to {batch_size} tickers each")
+
+    for batch_idx, ticker_batch in enumerate(ticker_batches):
+        logger.info(f"Processing batch {batch_idx + 1}/{len(ticker_batches)}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as executor:
+            futures = {executor.submit(process_ticker, ticker): ticker for ticker in ticker_batch}
+            for future in concurrent.futures.as_completed(futures):
+                ticker = futures[future]
+                try:
+                    ticker, ticker_result = future.result()
+                    if ticker_result is None:
+                        missing_tickers.append(ticker)
+                    else:
+                        results.append(ticker_result)
+                except Exception as e:
+                    logger.error(f"Error processing {ticker}: {e}")
+                    missing_tickers.append(ticker)
+        if batch_idx < len(ticker_batches) - 1:
+            delay = REQUEST_DELAY * batch_size
+            logger.info(f"Waiting {delay:.2f} seconds before starting next batch...")
+            time.sleep(delay)
+    return results, missing_tickers
+
+
+# -----------------------------
+# Excel Output Function
+# -----------------------------
+def write_results_to_excel(results, required_columns, output_file_path):
+    """Write results to Excel with proper sorting by Daily Slope"""
+    try:
+        if not results:
+            logger.info("No tickers met all conditions. Creating empty output file.")
+            pd.DataFrame(columns=required_columns).to_excel(output_file_path, sheet_name="Scanner_Results", index=False)
+            return
+
+        results_df = pd.concat(results)
+        
+        # Debug output to check SL values before sorting
+        debug_elecon = results_df[results_df['Ticker'] == 'ELECON']
+        if not debug_elecon.empty:
+            logger.info(f"DEBUG - ELECON SL_New before sort: {debug_elecon['SL_New'].iloc[0]}")
+            
+        results_df = results_df.sort_values(by='Daily_Slope', ascending=False)
+        
+        # Debug output to check SL values after sorting
+        debug_elecon = results_df[results_df['Ticker'] == 'ELECON'] 
+        if not debug_elecon.empty:
+            logger.info(f"DEBUG - ELECON SL_New after sort: {debug_elecon['SL_New'].iloc[0]}")
+            
+        # Rename SL_New and TP_New for final output clarity
+        results_df = results_df.rename(columns={
+            'SL_New': 'SL',
+            'TP_New': 'TP',
+            'Daily_Slope': 'Slope'
+        })
+        
+        # Debug output after rename
+        debug_elecon = results_df[results_df['Ticker'] == 'ELECON']
+        if not debug_elecon.empty:
+            logger.info(f"DEBUG - ELECON SL after rename: {debug_elecon['SL'].iloc[0]}")
+            
+        for col in ['SL', 'TP', 'PosSize', 'Slope']:
+            if col in results_df.columns:
+                results_df[col] = results_df[col].round(2)
+                
+        # Debug output after rounding
+        debug_elecon = results_df[results_df['Ticker'] == 'ELECON']
+        if not debug_elecon.empty:
+            logger.info(f"DEBUG - ELECON SL after rounding: {debug_elecon['SL'].iloc[0]}")
+            
+        # Save the dataframe as CSV for debugging
+        csv_path = os.path.join(os.path.dirname(output_file_path), 'debug_output.csv')
+        results_df.to_csv(csv_path, index=False)
+        logger.info(f"DEBUG - Saved CSV debug output to {csv_path}")
+        
+        results_df.to_excel(output_file_path, sheet_name="Scanner_Results", index=False)
+        logger.info(f"Successfully wrote {len(results_df)} qualified tickers to {output_file_path}")
+
+    except Exception as e:
+        logger.error(f"Error writing results to Excel file: {e}")
+
+
+# -----------------------------
+# Main Function
+# -----------------------------
+def main():
+    """Main function to run the stock scanner"""
+    start_time = time.time()
+
+    # First check if we need to initialize or update the instruments data backup
+    backup_file = os.path.join(DAILY_DIR, "instruments_backup.csv")
+    if not os.path.exists(backup_file):
+        logger.info("Instruments backup file not found. Attempting to create it...")
+        save_instruments_data()
+
+    # Attempt to preload the instruments data
+    get_instruments_data()
+    
+    try:
+        df_tickers = pd.read_excel(input_file_path, sheet_name='Ticker', engine='openpyxl')
+        tickers = df_tickers['Ticker'].str.strip().dropna().tolist()
+        logger.info(f"Loaded {len(tickers)} tickers for scanning")
+    except FileNotFoundError:
+        logger.error(f"Error: File not found at {input_file_path}")
+        exit()
+    except Exception as e:
+        logger.error(f"Error reading ticker file: {e}")
+        exit()
+
+    results, missing_tickers = process_tickers_parallel(tickers)
+    write_results_to_excel(results, required_columns, output_file_path)
+
+    if missing_tickers:
+        logger.warning(f"Unable to process {len(set(missing_tickers))} tickers: {', '.join(set(missing_tickers))}")
+
+    logger.info(f"Found {len(results)} tickers that met all conditions")
+    logger.info(f"Total execution time: {time.time() - start_time:.2f} seconds")
+
+
+# -----------------------------
+# Entry Point
+# -----------------------------
+if __name__ == "__main__":
+    main()

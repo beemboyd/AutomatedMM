@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.indiaTS.gap_strategy</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/python3</string>
+        <string>/Users/maverick/PycharmProjects/India-TS/scripts/scan_markets_gap.py</string>
+    </array>
+    <!-- Using StartInterval for every 3 minutes instead of StartCalendarInterval -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <!-- Define start time at 9:30 AM on weekdays -->
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+            <key>Weekday</key>
+            <integer>1</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+            <key>Weekday</key>
+            <integer>2</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+            <key>Weekday</key>
+            <integer>3</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+            <key>Weekday</key>
+            <integer>4</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+            <key>Weekday</key>
+            <integer>5</integer>
+        </dict>
+    </array>
+    
+    <!-- Run every 3 minutes -->
+    <key>StartInterval</key>
+    <integer>180</integer>
+    
+    <!-- Set end time at 9:45 AM using program arguments -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/python3</string>
+        <string>/Users/maverick/PycharmProjects/India-TS/scripts/scan_markets_gap.py</string>
+        <!-- Add argument to check time and exit if after 9:45 AM -->
+        <string>--enforce-end-time</string>
+        <string>9:45</string>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/maverick/PycharmProjects/India-TS/logs/gap_strategy.stdout</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/maverick/PycharmProjects/India-TS/logs/gap_strategy.stderr</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>WorkingDirectory</key>
+    <string>/Users/maverick/PycharmProjects/India-TS</string>
+</dict>
+</plist>
