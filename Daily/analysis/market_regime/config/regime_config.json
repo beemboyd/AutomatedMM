@@ -1,0 +1,101 @@
+{
+    "regime_detection": {
+        "lookback_days": 20,
+        "momentum_threshold": 5.0,
+        "volatility_threshold": 30.0,
+        "breadth_threshold": 0.6,
+        "regime_persistence_days": 3,
+        "confidence_threshold": 0.7
+    },
+    
+    "regime_definitions": {
+        "STRONG_BULL": {
+            "momentum_min": 10.0,
+            "breadth_min": 0.7,
+            "volatility_max": 25.0,
+            "trend_strength_min": 5.0
+        },
+        "BULL": {
+            "momentum_min": 5.0,
+            "breadth_min": 0.55,
+            "volatility_max": 30.0,
+            "trend_strength_min": 2.0
+        },
+        "NEUTRAL": {
+            "momentum_range": [-5.0, 5.0],
+            "breadth_range": [0.45, 0.55],
+            "volatility_max": 35.0
+        },
+        "BEAR": {
+            "momentum_max": -5.0,
+            "breadth_max": 0.45,
+            "volatility_max": 40.0,
+            "trend_strength_max": -2.0
+        },
+        "STRONG_BEAR": {
+            "momentum_max": -10.0,
+            "breadth_max": 0.3,
+            "volatility_max": 50.0,
+            "trend_strength_max": -5.0
+        },
+        "VOLATILE": {
+            "volatility_min": 40.0,
+            "momentum_range": [-20.0, 20.0]
+        }
+    },
+    
+    "position_adjustments": {
+        "STRONG_BULL": {
+            "size_multiplier": 1.2,
+            "max_portfolio_exposure": 0.95,
+            "stop_loss_multiplier": 1.8,
+            "preferred_sectors": ["Technology", "Financial Services", "Consumer Discretionary"]
+        },
+        "BULL": {
+            "size_multiplier": 1.0,
+            "max_portfolio_exposure": 0.85,
+            "stop_loss_multiplier": 1.5,
+            "preferred_sectors": ["Technology", "Financial Services", "Healthcare"]
+        },
+        "NEUTRAL": {
+            "size_multiplier": 0.8,
+            "max_portfolio_exposure": 0.70,
+            "stop_loss_multiplier": 1.3,
+            "preferred_sectors": ["Consumer Staples", "Healthcare", "Utilities"]
+        },
+        "BEAR": {
+            "size_multiplier": 0.6,
+            "max_portfolio_exposure": 0.50,
+            "stop_loss_multiplier": 1.2,
+            "preferred_sectors": ["Consumer Staples", "Utilities", "Healthcare"]
+        },
+        "STRONG_BEAR": {
+            "size_multiplier": 0.3,
+            "max_portfolio_exposure": 0.30,
+            "stop_loss_multiplier": 1.0,
+            "preferred_sectors": ["Consumer Staples", "Utilities"]
+        },
+        "VOLATILE": {
+            "size_multiplier": 0.5,
+            "max_portfolio_exposure": 0.60,
+            "stop_loss_multiplier": 2.0,
+            "preferred_sectors": ["Consumer Staples", "Healthcare"]
+        }
+    },
+    
+    "indicators": {
+        "sma_periods": [20, 50, 200],
+        "rsi_period": 14,
+        "atr_period": 14,
+        "volume_ma_period": 20,
+        "sector_rotation_lookback": 10
+    },
+    
+    "reporting": {
+        "generate_daily_report": true,
+        "save_historical_regimes": true,
+        "alert_on_regime_change": true,
+        "report_format": ["text", "excel", "html"],
+        "visualization_enabled": true
+    }
+}
