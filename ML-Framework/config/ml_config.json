@@ -1,0 +1,118 @@
+{
+  "regime_detection": {
+    "lookback_short": 20,
+    "lookback_medium": 50,
+    "lookback_long": 100,
+    "n_regimes": 5,
+    "feature_lookback_periods": [20, 50, 100, 200],
+    "ensemble_weights": {
+      "traditional": 0.3,
+      "clustering": 0.7
+    },
+    "min_regime_confidence": 0.6,
+    "regime_persistence_threshold": 5,
+    "model_update_frequency": 7
+  },
+  
+  "position_adjustment_factors": {
+    "STRONG_BULLISH": 1.2,
+    "WEAK_BULLISH": 1.0,
+    "NEUTRAL": 0.8,
+    "WEAK_BEARISH": 0.6,
+    "STRONG_BEARISH": 0.4,
+    "HIGH_VOLATILITY": 0.5,
+    "CRISIS": 0.2
+  },
+  
+  "stop_loss_multipliers": {
+    "STRONG_BULLISH": {
+      "long": 2.0,
+      "short": 1.2
+    },
+    "WEAK_BULLISH": {
+      "long": 1.8,
+      "short": 1.5
+    },
+    "NEUTRAL": {
+      "long": 1.5,
+      "short": 1.5
+    },
+    "WEAK_BEARISH": {
+      "long": 1.2,
+      "short": 1.8
+    },
+    "STRONG_BEARISH": {
+      "long": 1.0,
+      "short": 2.0
+    },
+    "HIGH_VOLATILITY": {
+      "long": 2.5,
+      "short": 2.5
+    },
+    "CRISIS": {
+      "long": 3.0,
+      "short": 3.0
+    }
+  },
+  
+  "risk_management": {
+    "max_position_size": {
+      "STRONG_BULLISH": 0.05,
+      "WEAK_BULLISH": 0.04,
+      "NEUTRAL": 0.03,
+      "WEAK_BEARISH": 0.02,
+      "STRONG_BEARISH": 0.02,
+      "HIGH_VOLATILITY": 0.02,
+      "CRISIS": 0.01
+    },
+    "max_portfolio_exposure": {
+      "STRONG_BULLISH": 0.8,
+      "WEAK_BULLISH": 0.7,
+      "NEUTRAL": 0.5,
+      "WEAK_BEARISH": 0.3,
+      "STRONG_BEARISH": 0.2,
+      "HIGH_VOLATILITY": 0.3,
+      "CRISIS": 0.1
+    }
+  },
+  
+  "clustering_parameters": {
+    "kmeans": {
+      "n_clusters": 5,
+      "n_init": 10,
+      "max_iter": 300
+    },
+    "gmm": {
+      "n_components": 5,
+      "covariance_type": "full",
+      "max_iter": 100
+    },
+    "dbscan": {
+      "eps_percentile": 90,
+      "min_samples_factor": 2
+    },
+    "hierarchical": {
+      "n_clusters": 5,
+      "linkage": "ward"
+    }
+  },
+  
+  "feature_engineering": {
+    "returns_periods": [1, 5, 10, 20],
+    "ma_periods": [10, 20, 50, 100, 200],
+    "volatility_windows": [10, 20, 50],
+    "rsi_periods": [14, 21, 28],
+    "bb_periods": [20],
+    "atr_periods": [14, 20],
+    "volume_ma_periods": [10, 20, 50],
+    "correlation_windows": [20, 50],
+    "regime_lookback": 252
+  },
+  
+  "reporting": {
+    "output_formats": ["json", "csv", "txt", "html"],
+    "email_alerts": false,
+    "slack_notifications": false,
+    "report_retention_days": 30
+  }
+}

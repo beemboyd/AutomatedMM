@@ -38,7 +38,7 @@ flowchart TD
     classDef decision fill:#ff9,stroke:#333,stroke-width:1px;
     classDef data fill:#bfb,stroke:#333,stroke-width:1px;
     classDef start fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef end fill:#fbb,stroke:#333,stroke-width:2px;
+    classDef endNode fill:#fbb,stroke:#333,stroke-width:2px;
     classDef loop fill:#ddd,stroke:#333,stroke-width:1px;
     
     class FetchPrices,PlaceOrder,UpdateTrailingSL process;
@@ -46,6 +46,7 @@ flowchart TD
     class SyncPositions,SyncPositionsUpdate data;
     class Start start;
     class MonitoringLoop,WaitInterval loop;
+    class End endNode;
 ```
 
 ## Key Logic Steps in position_watchdog.py

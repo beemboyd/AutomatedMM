@@ -46,12 +46,13 @@ flowchart TD
     classDef decision fill:#ff9,stroke:#333,stroke-width:1px;
     classDef data fill:#bfb,stroke:#333,stroke-width:1px;
     classDef start fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef end fill:#fbb,stroke:#333,stroke-width:2px;
+    classDef endNode fill:#fbb,stroke:#333,stroke-width:2px;
     
     class ReadLongSignals,ReadShortSignals,PlaceLongOrders,PlaceShortOrders process;
     class AnalyzeMarketBreadth decision;
     class GetSignalFiles,GetCurrentLongs,GetCurrentShorts data;
-    class Start,End start;
+    class Start start;
+    class End endNode;
 ```
 
 ## Key Logic Steps in place_orders.py

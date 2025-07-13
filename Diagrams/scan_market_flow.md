@@ -34,12 +34,13 @@ flowchart TD
     classDef decision fill:#ff9,stroke:#333,stroke-width:1px;
     classDef data fill:#bfb,stroke:#333,stroke-width:1px;
     classDef start fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef end fill:#fbb,stroke:#333,stroke-width:2px;
-    
+    classDef endNode fill:#fbb,stroke:#333,stroke-width:2px;
+
     class FetchData,CalculateIndicators,ApplyStrategy,GenerateSignal process;
     class CheckGapThreshold decision;
     class GetTickers,CollectResults,CreateExcelLong,CreateExcelShort data;
-    class Start,End start;
+    class Start start;
+    class End endNode;
 ```
 
 ## Key Logic Steps in scan_market.py

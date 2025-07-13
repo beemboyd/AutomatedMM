@@ -185,8 +185,17 @@ class OrderManager:
         # No-op - handled by state_manager now
         pass
     
-    def place_gtt_stoploss_order(self, tradingsymbol, quantity, stop_loss, position_type="LONG", max_retries=3):
-        """Place a GTT stop-loss order"""
+    def place_gtt_stoploss_order(self, tradingsymbol, quantity, stop_loss, position_type="LONG", max_retries=3, product_type=None):
+        """Place a GTT stop-loss order
+        
+        Args:
+            tradingsymbol: Stock symbol
+            quantity: Number of shares
+            stop_loss: Stop loss price
+            position_type: LONG or SHORT
+            max_retries: Number of retries for rate limits
+            product_type: Override product type (CNC/MIS) - if not specified, uses position data or self.product_type
+        """
         tradingsymbol = tradingsymbol.upper()
         
         # Check for existing GTT order first, before cleaning
@@ -195,23 +204,20 @@ class OrderManager:
             logger.info(f"Existing SL order found for {position_type} {tradingsymbol}; skipping SL placement.")
             return True  # Successfully skipped (not an error)
         
-        # If no existing GTT order, check product type
-        # Check if we're trying to place a GTT order for a CNC position
-        # Get the position data
-        position_data = self.state_manager.get_position(tradingsymbol)
-        product_type = "MIS"  # Default
+        # Determine product type to use
+        # Priority: 1. Explicitly passed product_type, 2. Position data, 3. Instance default
+        if product_type:
+            # Use explicitly passed product type
+            product_to_use = product_type
+        else:
+            # Check position data
+            position_data = self.state_manager.get_position(tradingsymbol)
+            if position_data and position_data.get("product_type"):
+                product_to_use = position_data.get("product_type", "MIS").upper()
+            else:
+                product_to_use = self.product_type
         
-        if position_data:
-            product_type = position_data.get("product_type", "MIS").upper()
-        
-        # For CNC positions, we need to ensure GTT orders can be placed
-        # GTT orders traditionally only worked with MIS, but we have a special case for CNC positions
-        if product_type == "CNC":
-            logger.info(f"Placing GTT order for CNC position: {tradingsymbol}")
-            # Continue with the GTT order placement for CNC positions
-        elif self.product_type != "MIS":
-            logger.warning(f"GTT orders are typically only supported for MIS product type. Current: {self.product_type}")
-            # Continue anyway since we're handling both MIS and CNC now
+        logger.info(f"Placing GTT order for {tradingsymbol} with product type: {product_to_use}")
 
         ltp = self.data_handler.fetch_current_price(tradingsymbol)
         if ltp is None:
@@ -237,30 +243,18 @@ class OrderManager:
             "transaction_type": transaction_type,
             "quantity": quantity,
             "order_type": "LIMIT",
-            "product": "MIS",  # Ensure product type is always MIS for GTT orders
+            "product": product_to_use,  # Use the determined product type
             "price": stop_loss
         }]
-        # Check product_type in positions data
-        state_manager = self.state_manager
-        position_data = state_manager.get_position(tradingsymbol)
-        
-        # If position exists, store product_type for GTT association
-        product_type = "MIS"  # Default
-        if position_data:
-            stored_product_type = position_data.get("product_type", "").upper()
-            if stored_product_type in ["CNC", "MIS"]:
-                product_type = stored_product_type
-                logger.info(f"Using product_type {product_type} from position data for {tradingsymbol}")
-        
         # For CNC positions, make sure the position is created or updated
-        if product_type == "CNC" and position_data is None:
+        if product_to_use == "CNC" and not self.state_manager.get_position(tradingsymbol):
             logger.warning(f"CNC position data for {tradingsymbol} not found. Creating it.")
-            state_manager.add_position(
+            self.state_manager.add_position(
                 ticker=tradingsymbol,
                 position_type=position_type,
                 quantity=quantity, 
                 entry_price=ltp,  # Use current price as a placeholder
-                product_type="CNC"
+                product_type=product_to_use
             )
         
         payload = {
@@ -305,12 +299,25 @@ class OrderManager:
                     logger.error(f"Failed to place GTT SL order for {tradingsymbol} after {max_retries} attempts due to exception")
                     return False  # Failed to place GTT after max retries
     
-    def place_order(self, tradingsymbol, transaction_type, order_type, quantity, is_closing_position=False, exit_reason=None):
-        """Place a market order"""
+    def place_order(self, tradingsymbol, transaction_type, order_type, quantity, is_closing_position=False, exit_reason=None, product_type=None):
+        """Place a market order
+        
+        Args:
+            tradingsymbol: Stock symbol
+            transaction_type: BUY or SELL
+            order_type: MARKET or LIMIT
+            quantity: Number of shares
+            is_closing_position: Whether this is closing an existing position
+            exit_reason: Reason for exit if closing
+            product_type: Override product type (CNC/MIS) - if not specified, uses self.product_type
+        """
         tradingsymbol_upper = tradingsymbol.upper()
         
         # Determine position type (still needed for tracking purposes)
         position_type = "LONG" if transaction_type == "BUY" else "SHORT"
+        
+        # Use provided product_type or fall back to instance default
+        product = product_type if product_type else self.product_type
         
         # If closing a position, save exit details instead of cleaning trackers
         exit_details = {}
@@ -327,7 +334,7 @@ class OrderManager:
             "transaction_type": transaction_type,
             "order_type": order_type,
             "quantity": quantity,
-            "product": self.product_type,
+            "product": product,
             "validity": "DAY"
         }
         logger.info(f"Placing {transaction_type} order for {tradingsymbol} with payload: {payload}")
@@ -369,14 +376,15 @@ class OrderManager:
                         logger.warning(f"Could not fetch entry price for {tradingsymbol_upper}, using 0")
                         entry_price = 0
                     
-                    # Add to position tracking with confirmation number
+                    # Add to position tracking with confirmation number and product type
                     self.state_manager.add_position(
                         ticker=tradingsymbol_upper,
                         position_type=position_type,
                         quantity=quantity,
                         entry_price=entry_price,
                         timestamp=datetime.datetime.now().isoformat(),
-                        confirmation=order_id
+                        confirmation=order_id,
+                        product_type=product
                     )
                     
                     # Mark as traded with correct position type (adds to daily tickers)
