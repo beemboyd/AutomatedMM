@@ -1,0 +1,43 @@
+====================================
+SL WATCHDOG QUICK REFERENCE
+====================================
+
+CHECK STATUS:
+./check_sl_watchdog_status.sh
+
+START REGIME VERSION (Recommended):
+./start_sl_watchdog_regime.sh
+
+STOP REGIME VERSION:
+./stop_sl_watchdog_regime.sh
+
+START STANDARD VERSION:
+./start_sl_watchdog.sh
+
+STOP STANDARD VERSION:
+./stop_sl_watchdog.sh
+
+VIEW LOGS:
+tail -f ../logs/<username>/SL_watchdog*.log
+
+FIND PID:
+cat ../pids/sl_watchdog_regime.pid
+
+EMERGENCY KILL:
+kill -9 $(cat ../pids/sl_watchdog_regime.pid)
+
+====================================
+RULES:
+- Only ONE watchdog at a time
+- Regime version is preferred
+- Always check status first
+- Logs in Daily/logs/<username>/
+====================================
+
+VOLUME ANOMALY WARNINGS (NEW):
+- Auto-detects exhaustion patterns
+- Logs warnings every 5 minutes
+- HIGH RISK: Score ≥4/8
+- MEDIUM RISK: Score 3/8
+- Watch for 🚨 and ⚠️ in logs
+====================================

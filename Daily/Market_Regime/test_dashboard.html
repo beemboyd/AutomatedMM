@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Test</title>
+</head>
+<body>
+    <h1>Testing Dashboard Connection</h1>
+    <div id="status"></div>
+    <div id="data"></div>
+    
+    <script>
+        // Test API endpoints
+        async function testDashboard() {
+            const statusDiv = document.getElementById('status');
+            const dataDiv = document.getElementById('data');
+            
+            try {
+                // Test breadth data endpoint
+                const response = await fetch('http://localhost:5001/api/breadth-data');
+                if (response.ok) {
+                    const data = await response.json();
+                    statusDiv.innerHTML = '<p style="color: green;">✓ API Connection Successful</p>';
+                    dataDiv.innerHTML = `
+                        <h2>Market Data:</h2>
+                        <p>Total Stocks: ${data.total_stocks}</p>
+                        <p>Market Score: ${data.market_score.toFixed(3)}</p>
+                        <p>Market Regime: ${data.market_regime}</p>
+                        <p>Last Update: ${new Date(data.timestamp).toLocaleString()}</p>
+                    `;
+                } else {
+                    statusDiv.innerHTML = '<p style="color: red;">✗ API returned error: ' + response.status + '</p>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<p style="color: red;">✗ Connection Error: ' + error.message + '</p>';
+                console.error('Error:', error);
+            }
+        }
+        
+        // Test on load
+        testDashboard();
+        
+        // Also log to console
+        fetch('http://localhost:5001/api/breadth-data')
+            .then(r => r.json())
+            .then(data => console.log('API Data:', data))
+            .catch(err => console.error('API Error:', err));
+    </script>
+</body>
+</html>

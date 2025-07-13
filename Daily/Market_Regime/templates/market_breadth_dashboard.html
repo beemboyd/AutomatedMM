@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Breadth Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #0a0e27;
+            color: #ffffff;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 10px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .timestamp {
+            color: #b8c5d6;
+            font-size: 0.9em;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: #1a1f3a;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #2a3f5f;
+            transition: transform 0.2s;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            border-color: #4a6fa5;
+        }
+        
+        .metric-title {
+            font-size: 0.9em;
+            color: #8892b0;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .metric-subtitle {
+            font-size: 0.85em;
+            color: #64748b;
+        }
+        
+        .positive {
+            color: #4ade80;
+        }
+        
+        .negative {
+            color: #f87171;
+        }
+        
+        .neutral {
+            color: #fbbf24;
+        }
+        
+        .market-regime-card {
+            grid-column: span 2;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            text-align: center;
+        }
+        
+        .regime-value {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        .position-recommendations {
+            background: #162033;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 2px solid #2a4365;
+        }
+        
+        .recommendation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .recommendation-item {
+            text-align: center;
+        }
+        
+        .recommendation-label {
+            color: #8892b0;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        
+        .recommendation-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .breadth-chart {
+            background: #1a1f3a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            height: 400px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #2a3f5f;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .progress-green {
+            background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+        }
+        
+        .progress-red {
+            background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
+        }
+        
+        .sector-performance {
+            background: #1a1f3a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .sector-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .sector-item {
+            display: grid;
+            grid-template-columns: 150px 1fr auto;
+            align-items: center;
+            gap: 20px;
+            padding: 15px;
+            background: #0f172a;
+            border-radius: 8px;
+            border: 1px solid #2a3f5f;
+        }
+        
+        .sector-name {
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+        
+        .sector-bar {
+            height: 20px;
+            background: #2a3f5f;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .sector-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+            transition: width 0.5s ease;
+        }
+        
+        .sector-value {
+            font-weight: bold;
+            min-width: 50px;
+            text-align: right;
+        }
+        
+        .sector-item-enhanced {
+            background: #0f172a;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #2a3f5f;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .sector-item-enhanced:hover {
+            border-color: #4a6fa5;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 111, 165, 0.2);
+        }
+        
+        .sector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2a3f5f;
+        }
+        
+        .sector-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+        
+        .sector-stance {
+            font-size: 1em;
+            font-weight: 600;
+        }
+        
+        .sector-metrics {
+            display: grid;
+            gap: 8px;
+        }
+        
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+        }
+        
+        .metric-label {
+            color: #8892b0;
+            font-size: 0.9em;
+        }
+        
+        .metric-value {
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        
+        .sector-item-compact {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #2a3f5f;
+            transition: all 0.2s ease;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sector-item-compact:hover {
+            border-color: #4a6fa5;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(74, 111, 165, 0.15);
+        }
+        
+        .sector-header-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .sector-header-compact .sector-name {
+            font-size: 1em;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+        
+        .sector-stats-compact {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-item {
+            flex: 1;
+            text-align: center;
+            padding: 8px 5px;
+            background: #1e293b;
+            border-radius: 6px;
+        }
+        
+        .stat-value {
+            display: block;
+            font-size: 1.1em;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        
+        .stat-label {
+            display: block;
+            font-size: 0.75em;
+            color: #8892b0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .sector-summary {
+            font-size: 0.85em;
+            color: #94a3b8;
+            line-height: 1.4;
+            margin-top: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #64748b;
+        }
+        
+        .early-bird-card {
+            background: #1a1f3a;
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #4ade80;
+            transition: transform 0.2s;
+        }
+        
+        .early-bird-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(74, 222, 128, 0.3);
+        }
+        
+        .early-bird-ticker {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #4ade80;
+            margin-bottom: 5px;
+        }
+        
+        .early-bird-time {
+            font-size: 0.8em;
+            color: #fbbf24;
+            margin-bottom: 10px;
+        }
+        
+        .early-bird-details {
+            font-size: 0.9em;
+            color: #b8c5d6;
+        }
+        
+        .early-bird-metrics {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #2a3f5f;
+        }
+        
+        .error {
+            background: #7f1d1d;
+            color: #fca5a5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .refresh-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.2s;
+        }
+        
+        .refresh-button:hover {
+            background: #2563eb;
+        }
+        
+        .stock-lists {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stock-list-card {
+            background: #1a1f3a;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #2a3f5f;
+        }
+        
+        .stock-list-title {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            color: #e2e8f0;
+            border-bottom: 2px solid #2a3f5f;
+            padding-bottom: 10px;
+        }
+        
+        .stock-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .stock-item:last-child {
+            border-bottom: none;
+        }
+        
+        .stock-ticker {
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        
+        .stock-value {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Market Breadth Dashboard</h1>
+            <div class="timestamp" id="last-update">Loading...</div>
+            <button class="refresh-button" onclick="refreshData()">Refresh Data</button>
+        </div>
+        
+        <div id="error-message" class="error" style="display: none;"></div>
+        
+        <div class="position-recommendations" id="recommendations">
+            <h2>Position Sizing & Strategy Recommendations</h2>
+            <div class="recommendation-grid">
+                <div class="recommendation-item">
+                    <div class="recommendation-label">Position Size Multiplier</div>
+                    <div class="recommendation-value" id="position-multiplier">-</div>
+                </div>
+                <div class="recommendation-item">
+                    <div class="recommendation-label">Recommended Strategy</div>
+                    <div class="recommendation-value" id="strategy">-</div>
+                </div>
+                <div class="recommendation-item">
+                    <div class="recommendation-label">Stop Loss Adjustment</div>
+                    <div class="recommendation-value" id="sl-adjustment">-</div>
+                </div>
+                <div class="recommendation-item">
+                    <div class="recommendation-label">Confidence Level</div>
+                    <div class="recommendation-value" id="confidence">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="dashboard-grid">
+            <div class="metric-card market-regime-card">
+                <div class="metric-title">Market Regime</div>
+                <div class="regime-value" id="market-regime">-</div>
+                <div class="metric-subtitle">Market Score: <span id="market-score">-</span></div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-title">SMA20 Breadth</div>
+                <div class="metric-value" id="sma20-breadth">-</div>
+                <div class="progress-bar">
+                    <div class="progress-fill progress-green" id="sma20-progress"></div>
+                </div>
+                <div class="metric-subtitle">
+                    <span class="positive" id="above-sma20">-</span> / 
+                    <span class="negative" id="below-sma20">-</span> stocks
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-title">SMA50 Breadth</div>
+                <div class="metric-value" id="sma50-breadth">-</div>
+                <div class="progress-bar">
+                    <div class="progress-fill progress-green" id="sma50-progress"></div>
+                </div>
+                <div class="metric-subtitle">
+                    <span class="positive" id="above-sma50">-</span> / 
+                    <span class="negative" id="below-sma50">-</span> stocks
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-title">RSI Distribution</div>
+                <div class="metric-value" id="avg-rsi">-</div>
+                <div class="metric-subtitle">
+                    OB: <span class="negative" id="rsi-overbought">-</span> | 
+                    N: <span class="neutral" id="rsi-neutral">-</span> | 
+                    OS: <span class="positive" id="rsi-oversold">-</span>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-title">5D Momentum</div>
+                <div class="metric-value" id="momentum-5d">-</div>
+                <div class="metric-subtitle">
+                    <span class="positive" id="positive-5d">-</span> / 
+                    <span class="negative" id="negative-5d">-</span> stocks
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-title">Volume Participation</div>
+                <div class="metric-value" id="avg-volume">-</div>
+                <div class="metric-subtitle">
+                    High: <span id="high-volume">-</span> | 
+                    Normal: <span id="normal-volume">-</span> | 
+                    Low: <span id="low-volume">-</span>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-title">A/D Ratio (SMA20)</div>
+                <div class="metric-value" id="ad-ratio">-</div>
+                <div class="metric-subtitle">Advance/Decline</div>
+            </div>
+        </div>
+        
+        <div class="sector-performance">
+            <h2>Sector Performance</h2>
+            <div class="sector-grid" id="sector-grid">
+                <div class="loading">Loading sector data...</div>
+            </div>
+        </div>
+        
+        <!-- Early Bird Section -->
+        <div class="early-bird-section" style="margin-bottom: 30px;">
+            <h2>🐦 Early Bird Opportunities (KC Breakout Watch)</h2>
+            <p style="color: #8892b0; margin-bottom: 20px;">First appearances of KC_Breakout_Watch pattern - stocks breaking above Keltner Channel without volume confirmation yet</p>
+            <div class="early-bird-grid" id="early-bird-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                <div class="loading">Loading Early Bird data...</div>
+            </div>
+        </div>
+        
+        <div class="stock-lists">
+            <div class="stock-list-card">
+                <h3 class="stock-list-title">Top Gainers (5D)</h3>
+                <div id="top-gainers">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="stock-list-card">
+                <h3 class="stock-list-title">Top Losers (5D)</h3>
+                <div id="top-losers">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="stock-list-card">
+                <h3 class="stock-list-title">High Volume</h3>
+                <div id="high-volume-stocks">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="stock-list-card">
+                <h3 class="stock-list-title">Overbought (RSI > 70)</h3>
+                <div id="overbought-stocks">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="stock-list-card">
+                <h3 class="stock-list-title">Oversold (RSI < 30)</h3>
+                <div id="oversold-stocks">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let refreshInterval;
+        
+        async function fetchBreadthData() {
+            try {
+                const response = await fetch('/api/breadth-data');
+                if (!response.ok) throw new Error('Failed to fetch data');
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching breadth data:', error);
+                showError('Failed to load market breadth data');
+                return null;
+            }
+        }
+        
+        async function fetchSectorData() {
+            try {
+                const response = await fetch('/api/sector-performance');
+                if (!response.ok) throw new Error('Failed to fetch sector data');
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching sector data:', error);
+                return [];
+            }
+        }
+        
+        async function fetchStockDetails() {
+            try {
+                const response = await fetch('/api/stock-details');
+                if (!response.ok) throw new Error('Failed to fetch stock details');
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching stock details:', error);
+                return {};
+            }
+        }
+        
+        async function fetchEarlyBirdData() {
+            try {
+                const response = await fetch('/api/early-bird');
+                if (!response.ok) throw new Error('Failed to fetch early bird data');
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching early bird data:', error);
+                return { early_birds: [], total_count: 0 };
+            }
+        }
+        
+        function showError(message) {
+            const errorEl = document.getElementById('error-message');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 5000);
+        }
+        
+        function formatPercent(value) {
+            return `${value.toFixed(1)}%`;
+        }
+        
+        function formatNumber(value) {
+            return value.toFixed(2);
+        }
+        
+        function getColorClass(value, threshold = 0) {
+            if (value > threshold) return 'positive';
+            if (value < -threshold) return 'negative';
+            return 'neutral';
+        }
+        
+        function updateMainMetrics(data) {
+            // Update timestamp
+            document.getElementById('last-update').textContent = 
+                `Last Update: ${new Date(data.timestamp).toLocaleString()}`;
+            
+            // Update market regime
+            const regimeEl = document.getElementById('market-regime');
+            regimeEl.textContent = data.market_regime;
+            regimeEl.className = 'regime-value ' + getRegimeClass(data.market_regime);
+            document.getElementById('market-score').textContent = formatNumber(data.market_score);
+            
+            // Update recommendations
+            const rec = data.recommendations;
+            document.getElementById('position-multiplier').textContent = `${rec.position_size_multiplier}x`;
+            document.getElementById('strategy').textContent = rec.recommended_strategy;
+            document.getElementById('sl-adjustment').textContent = 
+                rec.stop_loss_adjustment > 0 ? `+${rec.stop_loss_adjustment}%` : `${rec.stop_loss_adjustment}%`;
+            document.getElementById('confidence').textContent = `${rec.confidence_level.toFixed(0)}%`;
+            
+            // Update SMA breadth
+            const sma20Percent = data.sma_breadth.sma20_percent;
+            document.getElementById('sma20-breadth').textContent = formatPercent(sma20Percent);
+            document.getElementById('sma20-progress').style.width = `${sma20Percent}%`;
+            document.getElementById('sma20-progress').textContent = formatPercent(sma20Percent);
+            document.getElementById('above-sma20').textContent = data.sma_breadth.above_sma20;
+            document.getElementById('below-sma20').textContent = data.sma_breadth.below_sma20;
+            
+            const sma50Percent = data.sma_breadth.sma50_percent;
+            document.getElementById('sma50-breadth').textContent = formatPercent(sma50Percent);
+            document.getElementById('sma50-progress').style.width = `${sma50Percent}%`;
+            document.getElementById('sma50-progress').textContent = formatPercent(sma50Percent);
+            document.getElementById('above-sma50').textContent = data.sma_breadth.above_sma50;
+            document.getElementById('below-sma50').textContent = data.sma_breadth.below_sma50;
+            
+            // Update RSI
+            document.getElementById('avg-rsi').textContent = formatNumber(data.rsi_distribution.avg_rsi);
+            document.getElementById('rsi-overbought').textContent = data.rsi_distribution.overbought;
+            document.getElementById('rsi-neutral').textContent = data.rsi_distribution.neutral;
+            document.getElementById('rsi-oversold').textContent = data.rsi_distribution.oversold;
+            
+            // Update momentum
+            const avgMomentum = data.momentum_indicators.avg_momentum_5d;
+            document.getElementById('momentum-5d').textContent = formatPercent(avgMomentum);
+            document.getElementById('momentum-5d').className = 'metric-value ' + getColorClass(avgMomentum);
+            document.getElementById('positive-5d').textContent = data.momentum_indicators.positive_5d;
+            document.getElementById('negative-5d').textContent = data.momentum_indicators.negative_5d;
+            
+            // Update volume
+            const avgVolume = data.volume_analysis.avg_volume_ratio;
+            document.getElementById('avg-volume').textContent = `${formatNumber(avgVolume)}x`;
+            document.getElementById('high-volume').textContent = data.volume_analysis.high_volume;
+            document.getElementById('normal-volume').textContent = data.volume_analysis.normal_volume;
+            document.getElementById('low-volume').textContent = data.volume_analysis.low_volume;
+            
+            // Update A/D ratio
+            const adRatio = data.advance_decline_ratio.sma20;
+            document.getElementById('ad-ratio').textContent = formatNumber(adRatio);
+            document.getElementById('ad-ratio').className = 'metric-value ' + getColorClass(adRatio - 1);
+        }
+        
+        function getRegimeClass(regime) {
+            if (regime.includes('Strong Uptrend')) return 'positive';
+            if (regime.includes('Uptrend')) return 'positive';
+            if (regime.includes('Strong Downtrend')) return 'negative';
+            if (regime.includes('Downtrend')) return 'negative';
+            return 'neutral';
+        }
+        
+        function updateSectorPerformance(sectors) {
+            const grid = document.getElementById('sector-grid');
+            
+            if (!sectors || sectors.length === 0) {
+                grid.innerHTML = '<div class="loading">No sector data available</div>';
+                return;
+            }
+            
+            grid.innerHTML = sectors.map(sector => {
+                // Determine color for stance
+                let stanceColor = '';
+                if (sector.stance.includes('Bullish')) {
+                    stanceColor = '#4ade80';
+                } else if (sector.stance.includes('Bearish')) {
+                    stanceColor = '#f87171';
+                } else if (sector.stance === 'Weak') {
+                    stanceColor = '#f59e0b';
+                } else {
+                    stanceColor = '#64748b';
+                }
+                
+                // Format momentum display
+                const momentumSign = sector.momentum_5d >= 0 ? '+' : '';
+                
+                // Compact format
+                return `
+                    <div class="sector-item-compact">
+                        <div class="sector-header-compact">
+                            <span class="sector-name">${sector.sector}</span>
+                            <span class="sector-stance" style="color: ${stanceColor}; font-size: 0.85em;">${sector.stance}</span>
+                        </div>
+                        <div class="sector-stats-compact">
+                            <div class="stat-item">
+                                <span class="stat-value">${formatPercent(sector.above_sma20)}</span>
+                                <span class="stat-label">SMA20</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">${formatNumber(sector.avg_rsi)}</span>
+                                <span class="stat-label">RSI</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value ${getColorClass(sector.momentum_5d)}">${momentumSign}${formatPercent(sector.momentum_5d)}</span>
+                                <span class="stat-label">5D</span>
+                            </div>
+                        </div>
+                        <div class="sector-summary">
+                            ${formatPercent(sector.above_sma20)} above SMA20 • RSI ${sector.rsi_status}${sector.rsi_caution}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function updateStockLists(stocks) {
+            // Top Gainers
+            const gainersEl = document.getElementById('top-gainers');
+            if (stocks.top_gainers && stocks.top_gainers.length > 0) {
+                gainersEl.innerHTML = stocks.top_gainers.map(stock => `
+                    <div class="stock-item">
+                        <span class="stock-ticker">${stock.ticker}</span>
+                        <span class="stock-value positive">+${formatPercent(stock.momentum_5d)}</span>
+                    </div>
+                `).join('');
+            } else {
+                gainersEl.innerHTML = '<div class="loading">No data</div>';
+            }
+            
+            // Top Losers
+            const losersEl = document.getElementById('top-losers');
+            if (stocks.top_losers && stocks.top_losers.length > 0) {
+                losersEl.innerHTML = stocks.top_losers.map(stock => `
+                    <div class="stock-item">
+                        <span class="stock-ticker">${stock.ticker}</span>
+                        <span class="stock-value negative">${formatPercent(stock.momentum_5d)}</span>
+                    </div>
+                `).join('');
+            } else {
+                losersEl.innerHTML = '<div class="loading">No data</div>';
+            }
+            
+            // High Volume
+            const volumeEl = document.getElementById('high-volume-stocks');
+            if (stocks.high_volume && stocks.high_volume.length > 0) {
+                volumeEl.innerHTML = stocks.high_volume.map(stock => `
+                    <div class="stock-item">
+                        <span class="stock-ticker">${stock.ticker}</span>
+                        <span class="stock-value">${formatNumber(stock.volume_ratio)}x</span>
+                    </div>
+                `).join('');
+            } else {
+                volumeEl.innerHTML = '<div class="loading">No data</div>';
+            }
+            
+            // Overbought
+            const overboughtEl = document.getElementById('overbought-stocks');
+            if (stocks.overbought && stocks.overbought.length > 0) {
+                overboughtEl.innerHTML = stocks.overbought.map(stock => `
+                    <div class="stock-item">
+                        <span class="stock-ticker">${stock.ticker}</span>
+                        <span class="stock-value negative">${formatNumber(stock.rsi)}</span>
+                    </div>
+                `).join('');
+            } else {
+                overboughtEl.innerHTML = '<div class="loading">No overbought stocks</div>';
+            }
+            
+            // Oversold
+            const oversoldEl = document.getElementById('oversold-stocks');
+            if (stocks.oversold && stocks.oversold.length > 0) {
+                oversoldEl.innerHTML = stocks.oversold.map(stock => `
+                    <div class="stock-item">
+                        <span class="stock-ticker">${stock.ticker}</span>
+                        <span class="stock-value positive">${formatNumber(stock.rsi)}</span>
+                    </div>
+                `).join('');
+            } else {
+                oversoldEl.innerHTML = '<div class="loading">No oversold stocks</div>';
+            }
+        }
+        
+        async function refreshData() {
+            const breadthData = await fetchBreadthData();
+            if (breadthData) {
+                updateMainMetrics(breadthData);
+            }
+            
+            const sectorData = await fetchSectorData();
+            updateSectorPerformance(sectorData);
+            
+            const stockDetails = await fetchStockDetails();
+            updateStockLists(stockDetails);
+            
+            const earlyBirdData = await fetchEarlyBirdData();
+            updateEarlyBirdDisplay(earlyBirdData);
+        }
+        
+        function updateEarlyBirdDisplay(data) {
+            const grid = document.getElementById('early-bird-grid');
+            
+            if (!data.early_birds || data.early_birds.length === 0) {
+                grid.innerHTML = '<div class="loading">No Early Bird opportunities found today</div>';
+                return;
+            }
+            
+            grid.innerHTML = data.early_birds.map(bird => `
+                <div class="early-bird-card">
+                    <div class="early-bird-ticker">${bird.ticker}</div>
+                    <div class="early-bird-time">First appeared at ${bird.time_appeared}</div>
+                    <div class="early-bird-details">
+                        <div>Sector: ${bird.sector}</div>
+                        <div>Entry: ₹${bird.entry_price}</div>
+                        <div>Stop Loss: ₹${bird.stop_loss} | Target 1: ₹${bird.target1}</div>
+                        <div style="margin-top: 5px; font-size: 0.8em; color: #fbbf24;">
+                            ${bird.description}
+                        </div>
+                    </div>
+                    <div class="early-bird-metrics">
+                        <div>
+                            <div style="font-size: 0.8em; color: #8892b0;">Score</div>
+                            <div style="font-weight: bold; color: #4ade80;">${bird.probability_score}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.8em; color: #8892b0;">Volume</div>
+                            <div style="font-weight: bold;">${bird.volume_ratio}x</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.8em; color: #8892b0;">KC Dist</div>
+                            <div style="font-weight: bold;">${bird.kc_distance}%</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Initial load
+        refreshData();
+        
+        // Auto-refresh every 2 minutes
+        refreshInterval = setInterval(refreshData, 120000);
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

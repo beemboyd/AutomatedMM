@@ -1,0 +1,197 @@
+{
+  "regime_types": [
+    "strong_bull",
+    "bull", 
+    "neutral",
+    "bear",
+    "strong_bear",
+    "volatile",
+    "crisis"
+  ],
+  
+  "update_frequency": "30min",
+  
+  "indicators": {
+    "price_action": {
+      "sma_periods": [20, 50, 200],
+      "ema_periods": [9, 21],
+      "rsi_period": 14,
+      "macd_params": [12, 26, 9]
+    },
+    "volatility": {
+      "atr_period": 14,
+      "bollinger_period": 20,
+      "bollinger_std": 2,
+      "vix_threshold": 20
+    },
+    "market_breadth": {
+      "advance_decline_period": 20,
+      "new_highs_lows_period": 52,
+      "volume_ma_period": 20
+    },
+    "momentum": {
+      "roc_period": 10,
+      "mfi_period": 14,
+      "adx_period": 14
+    }
+  },
+  
+  "lookback_periods": {
+    "intraday": 1,
+    "short": 5,
+    "medium": 20,
+    "long": 50,
+    "extra_long": 200
+  },
+  
+  "regime_thresholds": {
+    "strong_bull": {
+      "min_score": 0.7,
+      "min_confidence": 0.75,
+      "indicators": {
+        "trend_strength": 0.7,
+        "momentum": 0.6,
+        "breadth": 0.6,
+        "volatility": "low"
+      }
+    },
+    "bull": {
+      "min_score": 0.5,
+      "min_confidence": 0.6,
+      "indicators": {
+        "trend_strength": 0.5,
+        "momentum": 0.4,
+        "breadth": 0.5,
+        "volatility": "normal"
+      }
+    },
+    "neutral": {
+      "min_score": -0.2,
+      "max_score": 0.2,
+      "min_confidence": 0.5,
+      "indicators": {
+        "trend_strength": 0.0,
+        "momentum": 0.0,
+        "breadth": 0.5,
+        "volatility": "normal"
+      }
+    },
+    "bear": {
+      "max_score": -0.5,
+      "min_confidence": 0.6,
+      "indicators": {
+        "trend_strength": -0.5,
+        "momentum": -0.4,
+        "breadth": 0.4,
+        "volatility": "elevated"
+      }
+    },
+    "strong_bear": {
+      "max_score": -0.7,
+      "min_confidence": 0.75,
+      "indicators": {
+        "trend_strength": -0.7,
+        "momentum": -0.6,
+        "breadth": 0.3,
+        "volatility": "high"
+      }
+    },
+    "volatile": {
+      "min_confidence": 0.6,
+      "indicators": {
+        "volatility": "very_high",
+        "volatility_expansion": true,
+        "regime_changes_frequency": "high"
+      }
+    },
+    "crisis": {
+      "min_confidence": 0.8,
+      "indicators": {
+        "trend_strength": -0.8,
+        "momentum": -0.7,
+        "breadth": 0.2,
+        "volatility": "extreme",
+        "vix_spike": true
+      }
+    }
+  },
+  
+  "learning_parameters": {
+    "enabled": true,
+    "min_samples": 100,
+    "update_frequency": "daily",
+    "performance_window": 20,
+    "feature_importance_update": "weekly",
+    "model_retrain_frequency": "monthly",
+    "confidence_decay_rate": 0.95,
+    "learning_rate": 0.01
+  },
+  
+  "action_parameters": {
+    "position_sizing": {
+      "strong_bull": 1.2,
+      "bull": 1.0,
+      "neutral": 0.8,
+      "bear": 0.5,
+      "strong_bear": 0.3,
+      "volatile": 0.6,
+      "crisis": 0.0
+    },
+    "stop_loss_multiplier": {
+      "strong_bull": 1.5,
+      "bull": 1.2,
+      "neutral": 1.0,
+      "bear": 0.8,
+      "strong_bear": 0.7,
+      "volatile": 0.6,
+      "crisis": 0.5
+    },
+    "new_capital_deployment": {
+      "strong_bull": 1.0,
+      "bull": 0.8,
+      "neutral": 0.5,
+      "bear": 0.2,
+      "strong_bear": 0.0,
+      "volatile": 0.3,
+      "crisis": 0.0
+    },
+    "max_portfolio_exposure": {
+      "strong_bull": 1.0,
+      "bull": 0.9,
+      "neutral": 0.7,
+      "bear": 0.5,
+      "strong_bear": 0.3,
+      "volatile": 0.5,
+      "crisis": 0.2
+    }
+  },
+  
+  "sector_preferences": {
+    "strong_bull": ["IT", "Banking", "Auto", "Realty"],
+    "bull": ["Banking", "IT", "Consumer", "Infra"],
+    "neutral": ["FMCG", "Pharma", "IT"],
+    "bear": ["FMCG", "Pharma", "Utilities"],
+    "strong_bear": ["Gold", "Pharma", "FMCG"],
+    "volatile": ["Low Beta", "Defensive"],
+    "crisis": ["Cash", "Gold"]
+  },
+  
+  "alert_settings": {
+    "regime_change": true,
+    "confidence_drop": true,
+    "extreme_readings": true,
+    "learning_updates": false,
+    "email_alerts": false,
+    "log_alerts": true
+  },
+  
+  "data_sources": {
+    "primary_index": "NIFTY",
+    "secondary_indices": ["BANKNIFTY", "NIFTYMIDCAP", "NIFTYSMALLCAP"],
+    "sector_indices": ["NIFTYIT", "NIFTYBANK", "NIFTYPHARMA", "NIFTYAUTO"],
+    "global_indices": ["DJI", "SPX", "HSI", "N225"],
+    "use_scanner_data": true,
+    "scanner_path": "Daily/results",
+    "historical_data_path": "Market_Regime/data"
+  }
+}

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f0f0f0; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Market Breadth Dashboard - Diagnostic Test</h1>
+    
+    <h2>Connection Test</h2>
+    <div id="connection-status">Testing connection...</div>
+    
+    <h2>API Endpoints</h2>
+    <div id="api-tests"></div>
+    
+    <h2>Data Preview</h2>
+    <pre id="data-preview"></pre>
+    
+    <script>
+        // Test all endpoints
+        const endpoints = [
+            '/health',
+            '/api/breadth-data',
+            '/api/sector-performance',
+            '/api/stock-details'
+        ];
+        
+        async function testEndpoint(endpoint) {
+            try {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+                return { endpoint, status: 'success', code: response.status, data };
+            } catch (error) {
+                return { endpoint, status: 'error', error: error.message };
+            }
+        }
+        
+        async function runTests() {
+            const connectionDiv = document.getElementById('connection-status');
+            const apiDiv = document.getElementById('api-tests');
+            const previewDiv = document.getElementById('data-preview');
+            
+            // Test basic connection
+            try {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    connectionDiv.innerHTML = '<span class="success">✓ Connection successful</span>';
+                } else {
+                    connectionDiv.innerHTML = '<span class="error">✗ Connection failed: ' + response.status + '</span>';
+                }
+            } catch (error) {
+                connectionDiv.innerHTML = '<span class="error">✗ Connection error: ' + error.message + '</span>';
+            }
+            
+            // Test all endpoints
+            const results = await Promise.all(endpoints.map(testEndpoint));
+            
+            apiDiv.innerHTML = results.map(result => {
+                if (result.status === 'success') {
+                    return `<div class="success">✓ ${result.endpoint} - Status: ${result.code}</div>`;
+                } else {
+                    return `<div class="error">✗ ${result.endpoint} - Error: ${result.error}</div>`;
+                }
+            }).join('');
+            
+            // Show breadth data preview
+            const breadthResult = results.find(r => r.endpoint === '/api/breadth-data');
+            if (breadthResult && breadthResult.status === 'success') {
+                const data = breadthResult.data;
+                previewDiv.textContent = JSON.stringify({
+                    timestamp: data.timestamp,
+                    total_stocks: data.total_stocks,
+                    market_score: data.market_score,
+                    market_regime: data.market_regime,
+                    sma_breadth: data.sma_breadth,
+                    recommendations: data.recommendations
+                }, null, 2);
+            }
+        }
+        
+        // Run tests on load
+        runTests();
+        
+        // Also check if main dashboard loads
+        fetch('/')
+            .then(response => response.text())
+            .then(html => {
+                console.log('Main dashboard HTML length:', html.length);
+                console.log('First 200 chars:', html.substring(0, 200));
+            })
+            .catch(err => console.error('Error loading main dashboard:', err));
+    </script>
+</body>
+</html>

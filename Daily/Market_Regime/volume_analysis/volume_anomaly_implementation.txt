@@ -1,0 +1,67 @@
+================================================================================
+VOLUME-PRICE ANOMALY ANALYSIS - IMPLEMENTATION SUMMARY
+================================================================================
+Generated: 2025-07-13 11:39:40
+
+KEY EXHAUSTION PATTERNS IDENTIFIED:
+--------------------------------------------------
+
+HIGH VOLUME LOW MOMENTUM:
+  Definition: Volume > 3x average with momentum < 5%
+  Risk Level: HIGH
+  Action: Consider immediate exit or very tight stop loss
+
+VOLUME EFFICIENCY BREAKDOWN:
+  Definition: Volume efficiency < 1.0 (momentum/volume ratio)
+  Risk Level: MEDIUM-HIGH
+  Action: Tighten stop loss, monitor closely
+
+NARROW RANGE HIGH VOLUME:
+  Definition: Volume > 2x with price spread < 2%
+  Risk Level: MEDIUM
+  Action: Watch for rejection, consider partial exit
+
+
+RECOMMENDED EXIT RULES:
+--------------------------------------------------
+
+Volume Exhaustion Exit:
+  Condition: Volume > 3x AND Momentum < 5%
+  Action: Exit 50% position immediately, tight stop on remainder
+
+Efficiency Breakdown Exit:
+  Condition: Volume Efficiency < 0.5 for 2 consecutive scans
+  Action: Exit full position
+
+Narrow Range Rejection:
+  Condition: Volume > 2x AND Daily Range < 1.5% AND Close near day's low
+  Action: Exit at next day's open
+
+
+CURRENT HIGH-RISK CANDIDATES:
+--------------------------------------------------
+
+JAGSNPHARM:
+  Volume Ratio: 7.52x
+  Momentum: 4.73%
+  Efficiency: 0.63
+  Assessment: HIGH - Volume exhaustion pattern
+
+ANANDRATHI:
+  Volume Ratio: 6.74x
+  Momentum: 4.59%
+  Efficiency: 0.68
+  Assessment: HIGH - Low efficiency with high volume
+
+GLENMARK:
+  Volume Ratio: 8.27x
+  Momentum: 18.83%
+  Efficiency: 2.28
+  Assessment: MEDIUM - High volume but decent momentum
+
+
+IMPLEMENTATION STEPS:
+--------------------------------------------------
+1. Add exhaustion_score calculation to daily scanner
+2. Flag tickers with score >= 3 for review
+3. Auto-tighten stops for score >= 4
