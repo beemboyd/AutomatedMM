@@ -11,6 +11,8 @@ PLIST_FILES=(
     "com.india-ts.consolidated_score.plist"
     "com.india-ts.daily_action_plan.plist"
     "com.india-ts.health_dashboard.plist"
+    "com.india-ts.kc_lower_limit_trending.plist"
+    "com.india-ts.kc_upper_limit_trending.plist"
     "com.india-ts.long_reversal_daily.plist"
     "com.india-ts.market_regime_analysis.plist"
     "com.india-ts.market_regime_dashboard.plist"

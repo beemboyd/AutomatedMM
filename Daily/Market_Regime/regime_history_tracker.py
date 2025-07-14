@@ -60,7 +60,17 @@ class RegimeHistoryTracker:
         if os.path.exists(self.metrics_file):
             try:
                 with open(self.metrics_file, 'r') as f:
-                    return json.load(f)
+                    metrics = json.load(f)
+                    
+                # Convert regime_transitions back to defaultdict structure
+                if 'regime_transitions' in metrics:
+                    transitions = defaultdict(lambda: defaultdict(int))
+                    for from_regime, to_regimes in metrics['regime_transitions'].items():
+                        for to_regime, count in to_regimes.items():
+                            transitions[from_regime][to_regime] = count
+                    metrics['regime_transitions'] = transitions
+                
+                return metrics
             except Exception as e:
                 logger.error(f"Error loading metrics: {e}")
                 return self._initialize_metrics()
@@ -136,10 +146,17 @@ class RegimeHistoryTracker:
         # Update total count
         self.performance_metrics['total_regimes_tracked'] += 1
         
+        # Ensure regime_transitions is a defaultdict
+        if not isinstance(self.performance_metrics.get('regime_transitions'), defaultdict):
+            self.performance_metrics['regime_transitions'] = defaultdict(lambda: defaultdict(int))
+        
         # Track regime transitions
         if len(self.history) > 1:
             prev_regime = self.history[-2]['regime']
             if prev_regime != regime:
+                # Ensure nested structure exists
+                if prev_regime not in self.performance_metrics['regime_transitions']:
+                    self.performance_metrics['regime_transitions'][prev_regime] = defaultdict(int)
                 self.performance_metrics['regime_transitions'][prev_regime][regime] += 1
         
         # Update last updated timestamp

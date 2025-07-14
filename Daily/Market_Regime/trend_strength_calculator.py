@@ -17,6 +17,13 @@ from pathlib import Path
 # Add parent directories to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+# Import regime smoother
+try:
+    from regime_smoother import RegimeSmoother
+except ImportError:
+    # If not available, we'll create a stub
+    RegimeSmoother = None
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -48,6 +55,9 @@ class TrendStrengthCalculator:
             'bearish': 0.5,           # Long/Short ratio < 0.67
             'strong_bearish': 0.0     # Long/Short ratio < 0.5
         }
+        
+        # Initialize regime smoother if available
+        self.regime_smoother = RegimeSmoother() if RegimeSmoother else None
         
     def load_latest_scan(self):
         """Load the most recent scan results directly from Excel files"""
@@ -218,10 +228,27 @@ class TrendStrengthCalculator:
         
     def generate_trend_report(self, scan_data, historical_data=None):
         """Generate comprehensive trend strength report"""
-        # Calculate current trend strength
+        # Get raw counts
+        raw_long_count = scan_data['long_count']
+        raw_short_count = scan_data['short_count']
+        
+        # Apply smoothing if available
+        if self.regime_smoother:
+            smoothed_long, smoothed_short = self.regime_smoother.calculate_smoothed_counts(
+                raw_long_count, raw_short_count
+            )
+            # Use smoothed values for trend calculation
+            long_count = smoothed_long
+            short_count = smoothed_short
+            logger.info(f"Applied smoothing: Raw({raw_long_count}L/{raw_short_count}S) -> Smoothed({long_count:.1f}L/{short_count:.1f}S)")
+        else:
+            long_count = float(raw_long_count)
+            short_count = float(raw_short_count)
+        
+        # Calculate current trend strength using smoothed values
         trend, ratio, description = self.calculate_trend_strength(
-            scan_data['long_count'], 
-            scan_data['short_count']
+            long_count, 
+            short_count
         )
         
         # Calculate momentum if historical data available
@@ -244,10 +271,10 @@ class TrendStrengthCalculator:
             # Log scale normalization
             market_score = np.tanh(np.log(ratio) / 2)
         
-        # Trend score: strength of the trend
-        total_patterns = scan_data['long_count'] + scan_data['short_count']
+        # Trend score: strength of the trend (using smoothed values)
+        total_patterns = long_count + short_count
         if total_patterns > 0:
-            long_ratio = scan_data['long_count'] / total_patterns
+            long_ratio = long_count / total_patterns
             trend_score = 2 * long_ratio - 1  # Maps [0,1] to [-1,1]
         else:
             trend_score = 0.0
@@ -257,9 +284,15 @@ class TrendStrengthCalculator:
             'timestamp': datetime.datetime.now().isoformat(),
             'scan_timestamp': scan_data['timestamp'],
             'counts': {
-                'long': scan_data['long_count'],
-                'short': scan_data['short_count'],
-                'total': scan_data['long_count'] + scan_data['short_count']
+                'long': raw_long_count,
+                'short': raw_short_count,
+                'total': raw_long_count + raw_short_count
+            },
+            'smoothed_counts': {
+                'long': round(long_count, 1),
+                'short': round(short_count, 1),
+                'total': round(long_count + short_count, 1),
+                'smoothing_active': self.regime_smoother is not None
             },
             'trend_strength': {
                 'trend': trend,

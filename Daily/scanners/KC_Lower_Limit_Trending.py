@@ -108,7 +108,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
 RESULTS_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "results-s")
 HTML_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "Detailed_Analysis")
-PDF_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "Detailed_Analysis", "PDF")
+PDF_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "results-s", "PDF")
 
 # Ensure directories exist
 for dir_path in [RESULTS_DIR, HTML_DIR, PDF_DIR]:
