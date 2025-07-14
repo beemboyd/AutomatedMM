@@ -45,10 +45,11 @@ This document provides a comprehensive overview of all India-TS system jobs, the
 
 #### 5. **com.india-ts.market_regime_analysis**
 - **Purpose**: Analyzes market regime based on scanner results
-- **Schedule**: Every 30 minutes from 9:15 AM to 3:30 PM IST (weekdays)
+- **Schedule**: Every 30 minutes from 8:30 AM to 3:30 PM IST (weekdays)
 - **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/market_regime_analyzer.py`
 - **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.market_regime_analysis.plist`
 - **Status**: ✅ Active
+- **Updated**: 2025-07-13 - Changed start time from 9:15 AM to 8:30 AM
 
 #### 6. **com.india-ts.market_regime_dashboard**
 - **Purpose**: Generates market regime dashboard

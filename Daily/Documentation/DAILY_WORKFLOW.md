@@ -7,6 +7,7 @@ This guide provides a step-by-step workflow for daily trading operations using t
 | Time | Activity | Automated? |
 |------|----------|------------|
 | 8:30 AM | Daily Action Plan Generation | ✅ Automated |
+| 8:30 AM | Market Regime Analysis Starts | ✅ Automated |
 | 9:00 AM | Consolidated Score Report | ✅ Automated |
 | 9:15 AM | Market Opens - Scanners Start | ✅ Automated |
 | 9:30 AM | Review Scanner Results | 👤 Manual |
