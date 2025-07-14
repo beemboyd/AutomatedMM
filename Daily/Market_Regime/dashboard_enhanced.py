@@ -257,6 +257,94 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
+        <!-- Index Analysis Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📈 Index SMA20 Analysis</h5>
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <div class="card" style="border: 1px solid #dee2e6;">
+                                    <div class="card-body">
+                                        <h6>NIFTY 50</h6>
+                                        <div id="nifty-position" style="font-size: 1.5em; font-weight: bold;">-</div>
+                                        <small id="nifty-status">Loading...</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card" style="border: 1px solid #dee2e6;">
+                                    <div class="card-body">
+                                        <h6>NIFTY MIDCAP 100</h6>
+                                        <div id="midcap-position" style="font-size: 1.5em; font-weight: bold;">-</div>
+                                        <small id="midcap-status">Loading...</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card" style="border: 1px solid #dee2e6;">
+                                    <div class="card-body">
+                                        <h6>NIFTY SMALLCAP 100</h6>
+                                        <div id="smallcap-position" style="font-size: 1.5em; font-weight: bold;">-</div>
+                                        <small id="smallcap-status">Loading...</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col text-center">
+                                <p class="mb-0"><strong>Index Trend:</strong> <span id="index-trend" style="font-weight: bold;">-</span></p>
+                                <small id="index-analysis" class="text-muted">Loading analysis...</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Macro/Micro View Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card" style="background-color: #2c3e50; color: white;">
+                    <div class="card-body">
+                        <h5 class="card-title" style="color: white; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 20px;">🌍 Market Regime: Macro vs Micro View</h5>
+                        <div class="row">
+                            <!-- Macro View -->
+                            <div class="col-md-6">
+                                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 8px; height: 100%;">
+                                    <h6 style="color: #3498db; margin-bottom: 15px;">🌐 MACRO VIEW (Index-Based)</h6>
+                                    <div id="macro-status" style="font-size: 2em; font-weight: bold; margin: 10px 0;">Loading...</div>
+                                    <p id="macro-recommendation" style="margin: 10px 0;">Analyzing indices...</p>
+                                    <div id="macro-details" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">
+                                        <!-- Index details will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Micro View -->
+                            <div class="col-md-6">
+                                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 8px; height: 100%;">
+                                    <h6 style="color: #9b59b6; margin-bottom: 15px;">🔬 MICRO VIEW (Pattern-Based)</h6>
+                                    <div id="micro-status" style="font-size: 2em; font-weight: bold; margin: 10px 0;">Loading...</div>
+                                    <p id="micro-recommendation" style="margin: 10px 0;">Analyzing patterns...</p>
+                                    <div id="micro-details" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">
+                                        <!-- Pattern details will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Summary -->
+                        <div id="action-summary" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center; border: 2px solid #2ecc71;">
+                            <div style="font-size: 1.3em; font-weight: bold; margin-bottom: 10px;">📈 Analyzing...</div>
+                            <p style="margin: 0;">Please wait while we analyze market conditions...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Metrics Section -->
         <div class="row mb-4">
             <div class="col-md-3 mb-3">
@@ -569,6 +657,52 @@ ENHANCED_DASHBOARD_HTML = '''
                     document.getElementById('long-count').textContent = data.counts.long;
                     document.getElementById('short-count').textContent = data.counts.short;
                     
+                    // Update index analysis
+                    if (data.index_analysis) {
+                        const idx = data.index_analysis;
+                        
+                        // Update NIFTY 50
+                        if (idx.index_details && idx.index_details['NIFTY 50']) {
+                            const nifty = idx.index_details['NIFTY 50'];
+                            document.getElementById('nifty-position').textContent = 
+                                nifty.sma_position_pct.toFixed(1) + '%';
+                            document.getElementById('nifty-position').style.color = 
+                                nifty.above_sma20 ? '#27ae60' : '#e74c3c';
+                            document.getElementById('nifty-status').textContent = 
+                                nifty.above_sma20 ? 'Above SMA20' : 'Below SMA20';
+                        }
+                        
+                        // Update MIDCAP
+                        if (idx.index_details && idx.index_details['NIFTY MIDCAP 100']) {
+                            const midcap = idx.index_details['NIFTY MIDCAP 100'];
+                            document.getElementById('midcap-position').textContent = 
+                                midcap.sma_position_pct.toFixed(1) + '%';
+                            document.getElementById('midcap-position').style.color = 
+                                midcap.above_sma20 ? '#27ae60' : '#e74c3c';
+                            document.getElementById('midcap-status').textContent = 
+                                midcap.above_sma20 ? 'Above SMA20' : 'Below SMA20';
+                        }
+                        
+                        // Update SMALLCAP
+                        if (idx.index_details && idx.index_details['NIFTY SMLCAP 100']) {
+                            const smallcap = idx.index_details['NIFTY SMLCAP 100'];
+                            document.getElementById('smallcap-position').textContent = 
+                                smallcap.sma_position_pct.toFixed(1) + '%';
+                            document.getElementById('smallcap-position').style.color = 
+                                smallcap.above_sma20 ? '#27ae60' : '#e74c3c';
+                            document.getElementById('smallcap-status').textContent = 
+                                smallcap.above_sma20 ? 'Above SMA20' : 'Below SMA20';
+                        }
+                        
+                        // Update overall trend
+                        document.getElementById('index-trend').textContent = 
+                            idx.trend.replace('_', ' ').toUpperCase();
+                        document.getElementById('index-trend').style.color = 
+                            idx.trend.includes('bullish') ? '#27ae60' : 
+                            idx.trend.includes('bearish') ? '#e74c3c' : '#95a5a6';
+                        document.getElementById('index-analysis').textContent = idx.analysis;
+                    }
+                    
                     // Update historical context
                     if (data.historical_context) {
                         const ctx = data.historical_context;
@@ -591,6 +725,9 @@ ENHANCED_DASHBOARD_HTML = '''
                     
                     // Draw sparklines
                     drawSparklines(data);
+                    
+                    // Update Macro/Micro View
+                    updateMacroMicroView(data);
                     
                     previousData = data;
                 })
@@ -741,6 +878,108 @@ ENHANCED_DASHBOARD_HTML = '''
                     }
                 })
                 .catch(error => console.error('Error fetching reversal patterns:', error));
+        }
+        
+        function updateMacroMicroView(data) {
+            // Update Macro View (Index-based)
+            if (data.index_analysis) {
+                const idx = data.index_analysis;
+                const indicesAbove = idx.indices_above_sma20 || 0;
+                const totalIndices = idx.total_indices || 3;
+                
+                let macroStatus, macroColor, macroRecommendation;
+                
+                if (indicesAbove === totalIndices) {
+                    macroStatus = 'BULLISH';
+                    macroColor = '#2ecc71';
+                    macroRecommendation = 'All indices above SMA20 - Scale into positions';
+                } else if (indicesAbove >= 2) {
+                    macroStatus = 'MODERATELY BULLISH';
+                    macroColor = '#3498db';
+                    macroRecommendation = `${indicesAbove}/${totalIndices} indices above SMA20 - Normal position sizing`;
+                } else if (indicesAbove === 1) {
+                    macroStatus = 'NEUTRAL';
+                    macroColor = '#f39c12';
+                    macroRecommendation = 'Mixed signals - Reduce position sizes';
+                } else {
+                    macroStatus = 'BEARISH';
+                    macroColor = '#e74c3c';
+                    macroRecommendation = 'All indices below SMA20 - Consider scaling out';
+                }
+                
+                document.getElementById('macro-status').textContent = macroStatus;
+                document.getElementById('macro-status').style.color = macroColor;
+                document.getElementById('macro-recommendation').textContent = macroRecommendation;
+                
+                // Update index details
+                let detailsHtml = '';
+                if (idx.index_details) {
+                    for (const [indexName, indexData] of Object.entries(idx.index_details)) {
+                        const position = indexData.sma_position_pct || 0;
+                        const color = indexData.above_sma20 ? '#2ecc71' : '#e74c3c';
+                        detailsHtml += `<div style="margin: 5px 0;"><strong>${indexName}:</strong> <span style="color: ${color}">${position > 0 ? '+' : ''}${position.toFixed(1)}%</span></div>`;
+                    }
+                }
+                document.getElementById('macro-details').innerHTML = detailsHtml;
+            }
+            
+            // Update Micro View (Pattern-based)
+            const regime = data.regime;
+            const microStatus = regime.replace(/_/g, ' ').toUpperCase();
+            const longCount = data.counts.long;
+            const shortCount = data.counts.short;
+            const ratio = data.ratio;
+            
+            let microColor = '#95a5a6';
+            let microRecommendation = '';
+            
+            if (regime.includes('strong_uptrend') || regime.includes('uptrend')) {
+                microColor = '#2ecc71';
+                microRecommendation = `Strong reversal patterns (${longCount}L/${shortCount}S) - Take long positions`;
+            } else if (regime.includes('strong_downtrend') || regime.includes('downtrend')) {
+                microColor = '#e74c3c';
+                microRecommendation = `Bearish patterns dominate (${longCount}L/${shortCount}S) - Focus on shorts`;
+            } else {
+                microColor = '#f39c12';
+                microRecommendation = `Mixed patterns (${longCount}L/${shortCount}S) - Be selective`;
+            }
+            
+            document.getElementById('micro-status').textContent = microStatus;
+            document.getElementById('micro-status').style.color = microColor;
+            document.getElementById('micro-recommendation').textContent = microRecommendation;
+            
+            // Update micro details
+            const microDetailsHtml = `
+                <div style="margin: 5px 0;"><strong>Reversal Patterns:</strong> ${longCount} Long, ${shortCount} Short</div>
+                <div style="margin: 5px 0;"><strong>L/S Ratio:</strong> ${ratio === 'inf' ? 'Infinite' : ratio.toFixed(2)}</div>
+                <div style="margin: 5px 0;"><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%</div>
+            `;
+            document.getElementById('micro-details').innerHTML = microDetailsHtml;
+            
+            // Update Action Summary
+            let divergence = false;
+            if (data.index_analysis) {
+                const idxTrend = data.index_analysis.trend || '';
+                if ((idxTrend.includes('bearish') && (regime.includes('uptrend') || regime.includes('bullish'))) ||
+                    (idxTrend.includes('bullish') && (regime.includes('downtrend') || regime.includes('bearish')))) {
+                    divergence = true;
+                }
+            }
+            
+            const actionSummary = document.getElementById('action-summary');
+            if (divergence) {
+                actionSummary.style.borderColor = '#e74c3c';
+                actionSummary.innerHTML = `
+                    <div style="font-size: 1.3em; font-weight: bold; color: #e74c3c; margin-bottom: 10px;">⚠️ DIVERGENCE DETECTED</div>
+                    <p style="margin: 0;">Macro and Micro views diverge - Reduce position sizes and wait for confirmation</p>
+                `;
+            } else {
+                actionSummary.style.borderColor = '#2ecc71';
+                actionSummary.innerHTML = `
+                    <div style="font-size: 1.3em; font-weight: bold; color: #2ecc71; margin-bottom: 10px;">✅ VIEWS ALIGNED</div>
+                    <p style="margin: 0;">Both views align - Follow regime recommendations with confidence</p>
+                `;
+            }
         }
         
         function updateEarlyBirdPatterns() {
@@ -936,6 +1175,8 @@ def get_current_analysis():
             'strategy': data['market_regime']['strategy'],
             'ratio': data['trend_analysis']['ratio'],
             'counts': data['reversal_counts'],
+            'smoothed_counts': data.get('smoothed_counts', data['reversal_counts']),
+            'index_analysis': data.get('index_analysis', {}),
             'indicators': {
                 'market_score': data['trend_analysis'].get('market_score', 0),
                 'trend_score': data['trend_analysis'].get('trend_score', 0),

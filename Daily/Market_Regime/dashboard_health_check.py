@@ -387,6 +387,9 @@ HEALTH_DASHBOARD_HTML = '''
                     if (data.jobs) {
                         updateJobs(data.jobs);
                     }
+                    
+                    // Update Macro/Micro View
+                    updateMacroMicroView(data);
                 });
         }
         
@@ -450,6 +453,110 @@ HEALTH_DASHBOARD_HTML = '''
             statusText.textContent = status.message;
         }
         
+        function updateMacroMicroView(data) {
+            // Update Macro View (Index-based)
+            if (data.index_analysis) {
+                const idx = data.index_analysis;
+                const indicesAbove = idx.indices_above_sma20 || 0;
+                const totalIndices = idx.total_indices || 3;
+                
+                let macroStatus, macroColor, macroRecommendation;
+                
+                if (indicesAbove === totalIndices) {
+                    macroStatus = 'BULLISH';
+                    macroColor = '#2ecc71';
+                    macroRecommendation = 'All indices above SMA20 - Scale into positions';
+                } else if (indicesAbove >= 2) {
+                    macroStatus = 'MODERATELY BULLISH';
+                    macroColor = '#3498db';
+                    macroRecommendation = `${indicesAbove}/${totalIndices} indices above SMA20 - Normal position sizing`;
+                } else if (indicesAbove === 1) {
+                    macroStatus = 'NEUTRAL';
+                    macroColor = '#f39c12';
+                    macroRecommendation = 'Mixed signals - Reduce position sizes';
+                } else {
+                    macroStatus = 'BEARISH';
+                    macroColor = '#e74c3c';
+                    macroRecommendation = 'All indices below SMA20 - Consider scaling out';
+                }
+                
+                document.getElementById('macro-status').textContent = macroStatus;
+                document.getElementById('macro-status').style.color = macroColor;
+                document.getElementById('macro-recommendation').textContent = macroRecommendation;
+                
+                // Update index details
+                let detailsHtml = '';
+                if (idx.index_details) {
+                    for (const [indexName, indexData] of Object.entries(idx.index_details)) {
+                        const position = indexData.sma_position_pct || 0;
+                        const color = indexData.above_sma20 ? '#2ecc71' : '#e74c3c';
+                        detailsHtml += `<div style="margin: 5px 0;"><strong>${indexName}:</strong> <span style="color: ${color}">${position > 0 ? '+' : ''}${position.toFixed(1)}%</span></div>`;
+                    }
+                }
+                document.getElementById('macro-details').innerHTML = detailsHtml;
+            }
+            
+            // Update Micro View (Pattern-based)
+            if (data.current_regime) {
+                const regime = data.current_regime.regime;
+                const microStatus = regime.replace(/_/g, ' ').toUpperCase();
+                const longCount = data.scanner_counts.long;
+                const shortCount = data.scanner_counts.short;
+                const ratio = longCount / (shortCount || 1);
+                
+                let microColor = '#95a5a6';
+                let microRecommendation = '';
+                
+                if (regime.includes('strong_uptrend') || regime.includes('uptrend')) {
+                    microColor = '#2ecc71';
+                    microRecommendation = `Strong reversal patterns (${longCount}L/${shortCount}S) - Take long positions`;
+                } else if (regime.includes('strong_downtrend') || regime.includes('downtrend')) {
+                    microColor = '#e74c3c';
+                    microRecommendation = `Bearish patterns dominate (${longCount}L/${shortCount}S) - Focus on shorts`;
+                } else {
+                    microColor = '#f39c12';
+                    microRecommendation = `Mixed patterns (${longCount}L/${shortCount}S) - Be selective`;
+                }
+                
+                document.getElementById('micro-status').textContent = microStatus;
+                document.getElementById('micro-status').style.color = microColor;
+                document.getElementById('micro-recommendation').textContent = microRecommendation;
+                
+                // Update micro details
+                const microDetailsHtml = `
+                    <div style="margin: 5px 0;"><strong>Reversal Patterns:</strong> ${longCount} Long, ${shortCount} Short</div>
+                    <div style="margin: 5px 0;"><strong>L/S Ratio:</strong> ${ratio.toFixed(2)}</div>
+                    <div style="margin: 5px 0;"><strong>Confidence:</strong> ${(data.current_regime.confidence * 100).toFixed(1)}%</div>
+                `;
+                document.getElementById('micro-details').innerHTML = microDetailsHtml;
+                
+                // Update Action Summary
+                let divergence = false;
+                if (data.index_analysis) {
+                    const idxTrend = data.index_analysis.trend || '';
+                    if ((idxTrend.includes('bearish') && (regime.includes('uptrend') || regime.includes('bullish'))) ||
+                        (idxTrend.includes('bullish') && (regime.includes('downtrend') || regime.includes('bearish')))) {
+                        divergence = true;
+                    }
+                }
+                
+                const actionSummary = document.getElementById('action-summary');
+                if (divergence) {
+                    actionSummary.style.borderColor = '#e74c3c';
+                    actionSummary.innerHTML = `
+                        <div style="font-size: 1.1em; font-weight: bold; color: #e74c3c; margin-bottom: 10px;">⚠️ DIVERGENCE DETECTED</div>
+                        <p style="margin: 0; font-size: 0.9em;">Macro and Micro views diverge - Reduce position sizes and wait for confirmation</p>
+                    `;
+                } else {
+                    actionSummary.style.borderColor = '#2ecc71';
+                    actionSummary.innerHTML = `
+                        <div style="font-size: 1.1em; font-weight: bold; color: #2ecc71; margin-bottom: 10px;">✅ VIEWS ALIGNED</div>
+                        <p style="margin: 0; font-size: 0.9em;">Both views align - Follow regime recommendations with confidence</p>
+                    `;
+                }
+            }
+        }
+        
         function updateSchedule(scheduleData) {
             const container = document.getElementById('schedule-grid');
             container.innerHTML = '';
@@ -479,6 +586,40 @@ HEALTH_DASHBOARD_HTML = '''
         <div id="regime-display" class="regime-display">
             <div id="regime-name" class="regime-name">Loading...</div>
             <div id="regime-confidence" class="regime-confidence"></div>
+        </div>
+        
+        <!-- Macro/Micro View Section -->
+        <div class="status-card" style="margin-bottom: 20px;">
+            <div class="card-header">
+                <div class="card-title">🌍 Market Regime: Macro vs Micro View</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px;">
+                <!-- Macro View -->
+                <div style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; border: 1px solid #333;">
+                    <h4 style="color: #3498db; margin-bottom: 10px;">🌐 MACRO VIEW (Index-Based)</h4>
+                    <div id="macro-status" style="font-size: 1.5em; font-weight: bold; margin: 10px 0;">Loading...</div>
+                    <p id="macro-recommendation" style="margin: 10px 0; font-size: 0.9em;">Analyzing indices...</p>
+                    <div id="macro-details" style="margin-top: 10px; font-size: 0.85em;">
+                        <!-- Index details will be populated here -->
+                    </div>
+                </div>
+                
+                <!-- Micro View -->
+                <div style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; border: 1px solid #333;">
+                    <h4 style="color: #9b59b6; margin-bottom: 10px;">🔬 MICRO VIEW (Pattern-Based)</h4>
+                    <div id="micro-status" style="font-size: 1.5em; font-weight: bold; margin: 10px 0;">Loading...</div>
+                    <p id="micro-recommendation" style="margin: 10px 0; font-size: 0.9em;">Analyzing patterns...</p>
+                    <div id="micro-details" style="margin-top: 10px; font-size: 0.85em;">
+                        <!-- Pattern details will be populated here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Summary -->
+            <div id="action-summary" style="margin: 20px; padding: 15px; background: rgba(0,0,0,0.5); border-radius: 8px; text-align: center; border: 2px solid #2ecc71;">
+                <div style="font-size: 1.1em; font-weight: bold; margin-bottom: 10px;">📈 Analyzing...</div>
+                <p style="margin: 0; font-size: 0.9em;">Please wait while we analyze market conditions...</p>
+            </div>
         </div>
         
         <div class="status-grid">
@@ -666,6 +807,10 @@ def get_health_status():
                     'confidence_level': regime_data['market_regime']['confidence_level'],
                     'timestamp': regime_data['timestamp']
                 }
+                
+                # Add index analysis if available
+                if 'index_analysis' in regime_data:
+                    health_data['index_analysis'] = regime_data['index_analysis']
                 
                 # Extract scores from trend_analysis
                 if 'trend_analysis' in regime_data:

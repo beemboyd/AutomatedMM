@@ -389,6 +389,145 @@ class TrendDashboard:
         </div>
         """
         
+        # Add Macro/Micro View Section
+        html_content += """
+        <div class="breadth-section" style="background-color: #2c3e50; color: white; margin-bottom: 30px; margin-top: 30px;">
+            <h2 class="section-title" style="color: white; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 20px;">🌍 Market Regime: Macro vs Micro View</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        """
+        
+        # Macro View (Index-based)
+        macro_status = "N/A"
+        macro_color = "#95a5a6"
+        macro_recommendation = "No data available"
+        
+        if report.get('index_analysis'):
+            idx = report['index_analysis']
+            indices_above = idx.get('indices_above_sma20', 0)
+            total_indices = idx.get('total_indices', 3)
+            
+            if indices_above == total_indices:
+                macro_status = "BULLISH"
+                macro_color = "#2ecc71"
+                macro_recommendation = "All indices above SMA20 - Scale into positions"
+            elif indices_above >= 2:
+                macro_status = "MODERATELY BULLISH"
+                macro_color = "#3498db"
+                macro_recommendation = f"{indices_above}/{total_indices} indices above SMA20 - Normal position sizing"
+            elif indices_above == 1:
+                macro_status = "NEUTRAL"
+                macro_color = "#f39c12"
+                macro_recommendation = "Mixed signals - Reduce position sizes"
+            else:
+                macro_status = "BEARISH"
+                macro_color = "#e74c3c"
+                macro_recommendation = "All indices below SMA20 - Consider scaling out"
+        
+        html_content += f"""
+                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 8px;">
+                    <h3 style="color: #3498db; margin-bottom: 15px;">🌐 MACRO VIEW (Index-Based)</h3>
+                    <div style="font-size: 2em; font-weight: bold; color: {macro_color}; margin: 10px 0;">{macro_status}</div>
+                    <p style="margin: 10px 0;">{macro_recommendation}</p>
+        """
+        
+        if report.get('index_analysis') and idx.get('index_details'):
+            html_content += '<div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">'
+            for index_name, index_data in idx['index_details'].items():
+                position = index_data.get('sma_position_pct', 0)
+                color = '#2ecc71' if index_data.get('above_sma20', False) else '#e74c3c'
+                html_content += f'<div style="margin: 5px 0;"><strong>{index_name}:</strong> <span style="color: {color}">{position:+.1f}%</span></div>'
+            html_content += '</div>'
+        
+        html_content += '</div>'
+        
+        # Micro View (Pattern-based)
+        micro_status = regime.replace('_', ' ').upper()
+        micro_color = regime_color
+        long_count = report['reversal_counts']['long']
+        short_count = report['reversal_counts']['short']
+        ratio = report['trend_analysis']['ratio']
+        
+        if 'strong_uptrend' in regime or 'uptrend' in regime:
+            micro_recommendation = f"Strong reversal patterns ({long_count}L/{short_count}S) - Take long positions"
+        elif 'strong_downtrend' in regime or 'downtrend' in regime:
+            micro_recommendation = f"Bearish patterns dominate ({long_count}L/{short_count}S) - Focus on shorts"
+        else:
+            micro_recommendation = f"Mixed patterns ({long_count}L/{short_count}S) - Be selective"
+        
+        html_content += f"""
+                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 8px;">
+                    <h3 style="color: #9b59b6; margin-bottom: 15px;">🔬 MICRO VIEW (Pattern-Based)</h3>
+                    <div style="font-size: 2em; font-weight: bold; color: {micro_color}; margin: 10px 0;">{micro_status}</div>
+                    <p style="margin: 10px 0;">{micro_recommendation}</p>
+                    <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">
+                        <div style="margin: 5px 0;"><strong>Reversal Patterns:</strong> {long_count} Long, {short_count} Short</div>
+                        <div style="margin: 5px 0;"><strong>L/S Ratio:</strong> {'Infinite' if ratio == float('inf') or ratio == 'inf' else f'{float(ratio):.2f}'}</div>
+                        <div style="margin: 5px 0;"><strong>Confidence:</strong> {report['market_regime']['confidence']:.1%}</div>
+                    </div>
+                </div>
+            </div>
+        """
+        
+        # Action Summary
+        divergence = False
+        if report.get('index_analysis'):
+            idx_trend = idx.get('trend', '')
+            if ('bearish' in idx_trend and ('uptrend' in regime or 'bullish' in regime)) or \
+               ('bullish' in idx_trend and ('downtrend' in regime or 'bearish' in regime)):
+                divergence = True
+        
+        action_color = "#e74c3c" if divergence else "#2ecc71"
+        action_text = "⚠️ DIVERGENCE DETECTED" if divergence else "✅ VIEWS ALIGNED"
+        
+        if divergence:
+            action_recommendation = "Macro and Micro views diverge - Reduce position sizes and wait for confirmation"
+        else:
+            action_recommendation = "Both views align - Follow regime recommendations with confidence"
+        
+        html_content += f"""
+            <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center; border: 2px solid {action_color};">
+                <div style="font-size: 1.3em; font-weight: bold; color: {action_color}; margin-bottom: 10px;">{action_text}</div>
+                <p style="margin: 0;">{action_recommendation}</p>
+            </div>
+        </div>
+        """
+        
+        # Add index analysis section if available
+        if report.get('index_analysis'):
+            idx = report['index_analysis']
+            html_content += f"""
+        <div class="breadth-section" style="margin-bottom: 30px;">
+            <h2 class="section-title">📈 Index SMA20 Analysis</h2>
+            <div class="metrics-grid">
+        """
+            
+            # Add each index
+            if idx.get('index_details'):
+                for index_name, index_data in idx['index_details'].items():
+                    position = index_data.get('sma_position_pct', 0)
+                    above_sma = index_data.get('above_sma20', False)
+                    color = '#27ae60' if above_sma else '#e74c3c'
+                    status = 'Above' if above_sma else 'Below'
+                    
+                    html_content += f"""
+                <div class="metric-card">
+                    <div class="metric-value" style="color: {color}">{position:.1f}%</div>
+                    <div class="metric-label">{index_name}</div>
+                    <div style="font-size: 0.85em; color: #7f8c8d;">{status} SMA20</div>
+                </div>
+                """
+            
+            # Add overall analysis
+            html_content += f"""
+                <div class="metric-card">
+                    <div class="metric-value">{idx.get('indices_above_sma20', 0)}/{idx.get('total_indices', 3)}</div>
+                    <div class="metric-label">Indices Above SMA20</div>
+                    <div style="font-size: 0.85em; color: #7f8c8d;">{idx.get('trend', 'Unknown').replace('_', ' ').title()}</div>
+                </div>
+            </div>
+        </div>
+        """
+        
         # Add breadth indicators section if available
         if breadth:
             html_content += """

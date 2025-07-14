@@ -26,6 +26,8 @@ from trend_dashboard import TrendDashboard
 from confidence_calculator import ConfidenceCalculator
 from position_recommender import PositionRecommender
 from regime_history_tracker import RegimeHistoryTracker
+from regime_smoother import RegimeSmoother
+from index_sma_analyzer import IndexSMAAnalyzer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from analysis.market_regime.market_indicators import MarketIndicators
 
@@ -59,6 +61,8 @@ class MarketRegimeAnalyzer:
         self.confidence_calc = ConfidenceCalculator()
         self.position_rec = PositionRecommender()
         self.history_tracker = RegimeHistoryTracker()
+        self.regime_smoother = RegimeSmoother()
+        self.index_analyzer = IndexSMAAnalyzer()
         
         # Market regime definitions
         self.regimes = {
@@ -99,8 +103,8 @@ class MarketRegimeAnalyzer:
             }
         }
         
-    def determine_market_regime(self, trend_report):
-        """Determine market regime based on trend analysis"""
+    def determine_market_regime(self, trend_report, use_index_analysis=True):
+        """Determine market regime based on trend analysis and index SMA positions"""
         trend = trend_report['trend_strength']['trend']
         
         # Map trend strength to market regime
@@ -115,7 +119,24 @@ class MarketRegimeAnalyzer:
             'no_signals': 'choppy'
         }
         
-        regime = regime_mapping.get(trend, 'choppy')
+        base_regime = regime_mapping.get(trend, 'choppy')
+        
+        # Get index analysis if enabled
+        if use_index_analysis:
+            try:
+                index_trend = self.index_analyzer.analyze_index_trend()
+                
+                # Combine pattern-based regime with index-based regime
+                combined_regime = self._combine_regime_signals(base_regime, index_trend)
+                
+                logger.info(f"Regime determination: Pattern-based={base_regime}, Index trend={index_trend['trend']}, Combined={combined_regime}")
+                
+                regime = combined_regime
+            except Exception as e:
+                logger.error(f"Error in index analysis: {e}")
+                regime = base_regime
+        else:
+            regime = base_regime
         
         # Adjust based on momentum if available
         if trend_report.get('momentum'):
@@ -128,6 +149,55 @@ class MarketRegimeAnalyzer:
                 regime = 'choppy_bearish'
                 
         return regime
+    
+    def _combine_regime_signals(self, pattern_regime, index_trend):
+        """Combine pattern-based regime with index-based signals"""
+        # Weight for index analysis (30% weight)
+        index_weight = 0.3
+        pattern_weight = 0.7
+        
+        # Convert regimes to numerical scores
+        regime_scores = {
+            'strong_uptrend': 3,
+            'uptrend': 2,
+            'choppy_bullish': 1,
+            'choppy': 0,
+            'choppy_bearish': -1,
+            'downtrend': -2,
+            'strong_downtrend': -3
+        }
+        
+        index_regime_map = {
+            'strong_bullish': 'strong_uptrend',
+            'bullish': 'uptrend',
+            'neutral': 'choppy',
+            'bearish': 'downtrend',
+            'strong_bearish': 'strong_downtrend'
+        }
+        
+        # Get scores
+        pattern_score = regime_scores.get(pattern_regime, 0)
+        index_regime = index_regime_map.get(index_trend['trend'], 'choppy')
+        index_score = regime_scores.get(index_regime, 0)
+        
+        # Calculate weighted score
+        combined_score = pattern_score * pattern_weight + index_score * index_weight
+        
+        # Map back to regime
+        if combined_score >= 2.5:
+            return 'strong_uptrend'
+        elif combined_score >= 1.5:
+            return 'uptrend'
+        elif combined_score >= 0.5:
+            return 'choppy_bullish'
+        elif combined_score >= -0.5:
+            return 'choppy'
+        elif combined_score >= -1.5:
+            return 'choppy_bearish'
+        elif combined_score >= -2.5:
+            return 'downtrend'
+        else:
+            return 'strong_downtrend'
     
     def _load_existing_scan_results(self):
         """Load the most recent scanner results from the Daily/results directories"""
@@ -221,7 +291,43 @@ class MarketRegimeAnalyzer:
             return None
             
         # Determine market regime
-        regime = self.determine_market_regime(trend_report)
+        new_regime = self.determine_market_regime(trend_report)
+        
+        # Check if we should actually change the regime (smoothing)
+        current_regime = None
+        regime_duration_hours = 0
+        
+        # Get current regime from history
+        history_summary = self.history_tracker.get_performance_summary()
+        if history_summary and history_summary.get('current_regime'):
+            current_regime = history_summary['current_regime']
+            regime_duration_hours = history_summary.get('regime_duration_hours', 0)
+        
+        # Apply smoothing logic
+        if current_regime and self.regime_smoother:
+            # Calculate confidence for the new regime
+            temp_confidence_data = {
+                'ratio': trend_report['trend_strength']['ratio'] if trend_report['trend_strength']['ratio'] != 'inf' else 10.0,
+                'history': [entry['regime'] for entry in self.history_tracker.get_recent_history(24)],
+                'volume_participation': breadth_indicators.get('volume_participation', 0.5) if breadth_indicators else 0.5,
+                'trend_strength': trend_report['trend_strength'].get('strength', 0)
+            }
+            temp_confidence = self.confidence_calc.calculate_confidence(temp_confidence_data)
+            
+            should_change, reason = self.regime_smoother.should_change_regime(
+                current_regime, new_regime, temp_confidence, regime_duration_hours
+            )
+            
+            if not should_change:
+                logger.info(f"Regime change blocked by smoother: {current_regime} -> {new_regime} ({reason})")
+                regime = current_regime  # Keep current regime
+            else:
+                logger.info(f"Regime change approved: {current_regime} -> {new_regime} ({reason})")
+                regime = new_regime
+        else:
+            # No current regime or smoother not available, use new regime
+            regime = new_regime
+            
         regime_info = self.regimes[regime]
         
         # Calculate confidence
@@ -276,8 +382,16 @@ class MarketRegimeAnalyzer:
                 # Save model after prediction
                 self.predictor.save_model()
         
+        # Get index analysis
+        index_analysis = None
+        try:
+            index_analysis = self.index_analyzer.analyze_index_trend()
+            logger.info(f"Index analysis: {index_analysis['trend']} - {index_analysis['analysis']}")
+        except Exception as e:
+            logger.error(f"Error getting index analysis: {e}")
+            
         # Generate actionable insights
-        insights = self._generate_insights(regime, trend_report, prediction)
+        insights = self._generate_insights(regime, trend_report, prediction, index_analysis)
         
         # Prepare complete report
         report = {
@@ -291,10 +405,12 @@ class MarketRegimeAnalyzer:
                 'confidence_level': self.position_rec._get_confidence_level(confidence)
             },
             'reversal_counts': trend_report['counts'],
+            'smoothed_counts': trend_report.get('smoothed_counts', trend_report['counts']),
             'trend_analysis': trend_report['trend_strength'],
             'momentum_analysis': trend_report.get('momentum'),
             'breadth_indicators': breadth_indicators,
             'volatility': volatility_data,
+            'index_analysis': index_analysis,
             'position_recommendations': position_recommendations,
             'prediction': prediction,
             'model_performance': self.predictor.get_model_insights(),
@@ -439,7 +555,7 @@ class MarketRegimeAnalyzer:
         except Exception as e:
             logger.error(f"Error saving report to database: {e}")
         
-    def _generate_insights(self, regime, trend_report, prediction=None):
+    def _generate_insights(self, regime, trend_report, prediction=None, index_analysis=None):
         """Generate actionable trading insights based on regime and prediction"""
         insights = []
         
@@ -507,6 +623,26 @@ class MarketRegimeAnalyzer:
                 insights.append("High confidence prediction - Consider adjusting position sizing accordingly")
             elif confidence < 0.4:
                 insights.append("Low confidence prediction - Maintain current strategy with caution")
+                
+        # Index analysis insights
+        if index_analysis:
+            indices_above = index_analysis.get('indices_above_sma20', 0)
+            total_indices = index_analysis.get('total_indices', 3)
+            avg_position = index_analysis.get('avg_position', 0)
+            
+            insights.append(f"\n📈 Index Analysis: {indices_above}/{total_indices} indices above SMA20")
+            
+            if index_analysis.get('index_details'):
+                for idx_name, idx_data in index_analysis['index_details'].items():
+                    position = idx_data.get('sma_position_pct', 0)
+                    status = "above" if idx_data.get('above_sma20', False) else "below"
+                    insights.append(f"  • {idx_name}: {position:+.1f}% {status} SMA20")
+            
+            # Index-based warnings
+            if indices_above == 0 and regime in ['uptrend', 'strong_uptrend']:
+                insights.append("⚠️ Warning: All indices below SMA20 despite bullish patterns")
+            elif indices_above == total_indices and regime in ['downtrend', 'strong_downtrend']:
+                insights.append("⚠️ Warning: All indices above SMA20 despite bearish patterns")
                 
         # Model performance insights
         model_insights = self.predictor.get_model_insights()
@@ -594,6 +730,13 @@ def main():
                 print(f"  Max Positions: {recs['max_positions']}")
                 print(f"  Risk per Trade: {recs['risk_per_trade']:.1%}")
                 print(f"  Preferred Direction: {recs['preferred_direction']}")
+                
+            if report.get('index_analysis'):
+                idx_analysis = report['index_analysis']
+                print(f"\n📈 Index Analysis:")
+                print(f"  Trend: {idx_analysis.get('trend', 'N/A')}")
+                print(f"  Indices above SMA20: {idx_analysis.get('indices_above_sma20', 0)}/{idx_analysis.get('total_indices', 3)}")
+                print(f"  Average position: {idx_analysis.get('avg_position', 0):.1f}%")
                 
             if report.get('prediction'):
                 print(f"\n🔮 Next Regime Prediction:")
