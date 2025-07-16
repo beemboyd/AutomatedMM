@@ -14,10 +14,10 @@ from Daily.trading.place_orders_daily import get_top_stocks, get_latest_brooks_f
 def test_score_filtering():
     """Test the score filtering functionality"""
     
-    # Find the latest Brooks/StrategyB file
+    # Find the latest Long Reversal Daily file
     brooks_file = get_latest_brooks_file()
     if not brooks_file:
-        print("No Brooks file found!")
+        print("No Long Reversal Daily file found!")
         return
     
     print(f"Testing with file: {os.path.basename(brooks_file)}")

@@ -127,70 +127,45 @@ def setup_user_context(user_credentials: UserCredentials, config):
 
 def get_latest_brooks_file() -> Optional[str]:
     """
-    Find the latest StrategyB Report file in the Daily/results directory,
-    excluding Weekly analysis files which are handled separately.
+    Find the latest Long_Reversal_Daily file in the Daily/results directory.
 
     Returns:
-        str: Path to the latest StrategyB Report file or None if not found
+        str: Path to the latest Long_Reversal_Daily file or None if not found
     """
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         results_dir = os.path.join(os.path.dirname(script_dir), "results")
 
-        # Get all StrategyB Report files with new naming format
-        strategy_b_files = glob.glob(os.path.join(results_dir, "StrategyB_Report_*.xlsx"))
-        # Also check for previous format files for backward compatibility
-        report_files = glob.glob(os.path.join(results_dir, "Report_*.xlsx"))
-        # And old format files for backward compatibility
-        old_format_files = glob.glob(os.path.join(results_dir, "Brooks_Higher_Probability_LONG_Reversal_*.xlsx"))
-        old_format_files = [f for f in old_format_files if "Weekly" not in os.path.basename(f)]
+        # Get all Long_Reversal_Daily files
+        long_reversal_files = glob.glob(os.path.join(results_dir, "Long_Reversal_Daily_*.xlsx"))
         
-        # Combine all formats
-        all_files = strategy_b_files + report_files + old_format_files
-
-        if not all_files:
-            logging.error("No StrategyB Report files found in the Daily/results directory")
+        if not long_reversal_files:
+            logging.error("No Long_Reversal_Daily files found in the Daily/results directory")
             return None
 
         # Sort files by timestamp in filename (newest first)
-        # New filename format: Report_YYYYMMDD_HHMMSS.xlsx
-        # Old filename format: Brooks_Higher_Probability_LONG_Reversal_DD_MM_YYYY_HH_MM.xlsx
+        # Filename format: Long_Reversal_Daily_YYYYMMDD_HHMMSS.xlsx
         def extract_timestamp(filename):
             try:
                 basename = os.path.basename(filename)
                 
-                # Check if it's the new StrategyB format or previous Report format
-                if basename.startswith("StrategyB_Report_") or basename.startswith("Report_"):
-                    # Remove prefix and suffix
-                    if basename.startswith("StrategyB_Report_"):
-                        timestamp_part = basename.replace("StrategyB_Report_", "").replace(".xlsx", "")
-                    else:
-                        timestamp_part = basename.replace("Report_", "").replace(".xlsx", "")
-                    # Parse timestamp: YYYYMMDD_HHMMSS
-                    parts = timestamp_part.split("_")
-                    if len(parts) == 2:
-                        date_part, time_part = parts
-                        # Parse YYYYMMDD
-                        year = int(date_part[:4])
-                        month = int(date_part[4:6])
-                        day = int(date_part[6:8])
-                        # Parse HHMMSS
-                        hour = int(time_part[:2])
-                        minute = int(time_part[2:4])
-                        second = int(time_part[4:6])
-                        # Create datetime object for sorting
-                        dt = datetime.datetime(year, month, day, hour, minute, second)
-                        return dt
-                else:
-                    # Old format: Brooks_Higher_Probability_LONG_Reversal_DD_MM_YYYY_HH_MM.xlsx
-                    timestamp_part = basename.replace("Brooks_Higher_Probability_LONG_Reversal_", "").replace(".xlsx", "")
-                    # Parse timestamp: DD_MM_YYYY_HH_MM
-                    parts = timestamp_part.split("_")
-                    if len(parts) == 5:
-                        day, month, year, hour, minute = parts
-                        # Create datetime object for sorting
-                        dt = datetime.datetime(int(year), int(month), int(day), int(hour), int(minute))
-                        return dt
+                # Remove prefix and suffix
+                timestamp_part = basename.replace("Long_Reversal_Daily_", "").replace(".xlsx", "")
+                # Parse timestamp: YYYYMMDD_HHMMSS
+                parts = timestamp_part.split("_")
+                if len(parts) == 2:
+                    date_part, time_part = parts
+                    # Parse YYYYMMDD
+                    year = int(date_part[:4])
+                    month = int(date_part[4:6])
+                    day = int(date_part[6:8])
+                    # Parse HHMMSS
+                    hour = int(time_part[:2])
+                    minute = int(time_part[2:4])
+                    second = int(time_part[4:6])
+                    # Create datetime object for sorting
+                    dt = datetime.datetime(year, month, day, hour, minute, second)
+                    return dt
             except Exception:
                 # If parsing fails, use modification time as fallback
                 return datetime.datetime.fromtimestamp(os.path.getmtime(filename))
@@ -199,10 +174,10 @@ def get_latest_brooks_file() -> Optional[str]:
             return datetime.datetime.fromtimestamp(os.path.getmtime(filename))
 
         # Sort by extracted timestamp (newest first)
-        all_files.sort(key=extract_timestamp, reverse=True)
-        latest_file = all_files[0]
+        long_reversal_files.sort(key=extract_timestamp, reverse=True)
+        latest_file = long_reversal_files[0]
 
-        logging.info(f"Found latest StrategyB Report file: {os.path.basename(latest_file)}")
+        logging.info(f"Found latest Long Reversal Daily file: {os.path.basename(latest_file)}")
         return latest_file
     except Exception as e:
         logging.error(f"Error finding latest Brooks file: {e}")
@@ -725,7 +700,7 @@ def place_cnc_orders(stocks: List[Dict], available_capital: float, order_manager
     return successful_orders, order_details
 
 def main():
-    """Main function to place CNC orders for stocks from the latest Brooks Higher Probability LONG Reversal file"""
+    """Main function to place CNC orders for stocks from the latest Long Reversal Daily file"""
     try:
         print("=== CNC Order Placement Tool ===")
         
@@ -750,12 +725,12 @@ def main():
         # Set up user context and services
         order_manager, state_manager, temp_config, logger = setup_user_context(selected_user, config)
         
-        logger.info("Starting CNC order placement from Brooks Higher Probability LONG Reversal file")
+        logger.info("Starting CNC order placement from Long Reversal Daily file")
 
-        # Find the latest Brooks file
+        # Find the latest Long Reversal Daily file
         brooks_file = get_latest_brooks_file()
         if not brooks_file:
-            logger.error("No Brooks Higher Probability LONG Reversal file found, exiting")
+            logger.error("No Long Reversal Daily file found, exiting")
             return 1
 
         # Get available capital
