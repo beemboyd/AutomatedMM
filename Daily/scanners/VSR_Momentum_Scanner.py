@@ -823,20 +823,56 @@ def process_ticker(ticker):
 # Read Ticker File
 # -----------------------------
 def read_ticker_file():
-    """Read tickers from the Excel file"""
-    ticker_file = os.path.join(DATA_DIR, "Ticker.xlsx")
-    
+    """Read tickers from the latest Long_Reversal_Daily file"""
     try:
-        if not os.path.exists(ticker_file):
-            logger.error(f"Ticker file not found: {ticker_file}")
+        # Look for Long_Reversal_Daily files in the results directory
+        results_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
+        long_reversal_files = glob.glob(os.path.join(results_dir, "Long_Reversal_Daily_*.xlsx"))
+        
+        if not long_reversal_files:
+            logger.error("No Long_Reversal_Daily files found in the results directory")
             return []
         
-        df = pd.read_excel(ticker_file, sheet_name="Ticker")
+        # Sort files by timestamp in filename (newest first)
+        def extract_timestamp(filename):
+            try:
+                basename = os.path.basename(filename)
+                timestamp_part = basename.replace("Long_Reversal_Daily_", "").replace(".xlsx", "")
+                parts = timestamp_part.split("_")
+                if len(parts) == 2:
+                    date_part, time_part = parts
+                    year = int(date_part[:4])
+                    month = int(date_part[4:6])
+                    day = int(date_part[6:8])
+                    hour = int(time_part[:2])
+                    minute = int(time_part[2:4])
+                    second = int(time_part[4:6])
+                    return datetime.datetime(year, month, day, hour, minute, second)
+            except Exception:
+                return datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+            
+            return datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+        
+        # Sort by extracted timestamp (newest first)
+        long_reversal_files.sort(key=extract_timestamp, reverse=True)
+        latest_file = long_reversal_files[0]
+        
+        logger.info(f"Using latest Long Reversal Daily file: {os.path.basename(latest_file)}")
+        
+        # Read the file
+        df = pd.read_excel(latest_file)
         tickers = df['Ticker'].dropna().tolist()
-        logger.info(f"Read {len(tickers)} tickers from {ticker_file}")
+        logger.info(f"Read {len(tickers)} tickers from {os.path.basename(latest_file)}")
+        
+        # Also log some statistics about the file
+        if 'Score' in df.columns:
+            score_counts = df['Score'].value_counts().to_dict()
+            logger.info(f"Score distribution: {score_counts}")
+        
         return tickers
+        
     except Exception as e:
-        logger.error(f"Error reading ticker file: {e}")
+        logger.error(f"Error reading Long Reversal Daily file: {e}")
         return []
 
 # -----------------------------
