@@ -364,14 +364,14 @@ def check_existing_positions(tickers: List[str], state_manager, order_manager=No
 
 def get_top_stocks(brooks_file: str, target_positions: int, state_manager, order_manager=None) -> Tuple[List[Dict], List[str]]:
     """
-    Extract stocks from the Brooks file in Excel order, taking the first N positions
+    Extract stocks from the Brooks file with score 5/7 or better, taking maximum of 10 positions
     
-    Note: Stocks are selected based on their order in the Excel file (top to bottom), 
-    NOT sorted by Risk_Reward_Ratio. No existing position check is performed.
+    Note: Stocks are filtered by score (5/7 minimum) and limited to top 10 tickers.
+    They maintain their Excel order after filtering.
 
     Args:
         brooks_file (str): Path to the Brooks file
-        target_positions (int): Target number of positions to select
+        target_positions (int): Target number of positions to select (max 10)
         state_manager: State manager instance (not used, kept for compatibility)
         order_manager: Order manager instance (not used, kept for compatibility)
 
@@ -382,23 +382,41 @@ def get_top_stocks(brooks_file: str, target_positions: int, state_manager, order
         df = pd.read_excel(brooks_file)
 
         # Ensure required columns exist for Brooks file
-        required_columns = ['Ticker', 'Stop_Loss', 'Target1', 'Risk_Reward_Ratio']
+        required_columns = ['Ticker', 'Stop_Loss', 'Target1', 'Risk_Reward_Ratio', 'Score']
         for col in required_columns:
             if col not in df.columns:
                 logging.error(f"Required column '{col}' not found in Brooks file. Columns found: {df.columns.tolist()}")
                 return [], []
 
-        # Keep the original Excel order - do not sort by Risk_Reward_Ratio
-        # This ensures stocks are selected based on their position in the Excel file
-        logging.info("Using Excel file order for stock selection (not sorting by Risk_Reward_Ratio)")
-        logging.info("No existing position check - will select first N stocks from Excel")
+        # Filter for stocks with score 5/7 or better
+        def parse_score(score_str):
+            """Parse score string like '5/7' and return numerator"""
+            try:
+                if pd.isna(score_str) or score_str == '':
+                    return 0
+                if isinstance(score_str, str) and '/' in score_str:
+                    numerator = int(score_str.split('/')[0])
+                    return numerator
+                return 0
+            except:
+                return 0
+        
+        df['score_value'] = df['Score'].apply(parse_score)
+        filtered_df = df[df['score_value'] >= 5]
+        
+        # Limit to top 10 tickers maximum
+        max_selections = min(10, target_positions)
+        
+        logging.info(f"Filtering for stocks with score 5/7 or better")
+        logging.info(f"Found {len(filtered_df)} stocks with score >= 5/7")
+        logging.info(f"Selecting maximum of {max_selections} stocks")
 
-        # Convert to list of dictionaries, taking first N positions
+        # Convert to list of dictionaries, taking first N positions (max 10)
         result = []
 
-        for idx, (_, row) in enumerate(df.iterrows()):
-            # Stop if we have enough positions
-            if len(result) >= target_positions:
+        for idx, (_, row) in enumerate(filtered_df.iterrows()):
+            # Stop if we have enough positions or reached max of 10
+            if len(result) >= max_selections:
                 break
 
             ticker = row['Ticker']
@@ -415,10 +433,14 @@ def get_top_stocks(brooks_file: str, target_positions: int, state_manager, order
                 'entry_price': float(row.get('Entry_Price', 0))
             }
 
-            logging.info(f"Position {idx+1}: {ticker} - SL: {stop_loss}, Target: {target1}, R:R: {risk_reward}")
+            score = row['Score']
+            logging.info(f"Position {idx+1}: {ticker} - Score: {score}, SL: {stop_loss}, Target: {target1}, R:R: {risk_reward}")
             result.append(stock_data)
 
-        logging.info(f"Extracted {len(result)} stocks from Brooks file (first {target_positions} positions)")
+        logging.info(f"Selected {len(result)} stocks from Brooks file (filtered by score >= 5/7, max 10)")
+        
+        if len(result) < target_positions:
+            logging.warning(f"Only {len(result)} stocks met the criteria (score >= 5/7), less than requested {target_positions}")
 
         return result, []  # Return empty list for skipped_existing for compatibility
     except Exception as e:
@@ -760,7 +782,7 @@ def main():
 
         # Display the stocks and capital allocation
         print(f"\nAccount: {user_name}")
-        print(f"Stocks from {os.path.basename(brooks_file)} (first {max_positions} in Excel order):")
+        print(f"Stocks from {os.path.basename(brooks_file)} (score >= 5/7, max 10 positions):")
         print(f"Available Capital: ₹{available_capital:,.2f}")
         print(f"Usable Capital ({deployment_percent*100:.0f}%): ₹{usable_capital:,.2f}")
         print(f"Positions to create: {num_positions}")
