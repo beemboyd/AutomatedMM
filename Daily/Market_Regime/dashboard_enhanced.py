@@ -1343,6 +1343,9 @@ def get_g_pattern_data():
                 generated_time = line.split('Generated:')[1].strip()
                 break
         
+        # Count totals
+        total_count = len(g_pattern_df)
+        
         return jsonify({
             'generated_time': generated_time,
             'categories': categories,
@@ -1352,7 +1355,9 @@ def get_g_pattern_data():
                 'emerging': len(categories['emerging']),
                 'watch_closely': len(categories['watch_closely']),
                 'watch_only': len(categories['watch_only'])
-            }
+            },
+            'total_count': total_count,
+            'source_file': os.path.basename(latest_file)
         })
         
     except Exception as e:
