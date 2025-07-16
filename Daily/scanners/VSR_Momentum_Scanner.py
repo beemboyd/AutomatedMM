@@ -433,10 +433,58 @@ def calculate_vsr_indicators(hourly_data):
     df['VSR_Higher_Low'] = vsr_low_5 > vsr_low_5.shift(5)
     df['VSR_Pos_Divergence'] = df['Price_Lower_Low'] & df['VSR_Higher_Low']
     
+    # Negative divergence: Price making higher highs but VSR making lower highs
+    price_high_5 = df['High'].rolling(window=5).max()
+    vsr_high_5 = df['VSR'].rolling(window=5).max()
+    df['Price_Higher_High'] = price_high_5 > price_high_5.shift(5)
+    df['VSR_Lower_High'] = vsr_high_5 < vsr_high_5.shift(5)
+    df['VSR_Neg_Divergence'] = df['Price_Higher_High'] & df['VSR_Lower_High']
+    
+    # Buying Climax detection
+    # Extreme volume + wide spread + close near high + after uptrend
+    df['Wide_Spread'] = df['Spread_Pct'] > df['Spread_Pct'].rolling(window=20).mean() * 1.5
+    df['Close_Near_High'] = (df['Close'] - df['Low']) / (df['High'] - df['Low']) > 0.8
+    df['Extreme_Volume'] = df['VolumeRatio'] > 2.5
+    df['Uptrend_20'] = df['ROC20'] > 10
+    
+    df['Buying_Climax'] = (
+        df['Extreme_Volume'] & 
+        df['Wide_Spread'] & 
+        df['Close_Near_High'] & 
+        df['Uptrend_20'] &
+        (df['VSR_Ratio'] > 3.0)
+    )
+    
+    # Selling Climax detection
+    # Extreme volume + wide spread + close near low + after downtrend
+    df['Close_Near_Low'] = (df['Close'] - df['Low']) / (df['High'] - df['Low']) < 0.2
+    df['Downtrend_20'] = df['ROC20'] < -10
+    
+    df['Selling_Climax'] = (
+        df['Extreme_Volume'] & 
+        df['Wide_Spread'] & 
+        df['Close_Near_Low'] & 
+        df['Downtrend_20'] &
+        (df['VSR_Ratio'] > 3.0)
+    )
+    
+    # Climax with divergence (strongest signals)
+    df['Buying_Climax_Divergence'] = df['Buying_Climax'] & df['VSR_Neg_Divergence']
+    df['Selling_Climax_Divergence'] = df['Selling_Climax'] & df['VSR_Pos_Divergence']
+    
+    # Count recent climaxes
+    df['Buying_Climax_Count_10'] = df['Buying_Climax'].rolling(window=10).sum()
+    df['Selling_Climax_Count_10'] = df['Selling_Climax'].rolling(window=10).sum()
+    
     # Accumulation detection
     # High volume with small spread = accumulation
     df['Accumulation'] = (df['VolumeRatio'] > 1.5) & (df['Spread_Pct'] < df['Spread_Pct'].rolling(window=20).mean())
     df['Accumulation_Count'] = df['Accumulation'].rolling(window=10).sum()
+    
+    # Distribution detection
+    # High volume with small spread after uptrend = distribution
+    df['Distribution'] = (df['VolumeRatio'] > 1.5) & (df['Spread_Pct'] < df['Spread_Pct'].rolling(window=20).mean()) & (df['ROC10'] > 5)
+    df['Distribution_Count'] = df['Distribution'].rolling(window=10).sum()
     
     # Momentum building pattern
     df['Momentum_Building'] = (
@@ -511,11 +559,22 @@ def detect_vsr_momentum(data):
     
     # Advanced patterns
     advanced_conditions = {
-        'vsr_divergence': last_bar['VSR_Pos_Divergence'] if 'VSR_Pos_Divergence' in last_bar else False,
+        'vsr_pos_divergence': last_bar['VSR_Pos_Divergence'] if 'VSR_Pos_Divergence' in last_bar else False,
+        'vsr_neg_divergence': last_bar['VSR_Neg_Divergence'] if 'VSR_Neg_Divergence' in last_bar else False,
         'multiple_surges': last_5_bars['VSR_Surge'].sum() >= 2,
         'consistent_vsr': last_5_bars['VSR_Ratio'].mean() > 1.5,
         'volume_confirmation': last_5_bars['VolumeRatio'].max() > 2.0,
         'price_momentum': last_bar['ROC20'] > 5,
+    }
+    
+    # Climax conditions
+    climax_conditions = {
+        'buying_climax': last_bar['Buying_Climax'] if 'Buying_Climax' in last_bar else False,
+        'selling_climax': last_bar['Selling_Climax'] if 'Selling_Climax' in last_bar else False,
+        'buying_climax_divergence': last_bar['Buying_Climax_Divergence'] if 'Buying_Climax_Divergence' in last_bar else False,
+        'selling_climax_divergence': last_bar['Selling_Climax_Divergence'] if 'Selling_Climax_Divergence' in last_bar else False,
+        'recent_buying_climax': last_bar['Buying_Climax_Count_10'] > 0 if 'Buying_Climax_Count_10' in last_bar else False,
+        'recent_selling_climax': last_bar['Selling_Climax_Count_10'] > 0 if 'Selling_Climax_Count_10' in last_bar else False,
     }
     
     # Calculate scores
@@ -523,21 +582,24 @@ def detect_vsr_momentum(data):
     vsr_score = sum(vsr_conditions.values())
     momentum_score = sum(momentum_conditions.values())
     advanced_score = sum(advanced_conditions.values())
+    climax_score = sum(climax_conditions.values())
     
     # Calculate weighted total score
     weighted_score = (
         base_score * 1.0 +
         vsr_score * 3.0 +  # VSR is most important
         momentum_score * 2.0 +
-        advanced_score * 2.5
+        advanced_score * 2.5 +
+        climax_score * 4.0  # Climax patterns are very important
     )
     
     max_base_score = len(base_conditions)
     max_vsr_score = len(vsr_conditions)
     max_momentum_score = len(momentum_conditions)
     max_advanced_score = len(advanced_conditions)
+    max_climax_score = len(climax_conditions)
     max_weighted_score = (max_base_score * 1.0 + max_vsr_score * 3.0 + 
-                         max_momentum_score * 2.0 + max_advanced_score * 2.5)
+                         max_momentum_score * 2.0 + max_advanced_score * 2.5 + max_climax_score * 4.0)
     
     # Require minimum scores
     if base_score >= 4 and vsr_score >= 2:
@@ -563,7 +625,19 @@ def detect_vsr_momentum(data):
         target2 = last_bar['Close'] + (3 * risk)
         
         # Determine pattern type
-        if vsr_conditions['vsr_extreme'] and momentum_conditions['actual_breakout']:
+        if climax_conditions['buying_climax_divergence']:
+            pattern_type = 'Buying_Climax_Divergence'
+            description = 'BUYING CLIMAX with divergence - POTENTIAL TOP! Consider profit taking!'
+        elif climax_conditions['selling_climax_divergence']:
+            pattern_type = 'Selling_Climax_Divergence'  
+            description = 'SELLING CLIMAX with divergence - POTENTIAL BOTTOM! Watch for reversal!'
+        elif climax_conditions['buying_climax']:
+            pattern_type = 'Buying_Climax'
+            description = 'Buying climax detected - CAUTION at highs!'
+        elif climax_conditions['selling_climax']:
+            pattern_type = 'Selling_Climax'
+            description = 'Selling climax detected - Possible capitulation!'
+        elif vsr_conditions['vsr_extreme'] and momentum_conditions['actual_breakout']:
             pattern_type = 'VSR_Extreme_Breakout'
             description = 'Extreme VSR with price breakout - HIGHEST MOMENTUM!'
         elif vsr_conditions['vsr_surge'] and momentum_conditions['momentum_building']:
@@ -575,9 +649,12 @@ def detect_vsr_momentum(data):
         elif vsr_conditions['recent_vsr_activity'] and base_conditions['trend_aligned']:
             pattern_type = 'VSR_Trend_Aligned'
             description = 'VSR activity in aligned trend - MOMENTUM STARTING!'
-        elif advanced_conditions['vsr_divergence']:
-            pattern_type = 'VSR_Divergence'
+        elif advanced_conditions['vsr_pos_divergence']:
+            pattern_type = 'VSR_Pos_Divergence'
             description = 'Positive VSR divergence - ACCUMULATION DETECTED!'
+        elif advanced_conditions['vsr_neg_divergence']:
+            pattern_type = 'VSR_Neg_Divergence'
+            description = 'Negative VSR divergence - DISTRIBUTION WARNING!'
         else:
             pattern_type = 'VSR_Signal'
             description = 'VSR expansion detected - EARLY MOMENTUM!'
@@ -593,17 +670,19 @@ def detect_vsr_momentum(data):
         return {
             'pattern': pattern_type,
             'description': description,
-            'direction': 'LONG',
+            'direction': 'LONG' if not ('Selling' in pattern_type) else 'SHORT',
             'probability_score': probability_score,
             'base_score': base_score,
             'vsr_score': vsr_score,
             'momentum_score': momentum_score,
             'advanced_score': advanced_score,
+            'climax_score': climax_score,
             'weighted_score': weighted_score,
             'max_base_score': max_base_score,
             'max_vsr_score': max_vsr_score,
             'max_momentum_score': max_momentum_score,
             'max_advanced_score': max_advanced_score,
+            'max_climax_score': max_climax_score,
             'vsr_ratio': last_bar['VSR_Ratio'],
             'vsr_roc': last_bar['VSR_ROC'],
             'vsr_stats': vsr_stats,
@@ -620,11 +699,17 @@ def detect_vsr_momentum(data):
             'momentum_20h': last_bar['ROC20'],
             'kc_distance': last_bar['KC_Distance'],
             'accumulation_count': int(last_bar['Accumulation_Count']),
+            'distribution_count': int(last_bar['Distribution_Count']) if 'Distribution_Count' in last_bar else 0,
             'hh_count': int(last_bar['HH_Count']),
+            'buying_climax_count': int(last_bar['Buying_Climax_Count_10']) if 'Buying_Climax_Count_10' in last_bar else 0,
+            'selling_climax_count': int(last_bar['Selling_Climax_Count_10']) if 'Selling_Climax_Count_10' in last_bar else 0,
+            'has_pos_divergence': last_bar['VSR_Pos_Divergence'] if 'VSR_Pos_Divergence' in last_bar else False,
+            'has_neg_divergence': last_bar['VSR_Neg_Divergence'] if 'VSR_Neg_Divergence' in last_bar else False,
             'base_conditions': base_conditions,
             'vsr_conditions': vsr_conditions,
             'momentum_conditions': momentum_conditions,
-            'advanced_conditions': advanced_conditions
+            'advanced_conditions': advanced_conditions,
+            'climax_conditions': climax_conditions
         }
     
     return None
@@ -701,12 +786,18 @@ def process_ticker(ticker):
             'VSR_Score': f"{vsr_pattern['vsr_score']}/{vsr_pattern['max_vsr_score']}",
             'Momentum_Score': f"{vsr_pattern['momentum_score']}/{vsr_pattern['max_momentum_score']}",
             'Advanced_Score': f"{vsr_pattern['advanced_score']}/{vsr_pattern['max_advanced_score']}",
+            'Climax_Score': f"{vsr_pattern['climax_score']}/{vsr_pattern['max_climax_score']}",
             'VSR_Surges_10H': vsr_pattern['vsr_stats']['vsr_surges_10'],
             'VSR_Surges_20H': vsr_pattern['vsr_stats']['vsr_surges_20'],
             'Avg_VSR_Ratio': vsr_pattern['vsr_stats']['avg_vsr_ratio'],
             'Max_VSR_Ratio': vsr_pattern['vsr_stats']['max_vsr_ratio'],
             'Accumulation_Count': vsr_pattern['accumulation_count'],
+            'Distribution_Count': vsr_pattern['distribution_count'],
             'HH_Count': vsr_pattern['hh_count'],
+            'Buying_Climax_10H': vsr_pattern['buying_climax_count'],
+            'Selling_Climax_10H': vsr_pattern['selling_climax_count'],
+            'Has_Pos_Divergence': vsr_pattern['has_pos_divergence'],
+            'Has_Neg_Divergence': vsr_pattern['has_neg_divergence'],
             'Entry_Price': entry_price,
             'Stop_Loss': stop_loss,
             'Target1': vsr_pattern['target1'],
@@ -896,11 +987,62 @@ def generate_html_report(filtered_df, output_file):
                 <li><strong>Multiple VSR Surges</strong> - Sustained momentum building</li>
                 <li><strong>Hourly Analysis</strong> - Captures intraday momentum shifts early</li>
             </ul>
+            <h4>🎯 Enhanced with Climax Detection:</h4>
+            <ul>
+                <li><strong>Buying Climax</strong> - Extreme volume + wide spread + close near high (potential exhaustion at tops)</li>
+                <li><strong>Selling Climax</strong> - Extreme volume + wide spread + close near low (potential capitulation at bottoms)</li>
+                <li><strong>Divergences</strong> - Price-VSR divergences signal potential reversals or continuation</li>
+                <li><strong>⚠️ Climax + Divergence</strong> - Highest risk of reversal, use extreme caution!</li>
+            </ul>
         </div>
 
         <h2>🚀 Momentum Opportunities ({len(filtered_df)} matches)</h2>
     """
 
+    # Add summary statistics with climax information
+    if len(filtered_df) > 0:
+        # Calculate statistics
+        extreme_vsr = len(filtered_df[filtered_df['VSR_Ratio'] >= 3.0])
+        high_vsr = len(filtered_df[(filtered_df['VSR_Ratio'] >= 2.0) & (filtered_df['VSR_Ratio'] < 3.0)])
+        high_prob = len(filtered_df[filtered_df['Probability_Score'] >= 70])
+        
+        # Climax statistics
+        buying_climax = len(filtered_df[filtered_df.get('Buying_Climax_10H', 0) > 0]) if 'Buying_Climax_10H' in filtered_df.columns else 0
+        selling_climax = len(filtered_df[filtered_df.get('Selling_Climax_10H', 0) > 0]) if 'Selling_Climax_10H' in filtered_df.columns else 0
+        pos_divergence = len(filtered_df[filtered_df.get('Has_Pos_Divergence', False) == True]) if 'Has_Pos_Divergence' in filtered_df.columns else 0
+        neg_divergence = len(filtered_df[filtered_df.get('Has_Neg_Divergence', False) == True]) if 'Has_Neg_Divergence' in filtered_df.columns else 0
+        
+        html_content += f"""
+        <div class="stats-summary" style="background: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <h3>📊 Key Statistics</h3>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+                <div>
+                    <strong>VSR Analysis:</strong><br>
+                    Extreme VSR (≥3.0): {extreme_vsr}<br>
+                    High VSR (2.0-3.0): {high_vsr}<br>
+                    High Probability (≥70): {high_prob}
+                </div>
+                <div>
+                    <strong>Climax Events:</strong><br>
+                    Buying Climax: {buying_climax}<br>
+                    Selling Climax: {selling_climax}<br>
+                    Total Climax: {buying_climax + selling_climax}
+                </div>
+                <div>
+                    <strong>Divergences:</strong><br>
+                    Positive Divergence: {pos_divergence}<br>
+                    Negative Divergence: {neg_divergence}<br>
+                    Total Divergences: {pos_divergence + neg_divergence}
+                </div>
+                <div>
+                    <strong>Risk Alerts:</strong><br>
+                    Climax + Divergence: {len(filtered_df[(filtered_df.get('Buying_Climax_10H', 0) > 0) | (filtered_df.get('Selling_Climax_10H', 0) > 0) & ((filtered_df.get('Has_Pos_Divergence', False) == True) | (filtered_df.get('Has_Neg_Divergence', False) == True))])} ⚠️<br>
+                    Watch closely for reversals!
+                </div>
+            </div>
+        </div>
+        """
+        
     # Add sector summary if we have matches
     if len(filtered_df) > 0:
         sector_counts = filtered_df['Sector'].value_counts()
@@ -927,6 +1069,7 @@ def generate_html_report(filtered_df, output_file):
                     <th>VSR Ratio</th>
                     <th>VSR Surges</th>
                     <th>Pattern</th>
+                    <th>Climax</th>
                     <th>Entry</th>
                     <th>Stop Loss</th>
                     <th>Target 1</th>
@@ -947,6 +1090,20 @@ def generate_html_report(filtered_df, output_file):
         # Momentum class
         momentum_class = "momentum-positive" if row['Momentum_10H'] > 0 else "momentum-negative"
         
+        # Determine climax indicators
+        climax_html = ""
+        if row.get('Buying_Climax_10H', 0) > 0 or row.get('Selling_Climax_10H', 0) > 0:
+            if row.get('Has_Pos_Divergence', False) or row.get('Has_Neg_Divergence', False):
+                climax_html = '<span style="color: #e74c3c; font-weight: bold;">⚠️ CLIMAX+DIV</span>'
+            else:
+                climax_html = '<span style="color: #e67e22;">⚠️ CLIMAX</span>'
+        elif row.get('Has_Pos_Divergence', False):
+            climax_html = '<span style="color: #27ae60;">↗️ POS DIV</span>'
+        elif row.get('Has_Neg_Divergence', False):
+            climax_html = '<span style="color: #e74c3c;">↘️ NEG DIV</span>'
+        else:
+            climax_html = '-'
+        
         html_content += f"""
             <tr>
                 <td style="font-weight: bold;">{row['Ticker']}</td>
@@ -955,6 +1112,7 @@ def generate_html_report(filtered_df, output_file):
                 <td><span class="{vsr_class}">{row['VSR_Ratio']:.2f}x</span></td>
                 <td>{row['VSR_Surges_10H']} / {row['VSR_Surges_20H']}</td>
                 <td>{row['Pattern']}</td>
+                <td>{climax_html}</td>
                 <td>₹{row['Entry_Price']:.2f}</td>
                 <td>₹{row['Stop_Loss']:.2f}</td>
                 <td>₹{row['Target1']:.2f}</td>
@@ -1008,9 +1166,36 @@ def generate_html_report(filtered_df, output_file):
                         <strong>Scores:</strong><br>
                         VSR: {row['VSR_Score']}<br>
                         Momentum: {row['Momentum_Score']}<br>
+                        Climax: {row['Climax_Score']}<br>
                         Overall: {row['Probability_Score']:.0f}/100
                     </div>
-                </div>
+                </div>"""
+            
+            # Add climax warning if applicable
+            if row.get('Buying_Climax_10H', 0) > 0 or row.get('Selling_Climax_10H', 0) > 0:
+                climax_type = "Buying" if row.get('Buying_Climax_10H', 0) > 0 else "Selling"
+                climax_count = row.get('Buying_Climax_10H', 0) if climax_type == "Buying" else row.get('Selling_Climax_10H', 0)
+                divergence_text = ""
+                if row.get('Has_Pos_Divergence', False):
+                    divergence_text = " with POSITIVE DIVERGENCE"
+                elif row.get('Has_Neg_Divergence', False):
+                    divergence_text = " with NEGATIVE DIVERGENCE"
+                
+                html_content += f"""
+                <div style="background: #ffe6e6; padding: 10px; margin-top: 10px; border-radius: 5px; border: 1px solid #ffcccc;">
+                    <strong style="color: #d9534f;">⚠️ CLIMAX WARNING:</strong> {climax_count} {climax_type} Climax event(s) detected in last 10 hours{divergence_text}.
+                    {' EXTREME CAUTION - Potential reversal zone!' if divergence_text else ' Monitor closely for potential exhaustion.'}
+                </div>"""
+            elif row.get('Has_Pos_Divergence', False) or row.get('Has_Neg_Divergence', False):
+                div_type = "Positive" if row.get('Has_Pos_Divergence', False) else "Negative"
+                div_color = "#5cb85c" if div_type == "Positive" else "#d9534f"
+                html_content += f"""
+                <div style="background: #f0f8ff; padding: 10px; margin-top: 10px; border-radius: 5px; border: 1px solid #d0e0ff;">
+                    <strong style="color: {div_color};">📊 DIVERGENCE:</strong> {div_type} divergence detected between price and VSR.
+                    {' Potential accumulation phase.' if div_type == "Positive" else ' Potential distribution phase.'}
+                </div>"""
+            
+            html_content += """
             </div>
             """
         
@@ -1019,9 +1204,11 @@ def generate_html_report(filtered_df, output_file):
     # Complete HTML
     html_content += f"""
         <div class="source-info">
-            <p>Generated on {formatted_date} at {formatted_time} | VSR Momentum Scanner</p>
+            <p>Generated on {formatted_date} at {formatted_time} | VSR Momentum Scanner with Climax Detection</p>
             <p><strong>Note:</strong> VSR analysis identifies stocks with expanding volume-spread momentum on hourly timeframe.</p>
-            <p><strong>Risk Management:</strong> Use proper position sizing. Higher VSR ratios indicate stronger momentum but also higher volatility.</p>
+            <p><strong>Climax Detection:</strong> Buying/Selling climaxes indicate extreme volume and spread, often marking potential reversals.</p>
+            <p><strong>Divergences:</strong> Price-VSR divergences can signal accumulation (positive) or distribution (negative) phases.</p>
+            <p><strong>Risk Management:</strong> Use proper position sizing. Higher VSR ratios indicate stronger momentum but also higher volatility. Extra caution with climax signals!</p>
         </div>
     </body>
     </html>
