@@ -55,3 +55,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Archived backtesting scripts are available in the BT/archive/ directory for reference
 
 Always verify changes with individual strategy tests before committing. Be careful with Zerodha API interactions to avoid unintended orders.
+
+## Git Workflow - IMPORTANT
+**COMMIT AND PUSH AFTER EVERY CHANGE**: When making any code modifications, you MUST:
+1. Stage the changed files: `git add <modified_files>`
+2. Commit with a descriptive message: `git commit -m "Description of change"`
+3. Push to remote immediately: `git push origin master`
+
+This ensures:
+- No work is lost
+- Changes are immediately backed up
+- Team members have access to latest updates
+- Easy rollback if issues arise
+
+Example workflow:
+```bash
+# After modifying a file
+git add Daily/scanners/modified_scanner.py
+git commit -m "Fix scanner logic for handling edge cases"
+git push origin master
+```
+
+For multiple related changes, commit them together but push immediately after.
