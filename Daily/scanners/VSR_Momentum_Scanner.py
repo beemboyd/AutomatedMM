@@ -80,9 +80,13 @@ def load_daily_config(user_name="Sai"):
 
     return config
 
-# Get user from arguments
-args = parse_args()
-user_name = args.user
+# Get user from arguments only if not being imported by monitor service
+if os.environ.get('VSR_MONITOR_SERVICE') != '1':
+    args = parse_args()
+    user_name = args.user
+else:
+    # Default user when imported by monitor service
+    user_name = 'Sai'
 logger.info(f"Using credentials for user: {user_name}")
 
 # -----------------------------

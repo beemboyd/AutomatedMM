@@ -4,10 +4,10 @@ This is the main operational directory for the India-TS automated trading system
 
 ## 📚 Documentation Quick Links
 
-- **[Documentation Index](DOCUMENTATION_INDEX.md)** - Complete index of all documentation
+- **[Documentation Index](docs/DOCUMENTATION_INDEX.md)** - Complete index of all documentation
 - **[Daily Workflow Guide](Documentation/DAILY_WORKFLOW.md)** - Step-by-step daily operations
-- **[Dashboard Quick Reference](DASHBOARD_QUICK_REFERENCE.md)** - Dashboard commands and URLs
-- **[Jobs Documentation](INDIA_TS_JOBS_DOCUMENTATION.md)** - All automated jobs and schedules
+- **[Dashboard Quick Reference](docs/dashboards/DASHBOARD_QUICK_REFERENCE.md)** - Dashboard commands and URLs
+- **[Jobs Documentation](docs/system/INDIA_TS_JOBS_DOCUMENTATION.md)** - All automated jobs and schedules
 
 ## 🗂️ Directory Structure
 
@@ -17,12 +17,18 @@ Daily/
 ├── bin/              # Executable scripts and SL watchdog management
 ├── config.ini        # Main configuration file
 ├── Current_Orders/   # User-specific order files
-├── dashboards/       # Dashboard applications
+├── dashboards/       # Dashboard applications (DEPRECATED - see Market_Regime)
 ├── data/             # Data files and databases
 ├── Diagrams/         # Flow diagrams
 ├── Documentation/    # Detailed documentation
+├── docs/             # Organized documentation
+│   ├── automation/   # Automation reports and guides
+│   ├── dashboards/   # Dashboard documentation
+│   ├── guides/       # Pattern and tracker guides
+│   └── system/       # System documentation and dependencies
+├── Health/           # Job Manager Dashboard
 ├── logs/             # User-specific log files
-├── Market_Regime/    # Market regime analysis system
+├── Market_Regime/    # Market regime analysis and dashboards
 ├── pids/             # Process ID files
 ├── Plan/             # Daily plans and scores
 ├── portfolio/        # Portfolio management and SL watchdog

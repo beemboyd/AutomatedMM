@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import pytz
 from collections import deque
 import pandas as pd
+import re
 
 app = Flask(__name__)
 
@@ -369,6 +370,7 @@ ENHANCED_DASHBOARD_HTML = '''
                 <div class="metric-card">
                     <div class="metric-title">Volatility Score</div>
                     <div class="metric-value" id="volatility-score">-</div>
+                    <div class="metric-subtitle" id="avg-atr" style="font-size: 0.8em; color: #7f8c8d; margin-top: -5px;">-</div>
                     <div class="metric-delta" id="volatility-score-delta"></div>
                     <canvas id="volatility-score-sparkline" class="sparkline-container" width="200" height="50"></canvas>
                 </div>
@@ -500,15 +502,15 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
-        <!-- Early Bird Section -->
+        <!-- Top VSR Scores Section -->
         <div class="row mt-4">
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title">🐦 Early Bird Opportunities - KC Breakout Watch</h5>
-                        <p class="text-muted mb-3">First appearances of KC_Breakout_Watch pattern - stocks breaking above Keltner Channel without volume confirmation yet</p>
+                        <h5 class="card-title">🚀 Top VSR Momentum Scores</h5>
+                        <p class="text-muted mb-3">High scoring stocks based on Volume Spread Ratio analysis - Updated every minute</p>
                         
-                        <div class="row" id="early-bird-container">
+                        <div class="row" id="vsr-scores-container">
                             <div class="col-12 text-center">
                                 <div class="spinner-border text-primary" role="status">
                                     <span class="visually-hidden">Loading...</span>
@@ -652,6 +654,12 @@ ENHANCED_DASHBOARD_HTML = '''
                     updateMetric('volatility-score', data.indicators.volatility_score, 
                                previousData?.indicators?.volatility_score);
                     
+                    // Update average ATR subtitle
+                    const avgAtrElement = document.getElementById('avg-atr');
+                    if (avgAtrElement && data.volatility && data.volatility.avg_atr) {
+                        avgAtrElement.textContent = `Avg ATR: ${data.volatility.avg_atr.toFixed(2)}%`;
+                    }
+                    
                     // Update pattern counts
                     document.getElementById('pattern-count').textContent = data.counts.total;
                     document.getElementById('long-count').textContent = data.counts.long;
@@ -739,8 +747,8 @@ ENHANCED_DASHBOARD_HTML = '''
             // Update Reversal Patterns data
             updateReversalPatterns();
             
-            // Update Early Bird data
-            updateEarlyBirdPatterns();
+            // Update VSR Scores data
+            updateVSRScores();
         }
         
         function updateGPatternData() {
@@ -982,59 +990,70 @@ ENHANCED_DASHBOARD_HTML = '''
             }
         }
         
-        function updateEarlyBirdPatterns() {
-            fetch('/api/early_bird')
+        function updateVSRScores() {
+            fetch('/api/vsr_scores')
                 .then(response => response.json())
                 .then(data => {
-                    const container = document.getElementById('early-bird-container');
+                    const container = document.getElementById('vsr-scores-container');
                     
-                    if (data.error || !data.early_birds || data.early_birds.length === 0) {
-                        container.innerHTML = '<div class="col-12 text-center text-muted">No Early Bird opportunities found today</div>';
+                    if (data.error || !data.top_scores || data.top_scores.length === 0) {
+                        container.innerHTML = '<div class="col-12 text-center text-muted">No VSR momentum data available</div>';
                         return;
                     }
                     
                     let html = '';
-                    data.early_birds.forEach(bird => {
+                    data.top_scores.forEach(stock => {
+                        // Determine color based on score
+                        let scoreColor = '#dc3545'; // red for low scores
+                        if (stock.score >= 85) scoreColor = '#28a745'; // green for high scores
+                        else if (stock.score >= 50) scoreColor = '#ffc107'; // yellow for medium scores
+                        
+                        // Trend indicator
+                        let trendIcon = stock.trend === 'NEW' ? '🆕' : 
+                                       stock.trend.includes('📈') ? '📈' : 
+                                       stock.trend.includes('📉') ? '📉' : '➡️';
+                        
                         html += `
                             <div class="col-md-4 mb-3">
-                                <div class="card" style="border: 1px solid #4ade80; background: rgba(74, 222, 128, 0.05);">
+                                <div class="card" style="border: 1px solid ${scoreColor}; background: rgba(255, 255, 255, 0.95);">
                                     <div class="card-body">
-                                        <h6 class="mb-1" style="color: #4ade80;">
-                                            ${bird.ticker} 
-                                            <small class="text-warning">@ ${bird.time_appeared}</small>
+                                        <h6 class="mb-1">
+                                            ${stock.ticker} 
+                                            <span class="badge" style="background-color: ${scoreColor}; color: white;">Score: ${stock.score}</span>
+                                            <small>${trendIcon}</small>
                                         </h6>
-                                        <div class="small text-muted mb-2">${bird.sector}</div>
+                                        <div class="small text-muted mb-2">${stock.sector}</div>
                                         <div class="row text-center small">
                                             <div class="col-4">
-                                                <div class="text-muted">Entry</div>
-                                                <div>₹${bird.entry_price}</div>
+                                                <div class="text-muted">Price</div>
+                                                <div>₹${stock.price}</div>
                                             </div>
                                             <div class="col-4">
-                                                <div class="text-muted">SL</div>
-                                                <div class="text-danger">₹${bird.stop_loss}</div>
+                                                <div class="text-muted">VSR</div>
+                                                <div class="fw-bold">${stock.vsr.toFixed(2)}</div>
                                             </div>
                                             <div class="col-4">
-                                                <div class="text-muted">Target</div>
-                                                <div class="text-success">₹${bird.target1}</div>
+                                                <div class="text-muted">Volume</div>
+                                                <div>${stock.volume}</div>
                                             </div>
                                         </div>
                                         <hr class="my-2">
                                         <div class="row text-center small">
                                             <div class="col-4">
-                                                <div class="text-muted">Score</div>
-                                                <div style="color: #4ade80; font-weight: bold;">${bird.probability_score}</div>
+                                                <div class="text-muted">Momentum</div>
+                                                <div class="${stock.momentum > 0 ? 'text-success' : 'text-danger'} fw-bold">${stock.momentum}%</div>
                                             </div>
                                             <div class="col-4">
-                                                <div class="text-muted">Vol</div>
-                                                <div>${bird.volume_ratio}x</div>
+                                                <div class="text-muted">Build</div>
+                                                <div style="color: #4ade80; font-weight: bold;">${stock.build}</div>
                                             </div>
                                             <div class="col-4">
-                                                <div class="text-muted">KC%</div>
-                                                <div>${bird.kc_distance}%</div>
+                                                <div class="text-muted">Time</div>
+                                                <div>${stock.time}</div>
                                             </div>
                                         </div>
-                                        <div class="mt-2 small text-warning" style="font-size: 0.75em;">
-                                            ${bird.description}
+                                        <div class="mt-2 small text-info" style="font-size: 0.75em;">
+                                            Hourly VSR Analysis - Updated ${stock.last_update}
                                         </div>
                                     </div>
                                 </div>
@@ -1045,9 +1064,9 @@ ENHANCED_DASHBOARD_HTML = '''
                     container.innerHTML = html;
                 })
                 .catch(error => {
-                    console.error('Error fetching early bird patterns:', error);
-                    document.getElementById('early-bird-container').innerHTML = 
-                        '<div class="col-12 text-center text-danger">Error loading Early Bird data</div>';
+                    console.error('Error fetching VSR scores:', error);
+                    document.getElementById('vsr-scores-container').innerHTML = 
+                        '<div class="col-12 text-center text-danger">Error loading VSR data</div>';
                 });
         }
         
@@ -1366,79 +1385,81 @@ def get_g_pattern_data():
             'categories': {}
         })
 
-@app.route('/api/early_bird')
-def get_early_bird_patterns():
-    """Get Early Bird (KC_Breakout_Watch first appearances) patterns"""
+@app.route('/api/vsr_scores')
+def get_vsr_scores():
+    """Get top VSR scores from tracker logs"""
     try:
-        # Get today's date
-        today = datetime.now(IST).strftime('%Y%m%d')
+        # Get today's VSR tracker log
+        today = datetime.now().strftime('%Y%m%d')
+        vsr_log_path = os.path.join(DAILY_DIR, 'logs', 'vsr_tracker', f'vsr_tracker_{today}.log')
         
-        # Find KC Upper Limit files for today
-        kc_files = sorted(glob.glob(os.path.join(LONG_RESULTS_DIR, f'KC_Upper_Limit_Trending_{today}_*.xlsx')))
+        if not os.path.exists(vsr_log_path):
+            return jsonify({
+                'error': 'No VSR tracker log found for today',
+                'top_scores': [],
+                'total_count': 0
+            })
         
-        if not kc_files:
-            # Try yesterday if no files today
-            yesterday = (datetime.now(IST) - timedelta(days=1)).strftime('%Y%m%d')
-            kc_files = sorted(glob.glob(os.path.join(LONG_RESULTS_DIR, f'KC_Upper_Limit_Trending_{yesterday}_*.xlsx')))
+        # Parse the log file to extract latest scores
+        ticker_data = {}
         
-        early_birds = []
-        seen_tickers = set()
+        # Pattern to match VSR tracker log lines
+        pattern = r'\[(.*?)\]\s+(\w+)\s+\|\s+Score:\s+(\d+)\s+\|\s+VSR:\s+([\d.]+)\s+\|\s+Price:\s+₹([\d.]+)\s+\|\s+Vol:\s+([\d,N/A]+)\s+\|\s+Momentum:\s+([-\d.]+)%\s+\|\s+Build:\s+(.*?)\s+\|\s+Trend:\s+(.*?)\s+\|\s+Sector:\s+(.*?)$'
         
-        # Process files chronologically to find first appearances
-        for filepath in kc_files:
-            try:
-                df = pd.read_excel(filepath)
-                
-                # Filter for KC_Breakout_Watch pattern
-                kc_breakout = df[df['Pattern'] == 'KC_Breakout_Watch']
-                
-                for _, row in kc_breakout.iterrows():
-                    ticker = row['Ticker']
-                    if ticker not in seen_tickers:
-                        seen_tickers.add(ticker)
+        # Read the log file
+        with open(vsr_log_path, 'r') as f:
+            for line in f:
+                if '| Score:' in line and 'VSR:' in line:
+                    match = re.search(pattern, line)
+                    if match:
+                        user = match.group(1)
+                        ticker = match.group(2)
+                        score = int(match.group(3))
+                        vsr = float(match.group(4))
+                        price = float(match.group(5))
+                        volume = match.group(6).replace(',', '') if match.group(6) != 'N/A' else 'N/A'
+                        momentum = float(match.group(7))
+                        build = match.group(8).strip()
+                        trend = match.group(9).strip()
+                        sector = match.group(10).strip()
                         
-                        # Extract timestamp from filename
-                        filename = os.path.basename(filepath)
-                        timestamp_str = filename.replace('KC_Upper_Limit_Trending_', '').replace('.xlsx', '')
-                        time_parts = timestamp_str.split('_')
-                        if len(time_parts) == 2:
-                            hour = time_parts[1][:2]
-                            minute = time_parts[1][2:4]
-                            time_str = f"{hour}:{minute}"
-                        else:
-                            time_str = "N/A"
+                        # Extract timestamp from the line
+                        time_match = re.match(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', line)
+                        timestamp = time_match.group(1) if time_match else ''
                         
-                        early_birds.append({
+                        # Update with latest data for each ticker
+                        ticker_data[ticker] = {
                             'ticker': ticker,
-                            'sector': row.get('Sector', 'Unknown'),
-                            'entry_price': round(row.get('Entry_Price', 0), 2),
-                            'stop_loss': round(row.get('Stop_Loss', 0), 2),
-                            'target1': round(row.get('Target1', 0), 2),
-                            'probability_score': round(row.get('Probability_Score', 0), 1),
-                            'volume_ratio': round(row.get('Volume_Ratio', 0), 2),
-                            'time_appeared': time_str,
-                            'description': row.get('Description', ''),
-                            'kc_distance': round(row.get('KC_Distance_%', 0), 2),
-                            'adx': round(row.get('ADX', 0), 1),
-                            'momentum_5d': round(row.get('Momentum_5D', 0), 2)
-                        })
-            except Exception as e:
-                print(f"Error processing KC file {filepath}: {e}")
-                continue
+                            'score': score,
+                            'vsr': vsr,
+                            'price': price,
+                            'volume': volume,
+                            'momentum': momentum,
+                            'build': build,
+                            'trend': trend,
+                            'sector': sector,
+                            'timestamp': timestamp,
+                            'time': timestamp.split(' ')[1] if timestamp else '',
+                            'last_update': timestamp.split(' ')[1] if timestamp else ''
+                        }
         
-        # Sort by probability score descending
-        early_birds.sort(key=lambda x: x['probability_score'], reverse=True)
+        # Filter for high scores (>=50) and sort by score
+        top_scores = [data for data in ticker_data.values() if data['score'] >= 50]
+        top_scores.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Get top 15
+        top_15 = top_scores[:15]
         
         return jsonify({
-            'early_birds': early_birds[:15],  # Top 15
-            'total_count': len(early_birds),
+            'top_scores': top_15,
+            'total_count': len(top_scores),
             'last_update': datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
         })
         
     except Exception as e:
         return jsonify({
             'error': str(e),
-            'early_birds': [],
+            'top_scores': [],
             'total_count': 0
         })
 

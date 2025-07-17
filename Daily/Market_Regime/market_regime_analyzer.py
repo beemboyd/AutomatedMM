@@ -344,10 +344,28 @@ class MarketRegimeAnalyzer:
         if not df_combined.empty and 'ATR' in df_combined.columns:
             atr_values = df_combined['ATR'].dropna()
             if len(atr_values) > 0:
+                # Calculate volatility score based on ATR distribution
+                # Low volatility: < 2% ATR, Medium: 2-4%, High: > 4%
+                avg_atr = atr_values.mean()
+                median_atr = atr_values.median()
+                p75_atr = np.percentile(atr_values, 75)
+                
+                # Normalize volatility score (0-1 scale)
+                # 0 = Low volatility, 0.5 = Normal, 1.0 = High volatility
+                if avg_atr < 2.0:
+                    volatility_score = avg_atr / 4.0  # 0 to 0.5 for ATR 0-2%
+                elif avg_atr < 4.0:
+                    volatility_score = 0.5 + (avg_atr - 2.0) / 4.0  # 0.5 to 0.75 for ATR 2-4%
+                else:
+                    volatility_score = min(0.75 + (avg_atr - 4.0) / 8.0, 1.0)  # 0.75 to 1.0 for ATR > 4%
+                
                 volatility_data = {
-                    'volatility_score': min(np.percentile(atr_values, 75) / 5, 1.0),  # Normalize to 0-1
-                    'avg_atr': atr_values.mean(),
-                    'max_atr': atr_values.max()
+                    'volatility_score': round(volatility_score, 2),
+                    'avg_atr': round(avg_atr, 2),
+                    'median_atr': round(median_atr, 2),
+                    'p75_atr': round(p75_atr, 2),
+                    'max_atr': round(atr_values.max(), 2),
+                    'volatility_regime': 'low' if avg_atr < 2.0 else 'normal' if avg_atr < 4.0 else 'high' if avg_atr < 6.0 else 'extreme'
                 }
         
         # Get position recommendations
