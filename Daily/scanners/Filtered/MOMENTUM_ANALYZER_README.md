@@ -42,8 +42,12 @@ Daily/scanners/Filtered/
 └── MOMENTUM_ANALYZER_README.md   # This file
 
 Daily/results/StrongM/
-├── Strong_Candidates_*.html      # HTML reports
-└── Strong_Candidates_*.json      # JSON data files
+├── HTML/
+│   └── Strong_Candidates_*.html  # HTML reports
+├── JSON/
+│   └── Strong_Candidates_*.json  # JSON data files
+└── PDF/
+    └── Strong_Candidates_*.pdf   # PDF reports (if reportlab available)
 ```
 
 ## Usage
@@ -69,15 +73,20 @@ Edit `momentum_config.json` to adjust:
 ## Output
 
 ### HTML Report
-- Located in `Daily/results/StrongM/Strong_Candidates_*.html`
+- Located in `Daily/results/StrongM/HTML/Strong_Candidates_*.html`
 - Shows top 20 momentum candidates
 - Color-coded stages and price changes
 - Includes selection criteria and metadata
 
 ### JSON Data
-- Located in `Daily/results/StrongM/Strong_Candidates_*.json`
+- Located in `Daily/results/StrongM/JSON/Strong_Candidates_*.json`
 - Complete data for all candidates
 - Suitable for programmatic access
+
+### PDF Report (if reportlab installed)
+- Located in `Daily/results/StrongM/PDF/Strong_Candidates_*.pdf`
+- Professional formatted report with tables
+- Suitable for printing or sharing
 
 ## Trading Guidelines
 

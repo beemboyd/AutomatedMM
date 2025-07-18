@@ -207,9 +207,9 @@ class MomentumAnalyzer:
         """Generate HTML report of strong candidates"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        # Create output directory if needed
+        # Create output directory structure if needed
         base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        output_dir = os.path.join(base_path, "results", "StrongM")
+        output_dir = os.path.join(base_path, "results", "StrongM", "HTML")
         os.makedirs(output_dir, exist_ok=True)
         
         output_path = os.path.join(output_dir, f"Strong_Candidates_{timestamp}.html")
@@ -341,9 +341,9 @@ class MomentumAnalyzer:
         """Generate PDF report of strong candidates"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        # Create output directory if needed
+        # Create output directory structure if needed
         base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        output_dir = os.path.join(base_path, "results", "StrongM")
+        output_dir = os.path.join(base_path, "results", "StrongM", "PDF")
         os.makedirs(output_dir, exist_ok=True)
         
         output_path = os.path.join(output_dir, f"Strong_Candidates_{timestamp}.pdf")
@@ -469,7 +469,12 @@ class MomentumAnalyzer:
             report_path = self.generate_html_report()
         
         # Also save as JSON for further processing
-        json_path = report_path.replace('.pdf', '.json').replace('.html', '.json')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        json_dir = os.path.join(base_path, "results", "StrongM", "JSON")
+        os.makedirs(json_dir, exist_ok=True)
+        json_path = os.path.join(json_dir, f"Strong_Candidates_{timestamp}.json")
+        
         with open(json_path, 'w') as f:
             json.dump(self.strong_candidates, f, indent=2, default=str)
             
