@@ -138,7 +138,15 @@ def read_fno_scanner_results(file_path):
         # Map column names for compatibility
         df['ticker'] = df['Ticker']
         df['close'] = df['Entry_Price']
-        df['score'] = df.get('G_Score', df.get('Base_Score', 0))
+        
+        # Get score - handle if columns contain string values like "6/6"
+        if 'G_Score' in df.columns:
+            # Extract numerator from "6/6" format
+            df['score'] = df['G_Score'].apply(lambda x: float(str(x).split('/')[0]) if '/' in str(x) else 0)
+        elif 'Base_Score' in df.columns:
+            df['score'] = pd.to_numeric(df['Base_Score'], errors='coerce').fillna(0)
+        else:
+            df['score'] = 0
         
         return df
     except Exception as e:
