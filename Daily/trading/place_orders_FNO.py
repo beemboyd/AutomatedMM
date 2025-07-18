@@ -21,6 +21,7 @@ from typing import List, Dict, Optional, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import required modules
+from kiteconnect import KiteConnect
 from user_context_manager import (
     get_context_manager,
     get_user_state_manager,
@@ -257,7 +258,9 @@ def main():
         
         # Get managers
         context_manager = get_context_manager()
-        kite = context_manager.get_user_instance()
+        # Initialize KiteConnect directly
+        kite = KiteConnect(api_key=selected_user.api_key)
+        kite.set_access_token(selected_user.access_token)
         order_manager = get_user_order_manager()
         state_manager = get_user_state_manager()
         
