@@ -257,7 +257,7 @@ def main():
         
         # Get managers
         context_manager = get_context_manager()
-        kite = context_manager.get_kite_instance()
+        kite = context_manager.get_user_instance()
         order_manager = get_user_order_manager()
         state_manager = get_user_state_manager()
         
