@@ -123,8 +123,24 @@ def read_fno_scanner_results(file_path):
     """Read and parse the FNO scanner results"""
     try:
         df = pd.read_excel(file_path)
-        # Sort by rank to get top performers
-        df = df.sort_values('rank', ascending=True)
+        # FNO scanner uses different column names
+        # Sort by G_Score (highest first) or Base_Score if G_Score not available
+        if 'G_Score' in df.columns:
+            df = df.sort_values('G_Score', ascending=False)
+        elif 'Base_Score' in df.columns:
+            df = df.sort_values('Base_Score', ascending=False)
+        else:
+            # If no score columns, sort by Entry_Price
+            df = df.sort_values('Entry_Price', ascending=False)
+        
+        # Add a rank column for compatibility
+        df['rank'] = range(1, len(df) + 1)
+        
+        # Map column names for compatibility
+        df['ticker'] = df['Ticker']
+        df['close'] = df['Entry_Price']
+        df['score'] = df.get('G_Score', df.get('Base_Score', 0))
+        
         return df
     except Exception as e:
         raise Exception(f"Error reading FNO file: {str(e)}")
