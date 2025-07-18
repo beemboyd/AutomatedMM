@@ -462,11 +462,14 @@ class MomentumAnalyzer:
         # Identify strong candidates
         self.identify_strong_candidates()
         
-        # Generate report (PDF if available, else HTML)
+        # Generate reports in all formats
+        html_path = self.generate_html_report()
+        pdf_path = None
         if REPORTLAB_AVAILABLE:
-            report_path = self.generate_pdf_report()
+            pdf_path = self.generate_pdf_report()
+            report_path = pdf_path
         else:
-            report_path = self.generate_html_report()
+            report_path = html_path
         
         # Also save as JSON for further processing
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
