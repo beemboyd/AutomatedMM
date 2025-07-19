@@ -31,7 +31,7 @@ from utils import (
     format_currency
 )
 
-from mcp.server import Server
+from mcp.server import Server, NotificationOptions
 from mcp import Resource, Tool
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 from mcp.server.models import InitializationOptions
@@ -429,8 +429,8 @@ class PortfolioMCPServer:
                     server_name="portfolio-analysis",
                     server_version="0.1.0",
                     capabilities=self.server.get_capabilities(
-                        notification_options=None,
-                        experimental_capabilities={}
+                        notification_options=NotificationOptions(),
+                        experimental_capabilities={},
                     ),
                 ),
             )

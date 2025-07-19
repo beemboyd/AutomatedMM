@@ -4,7 +4,7 @@ Simplified Portfolio MCP Server using the latest MCP API
 """
 
 import asyncio
-from mcp.server import Server
+from mcp.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 import mcp.server.stdio
 import mcp.types as types
@@ -87,7 +87,7 @@ async def run():
                 server_name="portfolio-analysis",
                 server_version="0.1.0",
                 capabilities=server.get_capabilities(
-                    notification_options=None,
+                    notification_options=NotificationOptions(),
                     experimental_capabilities={}
                 )
             )

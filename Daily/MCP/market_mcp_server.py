@@ -23,7 +23,7 @@ from collections import defaultdict
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mcp.server import Server
+from mcp.server import Server, NotificationOptions
 from mcp import Resource, Tool
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 from mcp.server.models import InitializationOptions
@@ -621,8 +621,8 @@ class MarketMCPServer:
                     server_name="market-analysis",
                     server_version="0.1.0",
                     capabilities=self.server.get_capabilities(
-                        notification_options=None,
-                        experimental_capabilities={}
+                        notification_options=NotificationOptions(),
+                        experimental_capabilities={},
                     ),
                 ),
             )
