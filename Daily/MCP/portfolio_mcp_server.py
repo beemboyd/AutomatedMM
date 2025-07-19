@@ -31,7 +31,8 @@ from utils import (
     format_currency
 )
 
-from mcp import Server, Resource, Tool
+from mcp.server import Server
+from mcp import Resource, Tool
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 from mcp.server.models import InitializationOptions
 import mcp.server.stdio

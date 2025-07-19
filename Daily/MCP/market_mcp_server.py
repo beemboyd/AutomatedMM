@@ -23,7 +23,8 @@ from collections import defaultdict
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mcp import Server, Resource, Tool
+from mcp.server import Server
+from mcp import Resource, Tool
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 from mcp.server.models import InitializationOptions
 import mcp.server.stdio
