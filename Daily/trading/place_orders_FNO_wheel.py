@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 FNO Options Wheel Strategy Script
-Implements the wheel strategy for FNO stocks based on KC Upper Limit Trending signals
+Implements the wheel strategy for FNO stocks based on KC Upper Limit Trending signals from Daily/results
 Shows both put and call options for wheel strategy implementation
 """
 
@@ -107,13 +107,15 @@ def setup_user_context(user_credentials: UserCredentials, config):
     return logger
 
 def get_latest_fno_file():
-    """Get the most recent KC Upper Limit Trending FNO file"""
-    fno_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'FNO', 'Long')
-    pattern = os.path.join(fno_dir, 'KC_Upper_Limit_Trending_FNO_*.xlsx')
+    """Get the most recent KC Upper Limit Trending file"""
+    results_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'results')
+    pattern = os.path.join(results_dir, 'KC_Upper_Limit_Trending_*.xlsx')
     files = glob.glob(pattern)
     
     if not files:
-        raise FileNotFoundError(f"No FNO files found matching pattern: {pattern}")
+        print(f"No KC Upper Limit Trending files found in {results_dir}")
+        print("Exiting...")
+        sys.exit(0)
     
     latest_file = max(files, key=os.path.getctime)
     return latest_file
@@ -122,18 +124,14 @@ def read_fno_scanner_results(file_path):
     """Read and parse the FNO scanner results"""
     try:
         df = pd.read_excel(file_path)
-        # FNO scanner uses different column names
-        # Sort by G_Score (highest first) or Base_Score if G_Score not available
-        if 'G_Score' in df.columns:
-            df = df.sort_values('G_Score', ascending=False)
-        elif 'Base_Score' in df.columns:
-            df = df.sort_values('Base_Score', ascending=False)
-        else:
-            # If no score columns, sort by Entry_Price
-            df = df.sort_values('Entry_Price', ascending=False)
         
-        # Add a rank column for compatibility
-        df['rank'] = range(1, len(df) + 1)
+        # The KC_Upper_Limit_Trending file already has the tickers in rank order
+        # Preserve the original order instead of re-sorting
+        
+        # Check if rank column already exists
+        if 'rank' not in df.columns:
+            # Add a rank column based on current order
+            df['rank'] = range(1, len(df) + 1)
         
         # Map column names for compatibility
         df['ticker'] = df['Ticker']
@@ -553,7 +551,7 @@ def check_existing_positions(kite, ticker):
 def main():
     """Main execution function"""
     print("=== FNO Options Wheel Strategy Script ===")
-    print("This script analyzes wheel strategy opportunities based on KC Upper Limit Trending signals")
+    print("This script analyzes wheel strategy opportunities based on KC Upper Limit Trending signals from Daily/results")
     print("The wheel strategy combines selling puts and covered calls for income generation\n")
     
     try:
@@ -579,13 +577,19 @@ def main():
         kite.set_access_token(selected_user.access_token)
         
         # Get latest FNO file
-        logger.info("Looking for latest FNO scanner file...")
+        logger.info("Looking for latest KC Upper Limit Trending scanner file...")
         fno_file = get_latest_fno_file()
         logger.info(f"Using FNO file: {fno_file}")
         
         # Read scanner results
         df = read_fno_scanner_results(fno_file)
         logger.info(f"Found {len(df)} tickers in scanner results")
+        
+        # Exit if no tickers found
+        if len(df) == 0:
+            logger.info("No tickers found in scanner results. Exiting...")
+            print("No tickers found in scanner results. Exiting...")
+            return
         
         # Get lot sizes
         lot_sizes = get_fno_lot_sizes()

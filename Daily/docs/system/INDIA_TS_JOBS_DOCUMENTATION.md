@@ -43,13 +43,21 @@ This document provides a comprehensive overview of all India-TS system jobs, the
 
 ### Market Analysis Jobs
 
-#### 5. **com.india-ts.market_regime_analysis**
-- **Purpose**: Analyzes market regime based on scanner results
+#### 5. **com.india-ts.market_regime_analyzer_5min** *(Updated July 18, 2025)*
+- **Purpose**: Analyzes market regime based on scanner results with improved timing
+- **Schedule**: Every 5 minutes from 9:00 AM to 3:30 PM IST (weekdays)
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/run_regime_analyzer_5min.sh`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.market_regime_analyzer_5min.plist`
+- **Status**: ✅ Active
+- **Change Reason**: Fixed timing issue where analyzer was missing latest reversal scan files
+- **Migration**: Run `./migrate_to_5min_scheduler.sh` in Market_Regime directory
+
+#### 5a. **com.india-ts.market_regime_analysis** *(DEPRECATED)*
+- **Purpose**: Old 30-minute regime analyzer
 - **Schedule**: Every 30 minutes from 8:30 AM to 3:30 PM IST (weekdays)
 - **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/market_regime_analyzer.py`
 - **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.market_regime_analysis.plist`
-- **Status**: ✅ Active
-- **Updated**: 2025-07-13 - Changed start time from 9:15 AM to 8:30 AM
+- **Status**: ❌ Deprecated - Replaced by 5-minute version
 
 #### 6. **com.india-ts.kc_lower_limit_trending**
 - **Purpose**: Scans for stocks trending at Keltner Channel lower limit
