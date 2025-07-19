@@ -428,7 +428,10 @@ class PortfolioMCPServer:
                 InitializationOptions(
                     server_name="portfolio-analysis",
                     server_version="0.1.0",
-                    capabilities=self.server.get_capabilities(),
+                    capabilities=self.server.get_capabilities(
+                        notification_options=None,
+                        experimental_capabilities={}
+                    ),
                 ),
             )
 
