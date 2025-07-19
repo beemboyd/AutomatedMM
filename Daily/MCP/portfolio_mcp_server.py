@@ -59,7 +59,8 @@ class PortfolioMCPServer:
             
             # Add transaction files
             if self.transactions_path.exists():
-                for file in self.transactions_path.glob("*.xlsx"):
+                transaction_files = sorted(self.transactions_path.glob("*.xlsx"), reverse=True)
+                for file in transaction_files:
                     resources.append(Resource(
                         uri=f"portfolio://transactions/{file.name}",
                         name=f"Transactions: {file.stem}",
@@ -201,9 +202,21 @@ class PortfolioMCPServer:
             if not transaction_files:
                 return {"error": "No transaction files found"}
             
-            # For now, use the first file found
-            # In production, you'd match based on date range
-            df = read_transaction_excel(transaction_files[0])
+            # Sort files by name (assuming date format in filename) and use the most recent
+            transaction_files.sort(reverse=True)
+            selected_file = transaction_files[0]
+            
+            # If specific date range requested, try to find matching file
+            if 'start_date' in args and 'end_date' in args:
+                # Look for file that might match the date range
+                for file in transaction_files:
+                    # Check if filename contains date range (e.g., 06192025-07192025.xlsx)
+                    if args['start_date'].replace('-', '') in file.name or args['end_date'].replace('-', '') in file.name:
+                        selected_file = file
+                        break
+            
+            print(f"Using transaction file: {selected_file.name}", file=sys.stderr)
+            df = read_transaction_excel(selected_file)
             
             # Filter by user if specified
             if 'user' in args and args['user']:
