@@ -28,15 +28,11 @@ import logging
 import configparser
 from pathlib import Path
 
-# Add parent directories to path for imports
-# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'ML'))
-
-# Import the frequency analyzer
+# Import the frequency analyzer from the same analysis directory
 try:
-    from ML.Frequent_ticker_performance import FrequentTickerPerformanceAnalyzer
+    from Frequent_ticker_performance import FrequentTickerPerformanceAnalyzer
 except ImportError:
-    print("Error: Could not import FrequentTickerPerformanceAnalyzer from ML module")
+    print("Error: Could not import FrequentTickerPerformanceAnalyzer from analysis module")
     sys.exit(1)
 
 # Setup logging
