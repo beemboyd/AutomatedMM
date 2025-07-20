@@ -40,7 +40,7 @@ except ImportError:
     logger.warning("reportlab not available - PDF generation disabled")
 
 # Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Set up logging
 logging.basicConfig(

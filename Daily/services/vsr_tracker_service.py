@@ -19,7 +19,7 @@ from pathlib import Path
 from dateutil.relativedelta import relativedelta
 
 # Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Set flag to prevent VSR_Momentum_Scanner from executing its argparse
 os.environ['VSR_MONITOR_SERVICE'] = '1'

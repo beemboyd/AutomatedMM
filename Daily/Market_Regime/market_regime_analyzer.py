@@ -16,7 +16,7 @@ import sqlite3
 import glob
 
 # Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import local modules
 # from reversal_trend_scanner import ReversalTrendScanner  # No longer needed - we load existing results

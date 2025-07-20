@@ -8,7 +8,7 @@ Includes user selection and confirmation before executing trades.
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import pandas as pd
 from datetime import datetime
@@ -27,7 +27,7 @@ except ImportError:
     from utils.broker_interface import BrokerInterface
 
 from state_manager import StateManager
-from user_context_manager import UserContextManager
+from ..user_context_manager import UserContextManager
 
 # Check if the environment supports colors
 SUPPORTS_COLOR = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()

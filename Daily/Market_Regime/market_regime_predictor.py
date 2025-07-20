@@ -19,7 +19,7 @@ from sklearn.preprocessing import StandardScaler
 from collections import deque
 
 # Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import model manager
 from model_manager import ModelManager

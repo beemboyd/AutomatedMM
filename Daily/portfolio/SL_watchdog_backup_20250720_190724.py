@@ -21,19 +21,11 @@ from typing import Dict, List, Tuple, Optional
 
 # Import trading system modules
 from kiteconnect import KiteConnect
-from ..user_context_manager import (
+from user_context_manager import (
     get_context_manager,
     get_user_data_handler,
     UserCredentials
 )
-
-# Import regime stop loss module
-try:
-    from regime_stop_loss import RegimeStopLoss
-    REGIME_AVAILABLE = True
-except ImportError:
-    REGIME_AVAILABLE = False
-    logging.warning("regime_stop_loss module not available. Using standard ATR-based stop losses.")
 
 def load_daily_config():
     """Load configuration from Daily/config.ini file"""
@@ -233,36 +225,9 @@ class SLWatchdog:
         signal.signal(signal.SIGINT, self.handle_shutdown)
         signal.signal(signal.SIGTERM, self.handle_shutdown)
 
-        # Initialize regime stop loss calculator if available
-        self.regime_stop_loss = None
-        if REGIME_AVAILABLE:
-            try:
-                self.regime_stop_loss = RegimeStopLoss()
-                self.logger.info("Regime-based stop loss calculator initialized successfully")
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize regime stop loss calculator: {e}")
-                self.regime_stop_loss = None
-        
-        # Initialize volume-price anomaly tracking
-        self.volume_anomaly_data = {}
-        self.anomaly_warning_enabled = True  # Can be toggled on/off
-        self.anomaly_check_interval = 300  # Check every 5 minutes
-        self.last_anomaly_check = 0
-
         # Log the ATR-based stop loss logic being used
         self.logger.info("=" * 60)
-        if self.regime_stop_loss:
-            self.logger.info("INTELLIGENT REGIME-BASED TRAILING STOP LOSS ENABLED")
-            self.logger.info("Stop loss calculation based on:")
-            self.logger.info("- Market regime (strong_uptrend, uptrend, choppy, downtrend, etc.)")
-            self.logger.info("- Regime confidence level")
-            self.logger.info("- Market momentum and pattern counts")
-            self.logger.info("- Volatility-adjusted ATR multipliers")
-            self.logger.info("- Position age (tighter stops over time)")
-            self.logger.info("")
-            self.logger.info("Fallback to standard ATR-based logic if regime data unavailable:")
-        else:
-            self.logger.info("ATR-BASED TRAILING STOP LOSS ENABLED")
+        self.logger.info("ATR-BASED TRAILING STOP LOSS ENABLED")
         self.logger.info("Stop loss calculation based on 20-day ATR:")
         self.logger.info("- Low Volatility (ATR <2%): Stop = 1.0x ATR")
         self.logger.info("- Medium Volatility (ATR 2-4%): Stop = 1.5x ATR")
@@ -285,14 +250,6 @@ class SLWatchdog:
         self.logger.info("- SMA20 data is collected for monitoring only")
         self.logger.info("- No automatic exits based on SMA20 violations")
         self.logger.info("- Positions will only exit on ATR-based stop losses")
-        self.logger.info("")
-        if self.anomaly_warning_enabled:
-            self.logger.info("VOLUME-PRICE ANOMALY DETECTION ENABLED (WARNING MODE)")
-            self.logger.info("- Monitors for exhaustion patterns based on volume/price divergences")
-            self.logger.info("- High volume with low momentum = Distribution warning")
-            self.logger.info("- Narrow range with high volume = Top formation warning")
-            self.logger.info("- Anomaly Score 0-2: Low risk | 3: Medium risk | 4+: HIGH RISK")
-            self.logger.info("- Checks every 5 minutes, no automatic actions (observation mode)")
         self.logger.info("=" * 60)
     
     def handle_shutdown(self, signum, frame):
@@ -813,51 +770,19 @@ class SLWatchdog:
             # Calculate ATR as percentage of price
             atr_percentage = (latest_atr / latest_close) * 100
 
-            # Calculate position age if available
-            position_age_days = 0
-            if ticker in self.tracked_positions:
-                position_data = self.tracked_positions[ticker]
-                entry_timestamp = position_data.get('entry_timestamp', None)
-                if entry_timestamp:
-                    try:
-                        entry_date = datetime.fromisoformat(entry_timestamp.replace('Z', '+00:00'))
-                        position_age_days = (datetime.now() - entry_date.replace(tzinfo=None)).days
-                    except:
-                        position_age_days = 0
-
-            # Try to get regime-based multiplier first
-            regime_multiplier = None
-            regime_reason = ""
-            
-            if self.regime_stop_loss:
-                regime_multiplier, regime_reason = self.regime_stop_loss.get_regime_multiplier(
-                    ticker, atr_percentage, position_age_days
-                )
-                
-                if regime_multiplier is not None:
-                    # Use regime-based multiplier
-                    multiplier = regime_multiplier
-                    volatility_category = f"Regime-based ({regime_reason})"
-                    self.logger.debug(f"{ticker}: Using regime-based multiplier: {multiplier:.2f}x - {regime_reason}")
-                else:
-                    # Fallback to standard logic
-                    self.logger.debug(f"{ticker}: Regime data unavailable, using standard ATR logic")
-                    
-            # If regime multiplier not available, use standard logic
-            if regime_multiplier is None:
-                # Determine volatility category and multiplier
-                if atr_percentage < 2.0:
-                    # Low volatility
-                    multiplier = 1.0
-                    volatility_category = "Low"
-                elif atr_percentage <= 4.0:
-                    # Medium volatility
-                    multiplier = 1.5
-                    volatility_category = "Medium"
-                else:
-                    # High volatility
-                    multiplier = 2.0
-                    volatility_category = "High"
+            # Determine volatility category and multiplier
+            if atr_percentage < 2.0:
+                # Low volatility
+                multiplier = 1.0
+                volatility_category = "Low"
+            elif atr_percentage <= 4.0:
+                # Medium volatility
+                multiplier = 1.5
+                volatility_category = "Medium"
+            else:
+                # High volatility
+                multiplier = 2.0
+                volatility_category = "High"
 
             # Calculate trailing stop loss based on position type
             stop_loss_distance = latest_atr * multiplier
@@ -946,21 +871,13 @@ class SLWatchdog:
                         atr_result['position_high'] = position_high
                         self.atr_data[ticker] = atr_result
 
-                        # Check if this is regime-based
-                        if "Regime-based" in str(volatility_category):
-                            self.logger.info(f"{ticker}: Regime-Based ATR Stop Loss Updated - "
-                                           f"ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                                           f"Multiplier: {multiplier}x, "
-                                           f"Position High: ₹{position_high:.2f}, "
-                                           f"Stop Loss: ₹{new_stop_loss:.2f} (was ₹{old_stop_loss:.2f})")
-                        else:
-                            # Log the update with position high information
-                            self.logger.info(f"{ticker}: ATR Stop Loss Updated - "
-                                           f"ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                                           f"{volatility_category} Volatility, "
-                                           f"Multiplier: {multiplier}x, "
-                                           f"Position High: ₹{position_high:.2f}, "
-                                           f"Stop Loss: ₹{new_stop_loss:.2f} (was ₹{old_stop_loss:.2f})")
+                        # Log the update with position high information
+                        self.logger.info(f"{ticker}: ATR Stop Loss Updated - "
+                                       f"ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
+                                       f"{volatility_category} Volatility, "
+                                       f"Multiplier: {multiplier}x, "
+                                       f"Position High: ₹{position_high:.2f}, "
+                                       f"Stop Loss: ₹{new_stop_loss:.2f} (was ₹{old_stop_loss:.2f})")
                     else:
                         # If we couldn't get position high, just use regular ATR stop
                         self.atr_data[ticker] = atr_result
@@ -1389,9 +1306,6 @@ class SLWatchdog:
             self.remove_position_from_tracking(ticker)
             return
         
-        # Check for volume-price anomalies (exhaustion patterns)
-        self.check_volume_price_anomalies(ticker, current_price)
-        
         # SMA20 violation checks are now only done at 2:30 PM IST
         # See check_sma20_exit_at_230pm() method
 
@@ -1473,14 +1387,9 @@ class SLWatchdog:
                     stop_loss_price = new_stop_loss
 
         # Log the ATR stop loss check for transparency
-        if "Regime-based" in str(volatility_category):
-            self.logger.debug(f"Regime Stop Loss Check - {ticker}: Current Price: ₹{current_price:.2f}, "
-                             f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                             f"Multiplier: {multiplier}x")
-        else:
-            self.logger.debug(f"ATR Stop Loss Check - {ticker}: Current Price: ₹{current_price:.2f}, "
-                             f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                             f"{volatility_category} Volatility ({multiplier}x)")
+        self.logger.debug(f"ATR Stop Loss Check - {ticker}: Current Price: ₹{current_price:.2f}, "
+                         f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
+                         f"{volatility_category} Volatility ({multiplier}x)")
 
         # 1. Check stop loss
         if current_price <= stop_loss_price:
@@ -1505,38 +1414,22 @@ class SLWatchdog:
             raw_price = stop_loss_price * 0.995
             order_price = self.round_to_tick_size(raw_price, tick_size)
 
-            if "Regime-based" in str(volatility_category):
-                self.logger.info(f"REGIME STOP LOSS TRIGGERED - {ticker}: Current Price ₹{current_price:.2f} fell below "
-                               f"Regime Stop Loss ₹{stop_loss_price:.2f} (Multiplier: {multiplier}x ATR). "
-                               f"Queuing SELL order for {sell_quantity} shares ({sell_percent}% of position) at ₹{order_price:.2f} "
-                               f"(tick size: {tick_size}).")
-            else:
-                self.logger.info(f"ATR STOP LOSS TRIGGERED - {ticker}: Current Price ₹{current_price:.2f} fell below "
-                               f"ATR Stop Loss ₹{stop_loss_price:.2f} ({volatility_category} volatility, {multiplier}x ATR). "
-                               f"Queuing SELL order for {sell_quantity} shares ({sell_percent}% of position) at ₹{order_price:.2f} "
-                               f"(tick size: {tick_size}).")
+            self.logger.info(f"ATR STOP LOSS TRIGGERED - {ticker}: Current Price ₹{current_price:.2f} fell below "
+                           f"ATR Stop Loss ₹{stop_loss_price:.2f} ({volatility_category} volatility, {multiplier}x ATR). "
+                           f"Queuing SELL order for {sell_quantity} shares ({sell_percent}% of position) at ₹{order_price:.2f} "
+                           f"(tick size: {tick_size}).")
 
             # Queue the order - use full order method if selling entire position
             if sell_percent == 100 and not self.profit_target_exits_enabled:
-                if "Regime-based" in str(volatility_category):
-                    reason = (f"Regime stop loss breach - Current: ₹{current_price:.2f}, "
-                             f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                             f"Multiplier: {multiplier}x")
-                else:
-                    reason = (f"ATR stop loss breach - Current: ₹{current_price:.2f}, "
-                             f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                             f"{volatility_category} volatility ({multiplier}x)")
-                self.queue_order(ticker, sell_quantity, "SELL", reason, order_price)
+                self.queue_order(ticker, sell_quantity, "SELL",
+                               f"ATR stop loss breach - Current: ₹{current_price:.2f}, "
+                               f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
+                               f"{volatility_category} volatility ({multiplier}x)", order_price)
             else:
-                if "Regime-based" in str(volatility_category):
-                    reason = (f"Regime stop loss breach - Current: ₹{current_price:.2f}, "
-                             f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                             f"Multiplier: {multiplier}x")
-                else:
-                    reason = (f"ATR stop loss breach - Current: ₹{current_price:.2f}, "
-                             f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
-                             f"{volatility_category} volatility ({multiplier}x)")
-                self.queue_partial_order(ticker, sell_quantity, "SELL", reason, order_price, "stop_loss")
+                self.queue_partial_order(ticker, sell_quantity, "SELL",
+                               f"ATR stop loss breach - Current: ₹{current_price:.2f}, "
+                               f"Stop Loss: ₹{stop_loss_price:.2f}, ATR: ₹{atr_value:.2f} ({atr_percentage:.2f}%), "
+                               f"{volatility_category} volatility ({multiplier}x)", order_price, "stop_loss")
 
             return
 
@@ -2223,137 +2116,6 @@ class SLWatchdog:
         self.logger.info(f"Total Portfolio: Investment: ₹{total_investment:.2f} | Current: ₹{total_current_value:.2f} | "
                         f"P/L: ₹{total_profit_loss:.2f} ({total_profit_pct:.2f}%)")
         self.logger.info(f"Positions monitored: {len(self.tracked_positions)}")
-        
-        # Show volume anomaly summary if enabled
-        if self.anomaly_warning_enabled:
-            anomaly_summary = self.get_volume_anomaly_summary()
-            if anomaly_summary:
-                self.logger.info("")
-                self.logger.info("🚨 VOLUME-PRICE ANOMALY ALERTS:")
-                for item in anomaly_summary:
-                    risk_level = "HIGH" if item['score'] >= 4 else "MEDIUM"
-                    self.logger.info(f"  {item['ticker']}: {risk_level} RISK (Score: {item['score']}/8) - "
-                                   f"Volume: {item['volume_ratio']:.1f}x, Momentum: {item['momentum']:.1f}%")
-    
-    def check_volume_price_anomalies(self, ticker, current_price):
-        """Check for volume-price anomalies that may indicate exhaustion patterns"""
-        if not self.anomaly_warning_enabled:
-            return
-        
-        current_time = time.time()
-        # Only check every anomaly_check_interval seconds
-        if current_time - self.last_anomaly_check < self.anomaly_check_interval:
-            return
-        
-        self.last_anomaly_check = current_time
-        
-        try:
-            # Get historical data for volume analysis
-            token = self.get_instrument_token(ticker)
-            if token is None:
-                return
-            
-            # Get last 20 days of data for analysis
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=30)
-            historical_data = self.kite.historical_data(token, start_date, end_date, "day")
-            
-            if len(historical_data) < 20:
-                return
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(historical_data)
-            
-            # Calculate volume and price metrics
-            avg_volume_20 = df['volume'].rolling(window=20).mean().iloc[-1]
-            current_volume = df['volume'].iloc[-1]
-            volume_ratio = current_volume / avg_volume_20 if avg_volume_20 > 0 else 0
-            
-            # Price metrics
-            price_change = (df['close'].iloc[-1] - df['close'].iloc[-2]) / df['close'].iloc[-2] * 100
-            price_range = (df['high'].iloc[-1] - df['low'].iloc[-1]) / df['close'].iloc[-1] * 100
-            
-            # Calculate momentum (5-day)
-            momentum_5d = (df['close'].iloc[-1] - df['close'].iloc[-6]) / df['close'].iloc[-6] * 100
-            
-            # Volume efficiency (momentum per unit volume)
-            volume_efficiency = momentum_5d / volume_ratio if volume_ratio > 0 else 0
-            
-            # Check for anomalies
-            anomaly_score = 0
-            anomaly_reasons = []
-            
-            # 1. Volume Exhaustion: High volume but low momentum
-            if volume_ratio > 3.0 and abs(momentum_5d) < 5.0:
-                anomaly_score += 3
-                anomaly_reasons.append(f"Volume exhaustion: {volume_ratio:.1f}x volume but only {momentum_5d:.1f}% move")
-            
-            # 2. Efficiency Breakdown: Low momentum per unit volume
-            if volume_efficiency < 0.5 and volume_ratio > 2.0:
-                anomaly_score += 2
-                anomaly_reasons.append(f"Efficiency breakdown: {volume_efficiency:.2f} momentum/volume ratio")
-            
-            # 3. Narrow Range Rejection: High volume but narrow daily range
-            if volume_ratio > 2.0 and price_range < 1.5:
-                anomaly_score += 1
-                anomaly_reasons.append(f"Narrow range: {price_range:.1f}% range with {volume_ratio:.1f}x volume")
-            
-            # 4. Price Rejection: Close near day's low with high volume
-            close_position = (df['close'].iloc[-1] - df['low'].iloc[-1]) / (df['high'].iloc[-1] - df['low'].iloc[-1])
-            if volume_ratio > 2.0 and close_position < 0.3:
-                anomaly_score += 2
-                anomaly_reasons.append(f"Price rejection: Close at {close_position:.0%} of day's range")
-            
-            # Store anomaly data
-            self.volume_anomaly_data[ticker] = {
-                'timestamp': datetime.now(),
-                'anomaly_score': anomaly_score,
-                'volume_ratio': volume_ratio,
-                'momentum_5d': momentum_5d,
-                'volume_efficiency': volume_efficiency,
-                'price_range': price_range,
-                'reasons': anomaly_reasons
-            }
-            
-            # Log warnings based on anomaly score
-            if anomaly_score >= 4:
-                self.logger.warning(f"🚨 HIGH EXHAUSTION RISK - {ticker}: Score {anomaly_score}/8")
-                self.logger.warning(f"   Volume: {volume_ratio:.1f}x | Momentum: {momentum_5d:.1f}% | Efficiency: {volume_efficiency:.2f}")
-                for reason in anomaly_reasons:
-                    self.logger.warning(f"   - {reason}")
-                self.logger.warning(f"   ⚠️ RECOMMENDATION: Consider tightening stops or reducing position")
-                
-            elif anomaly_score >= 3:
-                self.logger.warning(f"⚠️ MEDIUM EXHAUSTION RISK - {ticker}: Score {anomaly_score}/8")
-                self.logger.warning(f"   Volume: {volume_ratio:.1f}x | Momentum: {momentum_5d:.1f}%")
-                for reason in anomaly_reasons:
-                    self.logger.warning(f"   - {reason}")
-                self.logger.warning(f"   💡 RECOMMENDATION: Monitor closely, prepare exit plan")
-                
-            elif anomaly_score >= 2:
-                self.logger.info(f"📊 Low exhaustion risk - {ticker}: Score {anomaly_score}/8")
-                self.logger.info(f"   Volume: {volume_ratio:.1f}x | Momentum: {momentum_5d:.1f}%")
-            
-        except Exception as e:
-            self.logger.debug(f"Error checking volume anomalies for {ticker}: {e}")
-    
-    def get_volume_anomaly_summary(self):
-        """Get summary of all current volume anomalies"""
-        summary = []
-        for ticker, data in self.volume_anomaly_data.items():
-            if data['anomaly_score'] >= 3:  # Only show medium/high risk
-                summary.append({
-                    'ticker': ticker,
-                    'score': data['anomaly_score'],
-                    'volume_ratio': data['volume_ratio'],
-                    'momentum': data['momentum_5d'],
-                    'efficiency': data['volume_efficiency'],
-                    'timestamp': data['timestamp']
-                })
-        
-        # Sort by score descending
-        summary.sort(key=lambda x: x['score'], reverse=True)
-        return summary
 
 def find_orders_file(user_name: str = None) -> Optional[str]:
     """Find the most recent orders file, optionally for a specific user"""

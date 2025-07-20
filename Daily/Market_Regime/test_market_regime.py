@@ -8,7 +8,7 @@ import sys
 import logging
 
 # Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import modules
 from market_regime_analyzer import MarketRegimeAnalyzer

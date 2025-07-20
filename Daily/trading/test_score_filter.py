@@ -6,7 +6,7 @@ import os
 import sys
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import the function we want to test
 from Daily.trading.place_orders_daily import get_top_stocks, get_latest_brooks_file

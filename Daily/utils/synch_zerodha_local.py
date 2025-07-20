@@ -38,11 +38,11 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import user-aware components (if available, but don't rely on them)
 try:
-    from user_context_manager import get_context_manager, get_user_order_manager, get_user_data_handler
+    from ..user_context_manager import get_context_manager, get_user_order_manager, get_user_data_handler
     USER_CONTEXT_AVAILABLE = True
 except ImportError:
     USER_CONTEXT_AVAILABLE = False

@@ -27,10 +27,10 @@ from tabulate import tabulate
 import time
 
 # Add parent directory to path so we can import modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from kiteconnect import KiteConnect
-from user_context_manager import (
+from ..user_context_manager import (
     get_context_manager,
     get_user_data_handler,
     UserCredentials

@@ -25,7 +25,7 @@ from kiteconnect import KiteConnect
 import webbrowser
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Set up logging
 logging.basicConfig(

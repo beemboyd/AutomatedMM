@@ -11,17 +11,18 @@ import signal
 import configparser
 import glob
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 import pytz
 from queue import Queue
 from typing import Dict, List, Tuple, Optional
 
 # Add parent directory to path so we can import modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import trading system modules
 from kiteconnect import KiteConnect
-from user_context_manager import (
+from ..user_context_manager import (
     get_context_manager,
     get_user_data_handler,
     UserCredentials
@@ -184,6 +185,10 @@ class SLWatchdog:
         self.atr_data = {}  # ticker -> {'atr': value, 'atr_percentage': value, 'stop_loss': value, 'multiplier': value, 'position_high': value}
         self.sma20_hourly_data = {}  # ticker -> {'sma20_violations': count, 'hours_monitored': count, 'hours_above_sma20': count}
 
+        # VSR tracking data
+        self.vsr_data = {}  # ticker -> {'entry_vsr': value, 'current_vsr': value, 'vsr_history': [], 'last_hourly_check': datetime}
+        self.hourly_candles = {}  # ticker -> list of hourly candles for VSR calculation
+
         # Tick size mapping (default fallback for unknown tickers)
         self.default_tick_size = 0.05
         self.tick_sizes = {}  # Will be populated dynamically from instruments data
@@ -216,6 +221,7 @@ class SLWatchdog:
         self.last_atr_check = 0
         self.last_sma20_check = 0
         self.last_position_sync = 0
+        self.last_vsr_check = 0  # Track last VSR check time
 
         # Threads
         self.price_poll_thread = None
@@ -227,7 +233,7 @@ class SLWatchdog:
 
         # Log the ATR-based stop loss logic being used
         self.logger.info("=" * 60)
-        self.logger.info("ATR-BASED TRAILING STOP LOSS ENABLED")
+        self.logger.info("ATR-BASED TRAILING STOP LOSS WITH VSR MONITORING ENABLED")
         self.logger.info("Stop loss calculation based on 20-day ATR:")
         self.logger.info("- Low Volatility (ATR <2%): Stop = 1.0x ATR")
         self.logger.info("- Medium Volatility (ATR 2-4%): Stop = 1.5x ATR")
@@ -236,6 +242,10 @@ class SLWatchdog:
         self.logger.info("- Trailing stops only move upward, never downward")
         self.logger.info("- Stop losses recalculated based on highest price reached since position entry")
         self.logger.info("- Profits are protected while still allowing for volatility")
+        self.logger.info("")
+        self.logger.info("VSR-BASED EXIT RULES (Hourly):")
+        self.logger.info("- Exit if hourly VSR drops < 50% of entry VSR")
+        self.logger.info("- Exit if position shows -2% loss")
         self.logger.info("")
         if self.profit_target_exits_enabled:
             self.logger.info("PROFIT TARGET EXITS ENABLED")
@@ -1306,6 +1316,33 @@ class SLWatchdog:
             self.remove_position_from_tracking(ticker)
             return
         
+
+        # Check VSR conditions (hourly)
+        vsr_signal = self.check_vsr_conditions(ticker)
+        if vsr_signal:
+            # Queue order for VSR-based exit
+            self.queue_order(
+                ticker,
+                expected_quantity,
+                "SELL",
+                f"VSR_EXIT: {vsr_signal['reason']}",
+                current_price
+            )
+            return
+
+        # Check -2% loss threshold
+        loss_signal = self.check_loss_threshold(ticker, current_price)
+        if loss_signal:
+            # Queue order for loss threshold exit
+            self.queue_order(
+                ticker,
+                expected_quantity,
+                "SELL",
+                f"LOSS_EXIT: {loss_signal['reason']}",
+                current_price
+            )
+            return
+
         # SMA20 violation checks are now only done at 2:30 PM IST
         # See check_sma20_exit_at_230pm() method
 

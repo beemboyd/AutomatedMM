@@ -6,7 +6,7 @@ import sys
 import pandas as pd
 
 # Add parent directories to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from Daily.scanners.VSR_Momentum_Scanner import (
     calculate_vsr_indicators,
