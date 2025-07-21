@@ -153,6 +153,22 @@ class SLWatchdog:
         # Profit target exits configuration
         profit_target_str = config.get('DEFAULT', 'profit_target_exits', fallback='no').lower()
         self.profit_target_exits_enabled = profit_target_str in ['yes', 'true', '1', 'on']
+        
+        # VSR-based exit configuration
+        vsr_exit_str = config.get('SL', 'vsr_exit_enabled', fallback='yes').lower()
+        self.vsr_exit_enabled = vsr_exit_str in ['yes', 'true', '1', 'on']
+        self.vsr_exit_threshold = config.getfloat('SL', 'vsr_exit_threshold', fallback=50.0)
+        self.vsr_check_interval_hours = config.getfloat('SL', 'vsr_check_interval_hours', fallback=1.0)
+        
+        # Loss threshold exit configuration
+        loss_threshold_str = config.get('SL', 'loss_threshold_enabled', fallback='yes').lower()
+        self.loss_threshold_enabled = loss_threshold_str in ['yes', 'true', '1', 'on']
+        self.loss_threshold_percent = config.getfloat('SL', 'loss_threshold_percent', fallback=2.0)
+        
+        # Candle length exit configuration
+        candle_length_str = config.get('SL', 'candle_length_exit_enabled', fallback='yes').lower()
+        self.candle_length_exit_enabled = candle_length_str in ['yes', 'true', '1', 'on']
+        self.candle_length_multiplier = config.getfloat('SL', 'candle_length_multiplier', fallback=2.0)
 
         # Initialize KiteConnect client
         try:
@@ -234,7 +250,7 @@ class SLWatchdog:
 
         # Log the ATR-based stop loss logic being used
         self.logger.info("=" * 60)
-        self.logger.info("ATR-BASED TRAILING STOP LOSS WITH VSR MONITORING ENABLED")
+        self.logger.info("ATR-BASED TRAILING STOP LOSS CONFIGURATION")
         self.logger.info("Stop loss calculation based on 20-day ATR:")
         self.logger.info("- Low Volatility (ATR <2%): Stop = 1.0x ATR")
         self.logger.info("- Medium Volatility (ATR 2-4%): Stop = 1.5x ATR")
@@ -244,9 +260,24 @@ class SLWatchdog:
         self.logger.info("- Stop losses recalculated based on highest price reached since position entry")
         self.logger.info("- Profits are protected while still allowing for volatility")
         self.logger.info("")
-        self.logger.info("VSR-BASED EXIT RULES (Hourly):")
-        self.logger.info("- Exit if hourly VSR drops < 50% of entry VSR")
-        self.logger.info("- Exit if position shows -2% loss")
+        self.logger.info("VSR-BASED EXIT RULES:")
+        if self.vsr_exit_enabled:
+            self.logger.info(f"- ENABLED: Exit if hourly VSR drops < {self.vsr_exit_threshold}% of entry VSR")
+            self.logger.info(f"- Check interval: {self.vsr_check_interval_hours} hours")
+        else:
+            self.logger.info("- DISABLED")
+        self.logger.info("")
+        self.logger.info("LOSS THRESHOLD EXIT RULES:")
+        if self.loss_threshold_enabled:
+            self.logger.info(f"- ENABLED: Exit if position shows -{self.loss_threshold_percent}% loss")
+        else:
+            self.logger.info("- DISABLED")
+        self.logger.info("")
+        self.logger.info("CANDLE LENGTH EXIT RULES:")
+        if self.candle_length_exit_enabled:
+            self.logger.info(f"- ENABLED: Exit if hourly candle length > {self.candle_length_multiplier}x ATR")
+        else:
+            self.logger.info("- DISABLED")
         self.logger.info("")
         if self.profit_target_exits_enabled:
             self.logger.info("PROFIT TARGET EXITS ENABLED")
@@ -1311,6 +1342,10 @@ class SLWatchdog:
         """Check VSR-based exit conditions
         Returns signal dict if exit conditions are met, None otherwise
         """
+        # Check if VSR exit is enabled
+        if not self.vsr_exit_enabled:
+            return None
+            
         try:
             # Check if we have position data
             if ticker not in self.tracked_positions:
@@ -1332,10 +1367,11 @@ class SLWatchdog:
             
             vsr_info = self.vsr_data[ticker]
             
-            # Only check hourly (not more frequently)
+            # Only check based on configured interval
             if vsr_info['last_hourly_check']:
                 time_since_last_check = current_time - vsr_info['last_hourly_check']
-                if time_since_last_check.total_seconds() < 3600:  # Less than 1 hour
+                check_interval_seconds = self.vsr_check_interval_hours * 3600
+                if time_since_last_check.total_seconds() < check_interval_seconds:
                     return None
             
             # Get hourly candle data
@@ -1387,13 +1423,13 @@ class SLWatchdog:
                 if len(vsr_info['vsr_history']) > 24:
                     vsr_info['vsr_history'] = vsr_info['vsr_history'][-24:]
                 
-                # Check if current VSR has dropped below 50% of entry VSR
+                # Check if current VSR has dropped below configured threshold of entry VSR
                 entry_vsr = vsr_info['entry_vsr']
-                vsr_threshold = entry_vsr * 0.5
+                vsr_threshold = entry_vsr * (self.vsr_exit_threshold / 100.0)
                 
                 if current_vsr < vsr_threshold:
                     vsr_drop_percent = ((entry_vsr - current_vsr) / entry_vsr) * 100
-                    self.logger.warning(f"{ticker}: VSR EXIT SIGNAL - Current VSR ({current_vsr:.2f}) < 50% of entry VSR ({entry_vsr:.2f})")
+                    self.logger.warning(f"{ticker}: VSR EXIT SIGNAL - Current VSR ({current_vsr:.2f}) < {self.vsr_exit_threshold}% of entry VSR ({entry_vsr:.2f})")
                     return {
                         'signal': True,
                         'reason': f'VSR dropped {vsr_drop_percent:.1f}% from entry (Current: {current_vsr:.2f}, Entry: {entry_vsr:.2f})'
@@ -1410,9 +1446,13 @@ class SLWatchdog:
         return None
     
     def check_loss_threshold(self, ticker, current_price):
-        """Check if position has reached -2% loss threshold
+        """Check if position has reached configured loss threshold
         Returns signal dict if exit conditions are met, None otherwise
         """
+        # Check if loss threshold exit is enabled
+        if not self.loss_threshold_enabled:
+            return None
+            
         try:
             if ticker not in self.tracked_positions:
                 return None
@@ -1426,8 +1466,8 @@ class SLWatchdog:
             # Calculate current loss percentage
             loss_percent = ((current_price - entry_price) / entry_price) * 100
             
-            # Check if loss exceeds -2%
-            if loss_percent <= -2.0:
+            # Check if loss exceeds configured threshold
+            if loss_percent <= -self.loss_threshold_percent:
                 self.logger.warning(f"{ticker}: LOSS THRESHOLD EXIT SIGNAL - Loss: {loss_percent:.2f}%")
                 return {
                     'signal': True,
@@ -1436,6 +1476,71 @@ class SLWatchdog:
                 
         except Exception as e:
             self.logger.error(f"Error in check_loss_threshold for {ticker}: {e}")
+            
+        return None
+    
+    def check_candle_length_conditions(self, ticker):
+        """Check if hourly candle length exceeds configured multiple of ATR
+        Returns signal dict if exit conditions are met, None otherwise
+        """
+        # Check if candle length exit is enabled
+        if not self.candle_length_exit_enabled:
+            return None
+            
+        try:
+            if ticker not in self.tracked_positions:
+                return None
+                
+            # Get ATR data
+            if ticker not in self.atr_data:
+                return None
+                
+            atr_value = self.atr_data[ticker]['atr']
+            
+            # Get current time
+            current_time = datetime.now()
+            
+            # Get hourly candle data
+            token = self.get_instrument_token(ticker)
+            if not token:
+                return None
+                
+            try:
+                # Get last 2 hours of data
+                end_date = current_time
+                start_date = current_time - timedelta(hours=2)
+                
+                hourly_data = self.kite.historical_data(
+                    token, 
+                    start_date.strftime("%Y-%m-%d %H:%M:%S"), 
+                    end_date.strftime("%Y-%m-%d %H:%M:%S"), 
+                    "60minute"
+                )
+                
+                if not hourly_data:
+                    return None
+                
+                # Get the latest completed hourly candle
+                latest_candle = hourly_data[-1]
+                candle_length = latest_candle['high'] - latest_candle['low']
+                
+                # Check if candle length exceeds threshold
+                length_threshold = atr_value * self.candle_length_multiplier
+                
+                if candle_length > length_threshold:
+                    length_ratio = candle_length / atr_value
+                    self.logger.warning(f"{ticker}: CANDLE LENGTH EXIT SIGNAL - Hourly candle length ({candle_length:.2f}) > {self.candle_length_multiplier}x ATR ({atr_value:.2f})")
+                    return {
+                        'signal': True,
+                        'reason': f'Hourly candle length {length_ratio:.1f}x ATR (Length: {candle_length:.2f}, ATR: {atr_value:.2f})'
+                    }
+                    
+            except Exception as e:
+                self.logger.error(f"Error fetching hourly data for candle length check on {ticker}: {e}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error in check_candle_length_conditions for {ticker}: {e}")
             
         return None
     
@@ -1481,6 +1586,19 @@ class SLWatchdog:
                 expected_quantity,
                 "SELL",
                 f"LOSS_EXIT: {loss_signal['reason']}",
+                current_price
+            )
+            return
+
+        # Check candle length conditions (hourly)
+        candle_signal = self.check_candle_length_conditions(ticker)
+        if candle_signal:
+            # Queue order for candle length exit
+            self.queue_order(
+                ticker,
+                expected_quantity,
+                "SELL",
+                f"CANDLE_EXIT: {candle_signal['reason']}",
                 current_price
             )
             return
