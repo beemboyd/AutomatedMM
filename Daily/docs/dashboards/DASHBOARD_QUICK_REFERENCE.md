@@ -12,6 +12,9 @@
 |-----------|-----|------|---------|
 | **Main Dashboard** | http://localhost:8080 | 8080 | Market regime analysis, trends, visualizations |
 | **Health Dashboard** | http://localhost:7080 | 7080 | System health, job monitoring, alerts |
+| **VSR Tracker** | http://localhost:3001 | 3001 | VSR-based trending stocks, momentum analysis |
+| **Market Breadth** | http://localhost:5001 | 5001 | Market internals, SMA breadth, sector analysis |
+| **Job Manager** | http://localhost:9090 | 9090 | All system jobs monitoring and control |
 
 ## 🎮 Control Commands
 
@@ -61,6 +64,21 @@ lsof -i :7080  # Health dashboard
 - **Real-time Alerts** for issues
 - **Job Summary** statistics
 
+### VSR Tracker Dashboard (Port 3001)
+- **Real-time VSR Analysis** from tracker logs
+- **Perfect Score Stocks** (Score = 100)
+- **High VSR Stocks** (VSR ≥ 10)
+- **High Momentum Stocks** (≥ 5%)
+- **Auto-refresh** every 60 seconds
+- **Manual Refresh Button** for instant updates
+
+### Market Breadth Dashboard (Port 5001)
+- **SMA20/SMA50 Breadth** with % changes
+- **Sector Performance** analysis
+- **Market Internals** visualization
+- **Early Bird** KC breakout patterns
+- **Real-time Updates** from scanner
+
 ## 🔧 Troubleshooting
 
 | Problem | Solution |
@@ -75,12 +93,19 @@ lsof -i :7080  # Health dashboard
 ```
 /Users/maverick/PycharmProjects/India-TS/Daily/
 ├── utils/
-│   ├── start_dashboards.sh    # Start both dashboards
-│   ├── stop_dashboards.sh     # Stop both dashboards
+│   ├── start_dashboards.sh    # Start main dashboards
+│   ├── stop_dashboards.sh     # Stop main dashboards
 │   └── check_jobs_status.sh   # Check all jobs status
-└── Market_Regime/
-    ├── dashboard_enhanced.py   # Main dashboard (8080)
-    └── dashboard_health_check.py # Health dashboard (7080)
+├── Market_Regime/
+│   ├── dashboard_enhanced.py   # Main dashboard (8080)
+│   ├── dashboard_health_check.py # Health dashboard (7080)
+│   └── market_breadth_dashboard.py # Market breadth (5001)
+├── dashboards/
+│   ├── vsr_tracker_dashboard.py # VSR tracker (3001)
+│   ├── start_vsr_dashboard.sh  # Start VSR dashboard
+│   └── stop_vsr_dashboard.sh   # Stop VSR dashboard
+└── job_management/
+    └── job_manager_dashboard.py # Job manager (9090)
 ```
 
 ## 🔄 After System Reboot
