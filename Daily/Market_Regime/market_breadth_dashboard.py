@@ -42,6 +42,56 @@ def get_latest_breadth_data():
         logger.error(f"Error loading breadth data: {e}")
         return None
 
+def get_previous_breadth_data():
+    """Get the previous run's breadth data"""
+    try:
+        # Get all breadth files sorted by timestamp
+        breadth_files = sorted([f for f in os.listdir(BREADTH_DATA_DIR) 
+                               if f.startswith('market_breadth_') and f.endswith('.json') 
+                               and 'latest' not in f])
+        
+        if len(breadth_files) < 2:
+            return None
+            
+        # Get the second-to-last file (previous run)
+        previous_file = os.path.join(BREADTH_DATA_DIR, breadth_files[-2])
+        
+        with open(previous_file, 'r') as f:
+            return json.load(f)
+            
+    except Exception as e:
+        logger.error(f"Error loading previous breadth data: {e}")
+        return None
+
+def calculate_sma_changes(current_data, previous_data):
+    """Calculate percentage changes in SMA breadth from previous run"""
+    if not current_data or not previous_data:
+        return None
+        
+    try:
+        current_sma = current_data.get('sma_breadth', {})
+        previous_sma = previous_data.get('sma_breadth', {})
+        
+        # Calculate percentage point changes
+        sma20_change = current_sma.get('sma20_percent', 0) - previous_sma.get('sma20_percent', 0)
+        sma50_change = current_sma.get('sma50_percent', 0) - previous_sma.get('sma50_percent', 0)
+        
+        # Calculate relative percentage changes
+        sma20_relative_change = (sma20_change / previous_sma.get('sma20_percent', 1)) * 100 if previous_sma.get('sma20_percent', 0) > 0 else 0
+        sma50_relative_change = (sma50_change / previous_sma.get('sma50_percent', 1)) * 100 if previous_sma.get('sma50_percent', 0) > 0 else 0
+        
+        return {
+            'sma20_change': round(sma20_change, 2),
+            'sma50_change': round(sma50_change, 2),
+            'sma20_relative_change': round(sma20_relative_change, 2),
+            'sma50_relative_change': round(sma50_relative_change, 2),
+            'previous_timestamp': previous_data.get('timestamp', '')
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating SMA changes: {e}")
+        return None
+
 def calculate_position_recommendations(breadth_data):
     """Calculate position sizing and strategy recommendations"""
     if not breadth_data:
@@ -104,6 +154,12 @@ def get_breadth_data():
             'sma50': data['sma_breadth']['above_sma50'] / max(data['sma_breadth']['below_sma50'], 1),
             'momentum_5d': data['momentum_indicators']['positive_5d'] / max(data['momentum_indicators']['negative_5d'], 1)
         }
+        
+        # Add SMA changes from previous run
+        previous_data = get_previous_breadth_data()
+        sma_changes = calculate_sma_changes(data, previous_data)
+        if sma_changes:
+            data['sma_changes'] = sma_changes
         
         return jsonify(data)
     else:

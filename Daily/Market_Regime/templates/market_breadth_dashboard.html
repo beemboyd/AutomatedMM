@@ -451,6 +451,37 @@
         .stock-value {
             font-weight: bold;
         }
+        
+        .change-indicator {
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-left: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .change-positive {
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .change-positive::before {
+            content: "▲ ";
+        }
+        
+        .change-negative {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        
+        .change-negative::before {
+            content: "▼ ";
+        }
+        
+        .change-neutral {
+            color: #6b7280;
+            background: rgba(107, 114, 128, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -494,7 +525,10 @@
             
             <div class="metric-card">
                 <div class="metric-title">SMA20 Breadth</div>
-                <div class="metric-value" id="sma20-breadth">-</div>
+                <div class="metric-value">
+                    <span id="sma20-breadth">-</span>
+                    <span id="sma20-change" class="change-indicator"></span>
+                </div>
                 <div class="progress-bar">
                     <div class="progress-fill progress-green" id="sma20-progress"></div>
                 </div>
@@ -506,7 +540,10 @@
             
             <div class="metric-card">
                 <div class="metric-title">SMA50 Breadth</div>
-                <div class="metric-value" id="sma50-breadth">-</div>
+                <div class="metric-value">
+                    <span id="sma50-breadth">-</span>
+                    <span id="sma50-change" class="change-indicator"></span>
+                </div>
                 <div class="progress-bar">
                     <div class="progress-fill progress-green" id="sma50-progress"></div>
                 </div>
@@ -710,6 +747,19 @@
             document.getElementById('sma50-progress').textContent = formatPercent(sma50Percent);
             document.getElementById('above-sma50').textContent = data.sma_breadth.above_sma50;
             document.getElementById('below-sma50').textContent = data.sma_breadth.below_sma50;
+            
+            // Update SMA changes
+            if (data.sma_changes) {
+                const sma20Change = data.sma_changes.sma20_change;
+                const sma20ChangeEl = document.getElementById('sma20-change');
+                sma20ChangeEl.textContent = `${sma20Change > 0 ? '+' : ''}${sma20Change.toFixed(1)}%`;
+                sma20ChangeEl.className = 'change-indicator ' + (sma20Change > 0 ? 'change-positive' : sma20Change < 0 ? 'change-negative' : 'change-neutral');
+                
+                const sma50Change = data.sma_changes.sma50_change;
+                const sma50ChangeEl = document.getElementById('sma50-change');
+                sma50ChangeEl.textContent = `${sma50Change > 0 ? '+' : ''}${sma50Change.toFixed(1)}%`;
+                sma50ChangeEl.className = 'change-indicator ' + (sma50Change > 0 ? 'change-positive' : sma50Change < 0 ? 'change-negative' : 'change-neutral');
+            }
             
             // Update RSI
             document.getElementById('avg-rsi').textContent = formatNumber(data.rsi_distribution.avg_rsi);
