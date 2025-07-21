@@ -18,11 +18,12 @@ from queue import Queue
 from typing import Dict, List, Tuple, Optional
 
 # Add parent directory to path so we can import modules
-# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# For self-contained Daily folder, add Daily to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import trading system modules
 from kiteconnect import KiteConnect
-from ..user_context_manager import (
+from user_context_manager import (
     get_context_manager,
     get_user_data_handler,
     UserCredentials
@@ -1296,6 +1297,147 @@ class SLWatchdog:
                 
         except Exception as e:
             self.logger.error(f"Fatal error in price polling thread: {e}")
+    
+    def calculate_vsr(self, high, low, volume):
+        """Calculate Volume Spread Ratio (VSR)"""
+        if high <= low or volume == 0:
+            return 0
+        spread = high - low
+        if spread == 0:
+            return 0
+        return volume / spread
+    
+    def check_vsr_conditions(self, ticker):
+        """Check VSR-based exit conditions
+        Returns signal dict if exit conditions are met, None otherwise
+        """
+        try:
+            # Check if we have position data
+            if ticker not in self.tracked_positions:
+                return None
+            
+            position_data = self.tracked_positions[ticker]
+            
+            # Get current time
+            current_time = datetime.now()
+            
+            # Initialize VSR data for this ticker if not exists
+            if ticker not in self.vsr_data:
+                self.vsr_data[ticker] = {
+                    'entry_vsr': None,
+                    'current_vsr': None,
+                    'vsr_history': [],
+                    'last_hourly_check': None
+                }
+            
+            vsr_info = self.vsr_data[ticker]
+            
+            # Only check hourly (not more frequently)
+            if vsr_info['last_hourly_check']:
+                time_since_last_check = current_time - vsr_info['last_hourly_check']
+                if time_since_last_check.total_seconds() < 3600:  # Less than 1 hour
+                    return None
+            
+            # Get hourly candle data
+            token = self.get_instrument_token(ticker)
+            if not token:
+                self.logger.error(f"Cannot get instrument token for {ticker}")
+                return None
+            
+            try:
+                # Get last 2 hours of data
+                end_date = current_time
+                start_date = current_time - timedelta(hours=2)
+                
+                hourly_data = self.kite.historical_data(
+                    token, 
+                    start_date.strftime("%Y-%m-%d %H:%M:%S"), 
+                    end_date.strftime("%Y-%m-%d %H:%M:%S"), 
+                    "60minute"
+                )
+                
+                if not hourly_data:
+                    return None
+                
+                # Get the latest completed hourly candle
+                latest_candle = hourly_data[-1]
+                current_vsr = self.calculate_vsr(
+                    latest_candle['high'],
+                    latest_candle['low'],
+                    latest_candle['volume']
+                )
+                
+                # Update current VSR
+                vsr_info['current_vsr'] = current_vsr
+                vsr_info['last_hourly_check'] = current_time
+                
+                # If we don't have entry VSR, set it
+                if vsr_info['entry_vsr'] is None:
+                    vsr_info['entry_vsr'] = current_vsr
+                    self.logger.info(f"{ticker}: Setting entry VSR to {current_vsr:.2f}")
+                    return None
+                
+                # Add to history
+                vsr_info['vsr_history'].append({
+                    'timestamp': current_time,
+                    'vsr': current_vsr
+                })
+                
+                # Keep only last 24 hours of history
+                if len(vsr_info['vsr_history']) > 24:
+                    vsr_info['vsr_history'] = vsr_info['vsr_history'][-24:]
+                
+                # Check if current VSR has dropped below 50% of entry VSR
+                entry_vsr = vsr_info['entry_vsr']
+                vsr_threshold = entry_vsr * 0.5
+                
+                if current_vsr < vsr_threshold:
+                    vsr_drop_percent = ((entry_vsr - current_vsr) / entry_vsr) * 100
+                    self.logger.warning(f"{ticker}: VSR EXIT SIGNAL - Current VSR ({current_vsr:.2f}) < 50% of entry VSR ({entry_vsr:.2f})")
+                    return {
+                        'signal': True,
+                        'reason': f'VSR dropped {vsr_drop_percent:.1f}% from entry (Current: {current_vsr:.2f}, Entry: {entry_vsr:.2f})'
+                    }
+                
+            except Exception as e:
+                self.logger.error(f"Error fetching hourly data for {ticker}: {e}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error in check_vsr_conditions for {ticker}: {e}")
+            return None
+        
+        return None
+    
+    def check_loss_threshold(self, ticker, current_price):
+        """Check if position has reached -2% loss threshold
+        Returns signal dict if exit conditions are met, None otherwise
+        """
+        try:
+            if ticker not in self.tracked_positions:
+                return None
+            
+            position_data = self.tracked_positions[ticker]
+            entry_price = position_data.get('entry_price', 0)
+            
+            if entry_price <= 0:
+                return None
+            
+            # Calculate current loss percentage
+            loss_percent = ((current_price - entry_price) / entry_price) * 100
+            
+            # Check if loss exceeds -2%
+            if loss_percent <= -2.0:
+                self.logger.warning(f"{ticker}: LOSS THRESHOLD EXIT SIGNAL - Loss: {loss_percent:.2f}%")
+                return {
+                    'signal': True,
+                    'reason': f'Loss threshold breached: {loss_percent:.2f}% (Price: {current_price:.2f}, Entry: {entry_price:.2f})'
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error in check_loss_threshold for {ticker}: {e}")
+            
+        return None
     
     def check_atr_stop_loss(self, ticker, current_price):
         """Check if current price is below ATR-based trailing stop loss with partial exits and SMA20 violations"""
