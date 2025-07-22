@@ -41,6 +41,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **2025-05-05**: Fixed place_orders.py to load position data directly from the state_manager instead of legacy state files, preventing ghost position errors.
 - **2025-05-05**: Enhanced the state reset logic to completely purge all MIS positions at the start of each trading day.
 - **2025-05-05**: Created cleanup_mis_positions.py utility to provide easy command-line tools for managing positions and cleaning state.
+- **2025-07-22**: Fixed VSR tracker real-time data updates by implementing cache expiration in VSR_Momentum_Scanner.py. The DataCache now has TTL-based expiration (1 min for minute data, 1 hour for hourly data) to ensure real-time updates instead of showing static/frozen data throughout the day. See Daily/docs/VSR_TRACKER_REALTIME_FIX.md for full details.
 
 ## BT Module Guidelines
 - New strategies must inherit from BaseStrategy in strategies/base.py
