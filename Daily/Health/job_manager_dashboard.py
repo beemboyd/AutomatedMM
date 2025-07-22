@@ -15,6 +15,7 @@ from flask import Flask, render_template_string, jsonify, request
 from flask_cors import CORS
 import threading
 import psutil
+import pytz
 
 # Setup logging
 logging.basicConfig(
@@ -25,6 +26,18 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
+
+# Time restriction function
+def is_within_market_hours():
+    """Check if current time is between 9:30 AM and 3:30 PM IST"""
+    ist = pytz.timezone('Asia/Kolkata')
+    current_time = datetime.now(ist)
+    
+    # Market hours: 9:30 AM to 3:30 PM
+    market_start = current_time.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_end = current_time.replace(hour=15, minute=30, second=0, microsecond=0)
+    
+    return market_start <= current_time <= market_end
 
 # Job definitions with their details
 JOBS = {
@@ -434,11 +447,64 @@ def restart_dashboard(dashboard_id):
 @app.route('/')
 def index():
     """Main dashboard page"""
+    if not is_within_market_hours():
+        # Return a simple message when outside market hours
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>India-TS Job Manager</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f5f5f5;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                }
+                .message-container {
+                    background: white;
+                    padding: 40px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    text-align: center;
+                }
+                h1 {
+                    color: #333;
+                    margin-bottom: 20px;
+                }
+                p {
+                    color: #666;
+                    font-size: 18px;
+                    margin: 10px 0;
+                }
+                .time {
+                    color: #2196F3;
+                    font-weight: bold;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="message-container">
+                <h1>India-TS Job Manager Dashboard</h1>
+                <p>This dashboard is only available during market hours</p>
+                <p class="time">9:30 AM - 3:30 PM IST</p>
+                <p>Please access during market hours</p>
+            </div>
+        </body>
+        </html>
+        '''
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/api/jobs')
 def get_jobs():
     """Get all jobs with their current status"""
+    if not is_within_market_hours():
+        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+    
     jobs_data = []
     
     # Add regular jobs
@@ -477,6 +543,9 @@ def get_jobs():
 @app.route('/api/job/<job_id>/reload', methods=['POST'])
 def api_reload_job(job_id):
     """Reload a specific job"""
+    if not is_within_market_hours():
+        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+    
     if job_id not in JOBS:
         return jsonify({'success': False, 'message': 'Invalid job ID'}), 404
     
@@ -486,6 +555,9 @@ def api_reload_job(job_id):
 @app.route('/api/job/<job_id>/restart', methods=['POST'])
 def api_restart_job(job_id):
     """Restart a specific job"""
+    if not is_within_market_hours():
+        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+    
     if job_id not in JOBS:
         return jsonify({'success': False, 'message': 'Invalid job ID'}), 404
     
@@ -495,6 +567,9 @@ def api_restart_job(job_id):
 @app.route('/api/job/<job_id>/stop', methods=['POST'])
 def api_stop_job(job_id):
     """Stop a specific job"""
+    if not is_within_market_hours():
+        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+    
     if job_id not in JOBS:
         return jsonify({'success': False, 'message': 'Invalid job ID'}), 404
     
@@ -504,6 +579,9 @@ def api_stop_job(job_id):
 @app.route('/api/dashboard/<dashboard_id>/start', methods=['POST'])
 def api_start_dashboard(dashboard_id):
     """Start a specific dashboard"""
+    if not is_within_market_hours():
+        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+    
     if dashboard_id not in DASHBOARDS:
         return jsonify({'success': False, 'message': 'Invalid dashboard ID'}), 404
     
@@ -513,6 +591,9 @@ def api_start_dashboard(dashboard_id):
 @app.route('/api/dashboard/<dashboard_id>/stop', methods=['POST'])
 def api_stop_dashboard(dashboard_id):
     """Stop a specific dashboard"""
+    if not is_within_market_hours():
+        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+    
     if dashboard_id not in DASHBOARDS:
         return jsonify({'success': False, 'message': 'Invalid dashboard ID'}), 404
     
@@ -522,6 +603,9 @@ def api_stop_dashboard(dashboard_id):
 @app.route('/api/dashboard/<dashboard_id>/restart', methods=['POST'])
 def api_restart_dashboard(dashboard_id):
     """Restart a specific dashboard"""
+    if not is_within_market_hours():
+        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+    
     if dashboard_id not in DASHBOARDS:
         return jsonify({'success': False, 'message': 'Invalid dashboard ID'}), 404
     
