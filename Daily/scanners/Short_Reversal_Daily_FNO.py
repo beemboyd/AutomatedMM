@@ -93,8 +93,8 @@ logger.info(f"Successfully loaded API credentials for user {user_name}")
 # Define paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
-RESULTS_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "FNO", "Short")  # FNO Short results directory
-HTML_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "FNO", "Short")     # FNO Short HTML directory
+RESULTS_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "FNO", "Short", "Liquid")  # FNO Short results directory
+HTML_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "FNO", "Short", "Liquid")     # FNO Short HTML directory
 
 # Ensure directories exist
 for dir_path in [RESULTS_DIR, HTML_DIR]:
