@@ -14,12 +14,6 @@ import threading
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-import requests
-
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from services.kite_operations import KiteOperations, setup_kite_operations
 
 # Configure logging
 logging.basicConfig(
@@ -36,7 +30,6 @@ class VSRPaperTrader:
         self.positions = {}
         self.pending_slices = {}
         self.setup_database()
-        self.kite_ops = None
         self.running = False
         
         # Trading parameters

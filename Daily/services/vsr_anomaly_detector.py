@@ -19,14 +19,15 @@ from typing import Dict, List, Optional, Tuple
 import configparser
 
 # Add parent directories to path
-# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# Add Daily to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import required modules
 from kiteconnect import KiteConnect
-from ..user_context_manager import get_context_manager, UserCredentials
+from user_context_manager import get_context_manager, UserCredentials
 
 # Import VSR calculation functions
-from Daily.scanners.VSR_Momentum_Scanner import (
+from scanners.VSR_Momentum_Scanner import (
     calculate_vsr_indicators,
     fetch_data_kite,
     DataCache

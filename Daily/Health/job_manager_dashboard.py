@@ -149,6 +149,18 @@ JOBS = {
         'script': 'run_momentum_analysis.py --force',
         'schedule': 'Every hour at :15 (9:15-15:15, Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Filtered'
+    },
+    'com.india-ts.long_reversal_fno': {
+        'name': 'Long Reversal FNO',
+        'script': 'Long_Reversal_Daily_FNO.py',
+        'schedule': 'Every hour at :19 (9:19-15:19, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.short_reversal_fno': {
+        'name': 'Short Reversal FNO',
+        'script': 'Short_Reversal_Daily_FNO.py',
+        'schedule': 'Every hour at :19 (9:19-15:19, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
     }
 }
 

@@ -26,8 +26,11 @@ except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from utils.broker_interface import BrokerInterface
 
+# Add Daily to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from state_manager import StateManager
-from ..user_context_manager import UserContextManager
+from user_context_manager import UserContextManager
 
 # Check if the environment supports colors
 SUPPORTS_COLOR = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()

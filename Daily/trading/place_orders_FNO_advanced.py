@@ -24,8 +24,12 @@ import math
 
 # Import required modules
 from kiteconnect import KiteConnect
-from ..user_context_manager import (
+# Add Daily to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from user_context_manager import (
     get_context_manager,
+    get_user_data_handler,
     get_user_state_manager,
     get_user_order_manager,
     UserCredentials

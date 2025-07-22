@@ -49,6 +49,12 @@ The health dashboard at http://localhost:7080 now displays all India-TS system j
   - Script: Long_Reversal_Daily.py
 - **short_reversal_daily** - Every 30 min (9:00-15:30, Mon-Fri)
   - Script: Short_Reversal_Daily.py
+- **long_reversal_fno** - Every hour at :19 (9:19-15:19, Mon-Fri)
+  - Script: Long_Reversal_Daily_FNO.py
+  - Scans FNO stocks for long reversal opportunities
+- **short_reversal_fno** - Every hour at :19 (9:19-15:19, Mon-Fri)
+  - Script: Short_Reversal_Daily_FNO.py
+  - Scans FNO stocks for short reversal opportunities
 - **market_breadth_scanner** - Every 30 min (9:00-15:30, Mon-Fri)
   - Script: Market_Breadth_Scanner.py
 
@@ -160,3 +166,4 @@ The Job Manager Dashboard provides centralized control and monitoring for all In
 Created: 2025-07-04
 Updated: 2025-07-11 - Added complete job schedules and Market Breadth Dashboard details
 Updated: 2025-07-17 - Added Job Manager Dashboard for centralized control
+Updated: 2025-07-22 - Added FNO reversal scanners (long_reversal_fno and short_reversal_fno)

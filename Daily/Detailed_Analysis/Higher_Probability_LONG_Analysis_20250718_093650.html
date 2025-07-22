@@ -1,0 +1,2394 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Higher Probability Reversal Filter - 18-07-2025</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 1400px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f9f9f9;
+            }
+            h1, h2, h3 {
+                color: #2c3e50;
+            }
+            h1 {
+                border-bottom: 2px solid #e74c3c;
+                padding-bottom: 10px;
+            }
+            .header-info {
+                display: flex;
+                justify-content: space-between;
+                color: #7f8c8d;
+                margin-bottom: 20px;
+            }
+            .ticker-card {
+                background-color: white;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 15px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                border-left: 5px solid #e74c3c;
+            }
+            .ticker-card.long {
+                border-left-color: #27ae60;
+            }
+            .ticker-card.short {
+                border-left-color: #e74c3c;
+            }
+            .ticker-header {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 10px;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 10px;
+            }
+            .ticker-name {
+                font-weight: bold;
+                font-size: 1.2em;
+                color: #2c3e50;
+            }
+            .ticker-direction {
+                font-weight: bold;
+                font-size: 1.1em;
+                padding: 5px 10px;
+                border-radius: 4px;
+                color: white;
+            }
+            .ticker-direction.long {
+                background-color: #27ae60;
+            }
+            .ticker-direction.short {
+                background-color: #e74c3c;
+            }
+            .ticker-details {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 10px;
+            }
+            .detail-item {
+                background-color: #f8f9fa;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            .detail-label {
+                color: #7f8c8d;
+                font-size: 0.85em;
+            }
+            .detail-value {
+                font-weight: bold;
+            }
+            .pattern-info {
+                background-color: #e8f4fd;
+                padding: 10px;
+                border-radius: 4px;
+                margin-top: 10px;
+            }
+            .score-badge {
+                background-color: #3498db;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 0.8em;
+                margin-left: 10px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+            }
+            th, td {
+                padding: 10px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }
+            thead tr {
+                background-color: #e74c3c;
+                color: white;
+            }
+            tbody tr:nth-of-type(even) {
+                background-color: #f3f3f3;
+            }
+            tbody tr:hover {
+                background-color: #e9e9e9;
+            }
+            .source-info {
+                margin-top: 30px;
+                font-size: 0.9em;
+                color: #95a5a6;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Higher Probability LONG Reversal Filter</h1>
+        <div class="header-info">
+            <div>Date: 18-07-2025 | Time: 09:36</div>
+            <div>Filtered from: Ticker.xlsx | LONG ONLY | Higher Probability: 60%+</div>
+        </div>
+
+        <h2>Higher Probability LONG Reversal Patterns (31 matches)</h2>
+    
+        <table>
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Direction</th>
+                    <th>Score</th>
+                    <th>Entry Price</th>
+                    <th>Stop Loss</th>
+                    <th>Target 1</th>
+                    <th>Risk:Reward</th>
+                    <th>Volume Ratio</th>
+                </tr>
+            </thead>
+            <tbody>
+    
+            <tr>
+                <td>DELHIVERY</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹432.00</td>
+                <td>₹399.20</td>
+                <td>₹497.60</td>
+                <td>2.00</td>
+                <td>0.13x</td>
+            </tr>
+        
+            <tr>
+                <td>MAXESTATES</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹539.25</td>
+                <td>₹500.20</td>
+                <td>₹617.34</td>
+                <td>2.00</td>
+                <td>0.57x</td>
+            </tr>
+        
+            <tr>
+                <td>HDFCAMC</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹5599.00</td>
+                <td>₹4990.77</td>
+                <td>₹6815.46</td>
+                <td>2.00</td>
+                <td>0.63x</td>
+            </tr>
+        
+            <tr>
+                <td>KIMS</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹753.50</td>
+                <td>₹688.40</td>
+                <td>₹883.69</td>
+                <td>2.00</td>
+                <td>0.13x</td>
+            </tr>
+        
+            <tr>
+                <td>MGL</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹1534.30</td>
+                <td>₹1443.27</td>
+                <td>₹1716.36</td>
+                <td>2.00</td>
+                <td>0.11x</td>
+            </tr>
+        
+            <tr>
+                <td>PATANJALI</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹1921.90</td>
+                <td>₹1629.50</td>
+                <td>₹2506.71</td>
+                <td>2.00</td>
+                <td>0.24x</td>
+            </tr>
+        
+            <tr>
+                <td>SKFINDIA</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹4982.00</td>
+                <td>₹4731.79</td>
+                <td>₹5482.43</td>
+                <td>2.00</td>
+                <td>0.06x</td>
+            </tr>
+        
+            <tr>
+                <td>SAREGAMA</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹508.00</td>
+                <td>₹473.13</td>
+                <td>₹577.74</td>
+                <td>2.00</td>
+                <td>0.97x</td>
+            </tr>
+        
+            <tr>
+                <td>TATACOMM</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>6/7</td>
+                <td>₹1800.00</td>
+                <td>₹1675.93</td>
+                <td>₹2048.14</td>
+                <td>2.00</td>
+                <td>1.56x</td>
+            </tr>
+        
+            <tr>
+                <td>SYRMA</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹724.10</td>
+                <td>₹486.84</td>
+                <td>₹1198.61</td>
+                <td>2.00</td>
+                <td>0.24x</td>
+            </tr>
+        
+            <tr>
+                <td>MANAPPURAM</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹273.35</td>
+                <td>₹256.38</td>
+                <td>₹307.30</td>
+                <td>2.00</td>
+                <td>0.13x</td>
+            </tr>
+        
+            <tr>
+                <td>BANDHANBNK</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹185.53</td>
+                <td>₹172.24</td>
+                <td>₹212.10</td>
+                <td>2.00</td>
+                <td>0.11x</td>
+            </tr>
+        
+            <tr>
+                <td>KCP</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹210.95</td>
+                <td>₹193.52</td>
+                <td>₹245.82</td>
+                <td>2.00</td>
+                <td>0.20x</td>
+            </tr>
+        
+            <tr>
+                <td>LICHSGFIN</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹644.80</td>
+                <td>₹593.54</td>
+                <td>₹747.32</td>
+                <td>2.00</td>
+                <td>0.13x</td>
+            </tr>
+        
+            <tr>
+                <td>SHK</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹244.19</td>
+                <td>₹222.93</td>
+                <td>₹286.72</td>
+                <td>2.00</td>
+                <td>0.06x</td>
+            </tr>
+        
+            <tr>
+                <td>ANANDRATHI</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹2670.20</td>
+                <td>₹2014.57</td>
+                <td>₹3981.46</td>
+                <td>2.00</td>
+                <td>0.43x</td>
+            </tr>
+        
+            <tr>
+                <td>BANKBARODA</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹246.99</td>
+                <td>₹233.72</td>
+                <td>₹273.54</td>
+                <td>2.00</td>
+                <td>0.09x</td>
+            </tr>
+        
+            <tr>
+                <td>BOSCHLTD</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹39010.00</td>
+                <td>₹36522.50</td>
+                <td>₹43985.00</td>
+                <td>2.00</td>
+                <td>0.13x</td>
+            </tr>
+        
+            <tr>
+                <td>CHEMPLASTS</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹452.00</td>
+                <td>₹405.79</td>
+                <td>₹544.41</td>
+                <td>2.00</td>
+                <td>1.13x</td>
+            </tr>
+        
+            <tr>
+                <td>DATAPATTNS</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹2925.80</td>
+                <td>₹2751.07</td>
+                <td>₹3275.26</td>
+                <td>2.00</td>
+                <td>0.10x</td>
+            </tr>
+        
+            <tr>
+                <td>ESCORTS</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹3447.50</td>
+                <td>₹3218.70</td>
+                <td>₹3905.10</td>
+                <td>2.00</td>
+                <td>0.36x</td>
+            </tr>
+        
+            <tr>
+                <td>POWERINDIA</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹19715.00</td>
+                <td>₹17802.50</td>
+                <td>₹23540.00</td>
+                <td>2.00</td>
+                <td>0.17x</td>
+            </tr>
+        
+            <tr>
+                <td>NMDC</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹70.67</td>
+                <td>₹67.04</td>
+                <td>₹77.93</td>
+                <td>2.00</td>
+                <td>0.37x</td>
+            </tr>
+        
+            <tr>
+                <td>NUVOCO</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹396.45</td>
+                <td>₹355.79</td>
+                <td>₹477.77</td>
+                <td>2.00</td>
+                <td>6.54x</td>
+            </tr>
+        
+            <tr>
+                <td>OIL</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹450.05</td>
+                <td>₹422.50</td>
+                <td>₹505.14</td>
+                <td>2.00</td>
+                <td>0.08x</td>
+            </tr>
+        
+            <tr>
+                <td>POLYCAB</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹7034.00</td>
+                <td>₹6674.62</td>
+                <td>₹7752.75</td>
+                <td>2.00</td>
+                <td>0.79x</td>
+            </tr>
+        
+            <tr>
+                <td>RRKABEL</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹1494.30</td>
+                <td>₹1293.90</td>
+                <td>₹1895.09</td>
+                <td>2.00</td>
+                <td>2.12x</td>
+            </tr>
+        
+            <tr>
+                <td>TMB</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹458.00</td>
+                <td>₹439.78</td>
+                <td>₹494.43</td>
+                <td>2.00</td>
+                <td>0.14x</td>
+            </tr>
+        
+            <tr>
+                <td>TATASTEEL</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹161.70</td>
+                <td>₹153.89</td>
+                <td>₹177.32</td>
+                <td>2.00</td>
+                <td>0.27x</td>
+            </tr>
+        
+            <tr>
+                <td>ECLERX</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹3739.70</td>
+                <td>₹3476.27</td>
+                <td>₹4266.56</td>
+                <td>2.00</td>
+                <td>0.26x</td>
+            </tr>
+        
+            <tr>
+                <td>PENIND</td>
+                <td><span class="ticker-direction long">LONG</span></td>
+                <td>5/7</td>
+                <td>₹244.90</td>
+                <td>₹221.54</td>
+                <td>₹291.62</td>
+                <td>2.00</td>
+                <td>0.13x</td>
+            </tr>
+        
+            </tbody>
+        </table>
+    <h2>Detailed Analysis</h2>
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">DELHIVERY</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹432.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹399.20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹497.60</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹530.41</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹32.80</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.13x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">5.05%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹9.70</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">MAXESTATES</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹539.25</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹500.20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹617.34</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹656.39</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹39.05</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.57x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">5.77%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹15.59</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">HDFCAMC</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹5599.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹4990.77</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹6815.46</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹7423.70</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹608.23</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.63x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">9.44%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹123.46</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">KIMS</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹753.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹688.40</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹883.69</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹948.79</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹65.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.13x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">6.15%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹19.69</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">MGL</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1534.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1443.27</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1716.36</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1807.39</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹91.03</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.11x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">3.24%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹33.66</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">PATANJALI</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1921.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1629.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹2506.71</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹2799.11</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹292.40</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.24x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">15.42%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹45.01</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">SKFINDIA</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹4982.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹4731.79</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹5482.43</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹5732.64</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹250.21</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.06x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">2.54%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹100.09</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">SAREGAMA</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹508.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹473.13</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹577.74</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹612.61</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹34.87</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.97x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">3.59%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹11.74</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">TATACOMM</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 6/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1800.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1675.93</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹2048.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹2172.21</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹124.07</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">1.56x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">5.15%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹44.34</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">SYRMA</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹724.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹486.84</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1198.61</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1435.87</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹237.26</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.24x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">6.73%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹26.31</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">MANAPPURAM</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹273.35</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹256.38</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹307.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹324.27</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹16.97</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.13x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">3.97%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹6.25</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">BANDHANBNK</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹185.53</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹172.24</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹212.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹225.39</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹13.29</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.11x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">5.66%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹4.27</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">KCP</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹210.95</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹193.52</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹245.82</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹263.25</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹17.43</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.20x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">5.87%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹5.47</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">LICHSGFIN</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹644.80</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹593.54</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹747.32</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹798.58</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹51.26</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.13x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">6.64%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹10.02</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">SHK</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹244.19</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹222.93</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹286.72</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹307.98</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹21.26</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.06x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">6.72%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹5.55</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">ANANDRATHI</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹2670.20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹2014.57</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹3981.46</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹4637.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹655.63</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.43x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">20.73%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹96.66</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">BANKBARODA</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹246.99</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹233.72</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹273.54</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹286.82</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹13.28</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.09x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">4.02%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹4.59</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">BOSCHLTD</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹39010.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹36522.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹43985.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹46472.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹2487.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.13x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">6.80%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹995.00</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">CHEMPLASTS</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹452.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹405.79</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹544.41</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹590.62</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹46.21</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">1.13x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">7.22%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹11.81</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">DATAPATTNS</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹2925.80</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹2751.07</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹3275.26</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹3450.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹174.73</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.10x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">2.69%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹69.89</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">ESCORTS</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹3447.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹3218.70</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹3905.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹4133.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹228.80</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.36x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">4.46%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹72.20</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">POWERINDIA</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹19715.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹17802.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹23540.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹25452.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹1912.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.17x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">6.17%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹765.00</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">NMDC</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹70.67</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹67.04</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹77.93</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹81.56</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹3.63</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.37x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">2.35%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹1.42</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">NUVOCO</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹396.45</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹355.79</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹477.77</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹518.43</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹40.66</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">6.54x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">9.99%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹11.62</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">OIL</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹450.05</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹422.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹505.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹532.69</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹27.55</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.08x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">4.11%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹8.99</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">POLYCAB</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹7034.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹6674.62</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹7752.75</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹8112.12</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹359.38</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.79x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">4.90%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹143.75</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">RRKABEL</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1494.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1293.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1895.09</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹2095.49</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹200.40</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">2.12x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">12.18%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹51.99</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">TMB</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹458.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹439.78</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹494.43</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹512.65</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹18.22</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.14x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">3.01%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹6.73</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">TATASTEEL</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹161.70</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹153.89</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹177.32</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹185.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹7.81</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.27x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">1.16%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹3.13</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">ECLERX</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹3739.70</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹3476.27</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹4266.56</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹4529.99</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹263.43</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.26x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">7.43%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹105.37</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="ticker-card long">
+            <div class="ticker-header">
+                <div class="ticker-name">PENIND</div>
+                <div>
+                    <span class="ticker-direction long">LONG</span>
+                    <span class="score-badge">Score: 5/7</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹244.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹221.54</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹291.62</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹314.97</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹23.36</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.13x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">6.53%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ATR (14)</div>
+                    <div class="detail-value">₹7.58</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Confirmed bullish reversal with multiple confirmations
+            </div>
+        </div>
+        
+        <div class="source-info">
+            <p>Generated on 18-07-2025 at 09:36 | Al Brooks Higher Probability Reversal Filter</p>
+            <p><strong>Note:</strong> These are higher probability setups (60%+) with wider stops as per Al Brooks methodology.</p>
+        </div>
+    </body>
+    </html>
+    

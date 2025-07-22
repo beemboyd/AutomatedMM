@@ -19,13 +19,14 @@ from pathlib import Path
 from dateutil.relativedelta import relativedelta
 
 # Add parent directories to path
-# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# Add Daily to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set flag to prevent VSR_Momentum_Scanner from executing its argparse
 os.environ['VSR_MONITOR_SERVICE'] = '1'
 
 # Import required modules
-from Daily.scanners.VSR_Momentum_Scanner import (
+from scanners.VSR_Momentum_Scanner import (
     load_daily_config,
     calculate_vsr_indicators,
     detect_vsr_momentum,

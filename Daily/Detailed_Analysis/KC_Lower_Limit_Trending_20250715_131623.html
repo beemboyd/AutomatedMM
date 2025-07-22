@@ -1,0 +1,4266 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>KC Lower Limit Trending Filter - 15-07-2025</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 1400px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f9f9f9;
+            }
+            h1, h2, h3 {
+                color: #2c3e50;
+            }
+            h1 {
+                border-bottom: 2px solid #e74c3c;
+                padding-bottom: 10px;
+            }
+            .header-info {
+                display: flex;
+                justify-content: space-between;
+                color: #7f8c8d;
+                margin-bottom: 20px;
+            }
+            .ticker-card {
+                background-color: white;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 15px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                border-left: 5px solid #e74c3c;
+            }
+            .ticker-header {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 10px;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 10px;
+            }
+            .ticker-name {
+                font-weight: bold;
+                font-size: 1.2em;
+                color: #2c3e50;
+            }
+            .ticker-direction {
+                font-weight: bold;
+                font-size: 1.1em;
+                padding: 5px 10px;
+                border-radius: 4px;
+                color: white;
+                background-color: #e74c3c;
+            }
+            .sector-badge {
+                background-color: #9b59b6;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 0.85em;
+                margin-left: 10px;
+            }
+            .ticker-details {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 10px;
+            }
+            .detail-item {
+                background-color: #f8f9fa;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            .detail-label {
+                color: #7f8c8d;
+                font-size: 0.85em;
+            }
+            .detail-value {
+                font-weight: bold;
+            }
+            .pattern-info {
+                background-color: #ffe3e3;
+                padding: 10px;
+                border-radius: 4px;
+                margin-top: 10px;
+            }
+            .score-badge {
+                background-color: #e74c3c;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 0.8em;
+                margin-left: 10px;
+            }
+            .potential-score {
+                font-weight: bold;
+                font-size: 1.1em;
+                padding: 5px 10px;
+                border-radius: 4px;
+                color: white;
+            }
+            .score-high {
+                background-color: #e74c3c;
+            }
+            .score-medium {
+                background-color: #f39c12;
+            }
+            .score-low {
+                background-color: #95a5a6;
+            }
+            .fresh-badge {
+                background-color: #e74c3c;
+                color: white;
+                padding: 3px 8px;
+                border-radius: 12px;
+                font-size: 0.85em;
+                animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+                0% { opacity: 1; }
+                50% { opacity: 0.7; }
+                100% { opacity: 1; }
+            }
+            .trend-strength {
+                display: inline-block;
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 0.9em;
+                font-weight: bold;
+            }
+            .trend-strong {
+                background-color: #e74c3c;
+                color: white;
+            }
+            .trend-medium {
+                background-color: #f39c12;
+                color: white;
+            }
+            .trend-weak {
+                background-color: #2ecc71;
+                color: white;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+            }
+            th, td {
+                padding: 10px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }
+            thead tr {
+                background-color: #e74c3c;
+                color: white;
+            }
+            tbody tr:nth-of-type(even) {
+                background-color: #f3f3f3;
+            }
+            tbody tr:hover {
+                background-color: #e9e9e9;
+            }
+            .source-info {
+                margin-top: 30px;
+                font-size: 0.9em;
+                color: #95a5a6;
+                text-align: center;
+            }
+            .sector-summary {
+                margin: 20px 0;
+                padding: 15px;
+                background-color: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            .kc-info {
+                background-color: #fff3cd;
+                padding: 10px;
+                border-radius: 4px;
+                margin-bottom: 20px;
+                border-left: 4px solid #ffc107;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Keltner Channel Lower Limit Trending Filter (Shorting)</h1>
+        <div class="header-info">
+            <div>Date: 15-07-2025 | Time: 13:16</div>
+            <div>Filtered from: Ticker.xlsx | Daily Timeframe | Trend Following Short Strategy</div>
+        </div>
+
+        <div class="kc-info">
+            <h3>Strategy Overview</h3>
+            <p>This scanner identifies high-probability shorting opportunities using:</p>
+            <ul>
+                <li><strong>L2 Pattern:</strong> Two consecutive bars closing below previous lows (bearish momentum confirmation)</li>
+                <li><strong>KC Breakdowns:</strong> Price breaking below Keltner Channel lower band</li>
+                <li><strong>Volume Surge:</strong> Increased volume on L2 bars shows institutional selling</li>
+                <li><strong>Pattern Combos:</strong> L2 + KC + Volume = Highest probability short setups</li>
+                <li><strong>Early Detection:</strong> Identifies stocks building weakness before major declines</li>
+            </ul>
+        </div>
+
+        <h2>High Probability Short Setups (30 matches)</h2>
+    
+        <div class="sector-summary">
+            <h3>Sector Distribution</h3>
+            <ul>
+        <li><strong>Unknown:</strong> 15 stocks</li><li><strong>Industrials:</strong> 8 stocks</li><li><strong>Basic Materials:</strong> 3 stocks</li><li><strong>Financial Services:</strong> 2 stocks</li><li><strong>Technology:</strong> 1 stocks</li><li><strong>Consumer Defensive:</strong> 1 stocks</li>
+            </ul>
+        </div>
+        
+        <h3 style="color: #f39c12;">📉 L2 Patterns Detected</h3>
+        <p>These stocks show L2 bearish momentum patterns - watch for continuation!</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Sector</th>
+                    <th>Probability</th>
+                    <th>Pattern</th>
+                    <th>L2</th>
+                    <th>Entry Price</th>
+                    <th>Stop Loss</th>
+                    <th>Target 1</th>
+                    <th>Risk:Reward</th>
+                    <th>Volume</th>
+                </tr>
+            </thead>
+            <tbody>
+    
+            <tr>
+                <td>HCLTECH</td>
+                <td><span class="sector-badge">Technology</span></td>
+                <td><span class="potential-score score-high">100</span></td>
+                <td>Bearish_G_Pattern</td>
+                <td><span class="fresh-badge">L2+Vol</span></td>
+                <td>₹1575.00</td>
+                <td>₹1640.91</td>
+                <td>₹1443.17</td>
+                <td>2.00</td>
+                <td>4.0x</td>
+            </tr>
+        
+            <tr>
+                <td>DMART</td>
+                <td><span class="sector-badge">Consumer Defensive</span></td>
+                <td><span class="potential-score score-low">45</span></td>
+                <td>Bearish_G_Pattern</td>
+                <td><span style="color: #f39c12;">4 recent</span></td>
+                <td>₹4051.10</td>
+                <td>₹4240.42</td>
+                <td>₹3672.46</td>
+                <td>2.00</td>
+                <td>1.7x</td>
+            </tr>
+        
+            <tr>
+                <td>TEJASNET</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">42</span></td>
+                <td>KC_Breakdown_Watch</td>
+                <td></td>
+                <td>₹658.10</td>
+                <td>₹691.99</td>
+                <td>₹590.31</td>
+                <td>2.00</td>
+                <td>5.2x</td>
+            </tr>
+        
+            <tr>
+                <td>TCS</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">41</span></td>
+                <td>Building_Bearish</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹3249.90</td>
+                <td>₹3351.04</td>
+                <td>₹3047.61</td>
+                <td>2.00</td>
+                <td>0.6x</td>
+            </tr>
+        
+            <tr>
+                <td>SOLARINDS</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">41</span></td>
+                <td>KC_Multi_L2</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹15371.00</td>
+                <td>₹16241.14</td>
+                <td>₹13630.71</td>
+                <td>2.00</td>
+                <td>0.6x</td>
+            </tr>
+        
+            <tr>
+                <td>TITAN</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">34</span></td>
+                <td>Bearish_G_Pattern</td>
+                <td><span style="color: #f39c12;">3 recent</span></td>
+                <td>₹3412.40</td>
+                <td>₹3532.87</td>
+                <td>₹3171.46</td>
+                <td>2.00</td>
+                <td>0.3x</td>
+            </tr>
+        
+            <tr>
+                <td>GODREJIND</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">30</span></td>
+                <td>KC_Multi_L2</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹1096.30</td>
+                <td>₹1172.06</td>
+                <td>₹944.79</td>
+                <td>2.00</td>
+                <td>0.2x</td>
+            </tr>
+        
+            <tr>
+                <td>SUNTV</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">28</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹567.35</td>
+                <td>₹591.54</td>
+                <td>₹518.98</td>
+                <td>2.00</td>
+                <td>0.7x</td>
+            </tr>
+        
+            <tr>
+                <td>GRSE</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">23</span></td>
+                <td>KC_Breakdown_Watch</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹2685.80</td>
+                <td>₹2911.06</td>
+                <td>₹2235.29</td>
+                <td>2.00</td>
+                <td>0.6x</td>
+            </tr>
+        
+            <tr>
+                <td>PERSISTENT</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">23</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">3 recent</span></td>
+                <td>₹5592.00</td>
+                <td>₹5845.71</td>
+                <td>₹5084.57</td>
+                <td>2.00</td>
+                <td>0.9x</td>
+            </tr>
+        
+            <tr>
+                <td>HDFCLIFE</td>
+                <td><span class="sector-badge">Financial Services</span></td>
+                <td><span class="potential-score score-low">22</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹753.00</td>
+                <td>₹784.84</td>
+                <td>₹689.33</td>
+                <td>2.00</td>
+                <td>0.5x</td>
+            </tr>
+        
+            <tr>
+                <td>COCHINSHIP</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">22</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹1929.00</td>
+                <td>₹2047.74</td>
+                <td>₹1691.51</td>
+                <td>2.00</td>
+                <td>0.3x</td>
+            </tr>
+        
+            <tr>
+                <td>TRIVENI</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">20</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹364.00</td>
+                <td>₹381.87</td>
+                <td>₹328.26</td>
+                <td>2.00</td>
+                <td>0.6x</td>
+            </tr>
+        
+            <tr>
+                <td>MAZDOCK</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">19</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹3117.60</td>
+                <td>₹3277.51</td>
+                <td>₹2797.77</td>
+                <td>2.00</td>
+                <td>0.4x</td>
+            </tr>
+        
+            <tr>
+                <td>MTARTECH</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">17</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹1541.50</td>
+                <td>₹1605.79</td>
+                <td>₹1412.93</td>
+                <td>2.00</td>
+                <td>0.2x</td>
+            </tr>
+        
+            <tr>
+                <td>WIPRO</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">17</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹257.30</td>
+                <td>₹264.95</td>
+                <td>₹242.00</td>
+                <td>2.00</td>
+                <td>0.8x</td>
+            </tr>
+        
+            <tr>
+                <td>IRFC</td>
+                <td><span class="sector-badge">Financial Services</span></td>
+                <td><span class="potential-score score-low">14</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">2 recent</span></td>
+                <td>₹135.58</td>
+                <td>₹139.01</td>
+                <td>₹128.71</td>
+                <td>2.00</td>
+                <td>0.8x</td>
+            </tr>
+        
+            <tr>
+                <td>SONACOMS</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">14</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹454.55</td>
+                <td>₹476.90</td>
+                <td>₹409.85</td>
+                <td>2.00</td>
+                <td>1.6x</td>
+            </tr>
+        
+            <tr>
+                <td>ABB</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">14</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹5668.00</td>
+                <td>₹5903.14</td>
+                <td>₹5197.71</td>
+                <td>2.00</td>
+                <td>1.0x</td>
+            </tr>
+        
+            <tr>
+                <td>SURYAROSNI</td>
+                <td><span class="sector-badge">Basic Materials</span></td>
+                <td><span class="potential-score score-low">11</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹319.00</td>
+                <td>₹336.52</td>
+                <td>₹283.96</td>
+                <td>2.00</td>
+                <td>0.8x</td>
+            </tr>
+        
+            <tr>
+                <td>AZAD</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">11</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹1558.70</td>
+                <td>₹1631.17</td>
+                <td>₹1413.76</td>
+                <td>2.00</td>
+                <td>0.5x</td>
+            </tr>
+        
+            <tr>
+                <td>POLYPLEX</td>
+                <td><span class="sector-badge">Basic Materials</span></td>
+                <td><span class="potential-score score-low">10</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹1149.00</td>
+                <td>₹1202.03</td>
+                <td>₹1042.94</td>
+                <td>2.00</td>
+                <td>0.2x</td>
+            </tr>
+        
+            <tr>
+                <td>UNITDSPR</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">10</span></td>
+                <td>Early_Short_Setup</td>
+                <td></td>
+                <td>₹1369.20</td>
+                <td>₹1414.50</td>
+                <td>₹1278.60</td>
+                <td>2.00</td>
+                <td>0.5x</td>
+            </tr>
+        
+            <tr>
+                <td>TRENT</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">7</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹5361.50</td>
+                <td>₹5716.00</td>
+                <td>₹4652.50</td>
+                <td>2.00</td>
+                <td>0.2x</td>
+            </tr>
+        
+            <tr>
+                <td>CERA</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">6</span></td>
+                <td>Early_Short_Setup</td>
+                <td></td>
+                <td>₹6503.50</td>
+                <td>₹6794.70</td>
+                <td>₹5921.10</td>
+                <td>2.00</td>
+                <td>1.2x</td>
+            </tr>
+        
+            <tr>
+                <td>SAREGAMA</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">5</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹485.50</td>
+                <td>₹507.54</td>
+                <td>₹441.41</td>
+                <td>2.00</td>
+                <td>0.2x</td>
+            </tr>
+        
+            <tr>
+                <td>TECHM</td>
+                <td><span class="sector-badge">Unknown</span></td>
+                <td><span class="potential-score score-low">5</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹1575.20</td>
+                <td>₹1631.87</td>
+                <td>₹1461.86</td>
+                <td>2.00</td>
+                <td>0.8x</td>
+            </tr>
+        
+            <tr>
+                <td>JWL</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">5</span></td>
+                <td>Early_Short_Setup</td>
+                <td><span style="color: #f39c12;">1 recent</span></td>
+                <td>₹370.95</td>
+                <td>₹382.75</td>
+                <td>₹347.35</td>
+                <td>2.00</td>
+                <td>0.5x</td>
+            </tr>
+        
+            <tr>
+                <td>JINDALSAW</td>
+                <td><span class="sector-badge">Basic Materials</span></td>
+                <td><span class="potential-score score-low">5</span></td>
+                <td>Early_Short_Setup</td>
+                <td></td>
+                <td>₹223.90</td>
+                <td>₹233.89</td>
+                <td>₹203.93</td>
+                <td>2.00</td>
+                <td>0.4x</td>
+            </tr>
+        
+            <tr>
+                <td>PATELENG</td>
+                <td><span class="sector-badge">Industrials</span></td>
+                <td><span class="potential-score score-low">5</span></td>
+                <td>Early_Short_Setup</td>
+                <td></td>
+                <td>₹40.09</td>
+                <td>₹41.02</td>
+                <td>₹38.23</td>
+                <td>2.00</td>
+                <td>0.4x</td>
+            </tr>
+        
+            </tbody>
+        </table>
+    <h2>Detailed Analysis</h2>
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    HCLTECH
+                    <span class="sector-badge">Technology</span>
+                    <span class="fresh-badge">L2 WITH VOLUME!</span>
+                </div>
+                <div>
+                    <span class="potential-score score-high">Score: 100/100</span>
+                    <span class="ticker-direction">Bearish_G_Pattern</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1575.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1640.91</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1443.17</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1377.26</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹65.91</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1609.46</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">2.1%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">25.3</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">3.96x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-8.34%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-7.79%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">4</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">4</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">7/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">5/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">3/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">5/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Multi-day L2 bearish momentum with volume - TIME TO DOUBLE SHORT POSITION!
+                <br>
+                <strong>Key Insight:</strong> L2 pattern forming - Watch for bearish continuation!
+                <br>
+                <strong>Position Strategy:</strong> Initial short on L2 confirmation, add on volume surge
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    DMART
+                    <span class="sector-badge">Consumer Defensive</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 45/100</span>
+                    <span class="ticker-direction">Bearish_G_Pattern</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹4051.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹4240.42</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹3672.46</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹3483.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹189.32</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹3983.03</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.7%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">33.8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">1.74x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-9.01%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-3.84%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">4</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Multi-day L2 bearish momentum with volume - TIME TO DOUBLE SHORT POSITION!
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    TEJASNET
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 42/100</span>
+                    <span class="ticker-direction">KC_Breakdown_Watch</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹658.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹691.99</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹590.31</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹556.42</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹33.89</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹665.67</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">1.1%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">18.9</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">5.23x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-7.05%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-5.70%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">7/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">3/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">3/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Below KC lower - MONITOR FOR L2 DEVELOPMENT
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    TCS
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 41/100</span>
+                    <span class="ticker-direction">Building_Bearish</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹3249.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹3351.04</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹3047.61</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹2946.47</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹101.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹3275.46</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">0.8%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">27.7</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">3 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.64x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-5.24%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-4.59%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">3/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Building multi-day bearish momentum - WATCH CLOSELY!
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (3 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    SOLARINDS
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 41/100</span>
+                    <span class="ticker-direction">KC_Multi_L2</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹15371.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹16241.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹13630.71</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹12760.57</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹870.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹15462.34</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">0.6%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">27.5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.62x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-10.61%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-6.90%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">7/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">3/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">2/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Below KC with multiple L2s - SHORT POSITION BUILDING OPPORTUNITY
+                <br>
+                <strong>Key Insight:</strong> Multiple L2 patterns below KC - Short position building opportunity!
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    TITAN
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 34/100</span>
+                    <span class="ticker-direction">Bearish_G_Pattern</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹3412.40</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹3532.87</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹3171.46</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹3050.99</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹120.47</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹3398.24</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.4%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">39.3</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.32x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-7.79%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-0.84%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">3</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Multi-day L2 bearish momentum with volume - TIME TO DOUBLE SHORT POSITION!
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    GODREJIND
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 30/100</span>
+                    <span class="ticker-direction">KC_Multi_L2</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1096.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1172.06</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹944.79</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹869.03</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹75.76</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1100.89</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">0.4%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">30.2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.20x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-9.16%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-4.89%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">6/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">3/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Below KC with multiple L2s - SHORT POSITION BUILDING OPPORTUNITY
+                <br>
+                <strong>Key Insight:</strong> Multiple L2 patterns below KC - Short position building opportunity!
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    SUNTV
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 28/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹567.35</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹591.54</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹518.98</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹494.79</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹24.19</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹563.15</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.8%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">64.4</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.66x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.61%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.03%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    GRSE
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 23/100</span>
+                    <span class="ticker-direction">KC_Breakdown_Watch</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹2685.80</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹2911.06</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹2235.29</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹2010.03</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹225.26</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹2689.93</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">0.1%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">31.2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.56x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-9.97%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-5.23%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">6/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">2/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Below KC lower - MONITOR FOR L2 DEVELOPMENT
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    PERSISTENT
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 23/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹5592.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹5845.71</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹5084.57</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹4830.86</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹253.71</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹5552.22</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.7%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">38.5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.95x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-7.39%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-3.32%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">3</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    HDFCLIFE
+                    <span class="sector-badge">Financial Services</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 22/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹753.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹784.84</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹689.33</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹657.49</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹31.84</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹743.98</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.2%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">23.9</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.53x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-7.03%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-5.18%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">2/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    COCHINSHIP
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 22/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1929.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹2047.74</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1691.51</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1572.77</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹118.74</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1913.80</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.8%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">51.8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.28x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-5.68%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-4.58%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    TRIVENI
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 20/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹364.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹381.87</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹328.26</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹310.39</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹17.87</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹362.62</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.4%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">46.2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.62x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-3.42%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.54%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    MAZDOCK
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 19/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹3117.60</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹3277.51</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹2797.77</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹2637.86</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹159.91</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹3078.72</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.3%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">19.7</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.37x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.81%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-5.28%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    MTARTECH
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 17/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1541.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1605.79</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1412.93</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1348.64</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹64.29</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1523.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.2%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">77.8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.22x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-3.08%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-2.15%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    WIPRO
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 17/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹257.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹264.95</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹242.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹234.35</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹7.65</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹252.63</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.9%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">35.1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.80x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-2.74%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-4.58%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    IRFC
+                    <span class="sector-badge">Financial Services</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 14/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹135.58</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹139.01</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹128.71</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹125.28</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹3.43</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹133.16</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.8%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">19.9</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.77x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.18%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.90%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    SONACOMS
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 14/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹454.55</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹476.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹409.85</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹387.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹22.35</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹449.69</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.1%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">36.3</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">1.59x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.49%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.46%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    ABB
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 14/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹5668.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹5903.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹5197.71</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹4962.57</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹235.14</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹5632.63</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.6%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">18.8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">1.03x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.73%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-2.95%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    SURYAROSNI
+                    <span class="sector-badge">Basic Materials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 11/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹319.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹336.52</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹283.96</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹266.43</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹17.52</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹313.65</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.7%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">19.1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.76x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-7.23%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-4.89%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    AZAD
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 11/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1558.70</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1631.17</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1413.76</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1341.29</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹72.47</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1547.06</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.8%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">22.9</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.45x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-5.33%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-3.76%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    POLYPLEX
+                    <span class="sector-badge">Basic Materials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 10/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1149.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1202.03</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1042.94</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹989.91</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹53.03</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1142.58</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.6%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">48.3</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.24x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.61%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-2.04%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">2/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    UNITDSPR
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 10/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1369.20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1414.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1278.60</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1233.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹45.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1363.46</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-0.4%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">62.2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.45x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-2.23%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">0.33%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">2/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    TRENT
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 7/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹5361.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹5716.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹4652.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹4298.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹354.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹5290.42</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.3%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">44.0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.18x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-12.74%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.44%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">1/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    CERA
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 6/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹6503.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹6794.70</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹5921.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹5629.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹291.20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹6394.16</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.7%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">35.8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">1.20x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.20%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-4.06%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">5/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    SAREGAMA
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 5/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹485.50</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹507.54</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹441.41</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹419.37</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹22.04</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹480.33</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.1%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">51.2</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.23x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-1.85%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.71%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    TECHM
+                    <span class="sector-badge">Unknown</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 5/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹1575.20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹1631.87</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹1461.86</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹1405.20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹56.67</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹1554.76</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.3%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">38.9</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.83x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-4.02%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-3.68%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    JWL
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 5/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹370.95</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹382.75</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹347.35</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹335.56</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹11.80</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹363.88</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.9%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">25.0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.54x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-3.96%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.08%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">1</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    JINDALSAW
+                    <span class="sector-badge">Basic Materials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 5/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹223.90</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹233.89</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹203.93</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹193.94</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹9.99</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹220.10</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.7%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">18.3</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.41x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-6.33%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-2.06%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="ticker-card">
+            <div class="ticker-header">
+                <div class="ticker-name">
+                    PATELENG
+                    <span class="sector-badge">Industrials</span>
+                    
+                </div>
+                <div>
+                    <span class="potential-score score-low">Score: 5/100</span>
+                    <span class="ticker-direction">Early_Short_Setup</span>
+                </div>
+            </div>
+            
+            <div class="ticker-details">
+                <div class="detail-item">
+                    <div class="detail-label">Entry Price</div>
+                    <div class="detail-value">₹40.09</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Stop Loss</div>
+                    <div class="detail-value">₹41.02</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 1 (1:2)</div>
+                    <div class="detail-value">₹38.23</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Target 2 (1:3)</div>
+                    <div class="detail-value">₹37.30</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk Amount</div>
+                    <div class="detail-value">₹0.93</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Risk:Reward</div>
+                    <div class="detail-value">2.00</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Lower Band</div>
+                    <div class="detail-value">₹39.39</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Distance</div>
+                    <div class="detail-value">-1.8%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">ADX (Trend Strength)</div>
+                    <div class="detail-value">22.6</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Congestion Days</div>
+                    <div class="detail-value">0 / 20</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Volume Expansion</div>
+                    <div class="detail-value">0.44x Average</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">10-Day Momentum</div>
+                    <div class="detail-value">-2.31%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">5-Day Momentum</div>
+                    <div class="detail-value">-1.18%</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Count</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Recent L2s (5 bars)</div>
+                    <div class="detail-value">0</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Base Score</div>
+                    <div class="detail-value">4/8</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">L2 Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">KC Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">Advanced Score</div>
+                    <div class="detail-value">0/5</div>
+                </div>
+            </div>
+            
+            <div class="pattern-info">
+                <strong>Pattern:</strong> Near breakdown zone - EARLY STAGE MONITORING
+                <br>
+                <strong>Key Insight:</strong> Near KC lower band - Monitor for L2 development
+                <br>
+                <strong>Position Strategy:</strong> Wait for L2 pattern to develop before entry
+                <br>
+                <strong>Risk Level:</strong> Low congestion risk (0 days).
+            </div>
+        </div>
+        
+        <div class="source-info">
+            <p>Generated on 15-07-2025 at 13:16 | KC Lower Limit Trending Filter</p>
+            <p><strong>Note:</strong> These setups identify stocks breaking down below Keltner Channel lower band with strong bearish trending characteristics.</p>
+            <p><strong>Risk Management:</strong> Use proper position sizing for shorting. Stocks with lower congestion days and higher trend strength typically perform better.</p>
+        </div>
+    </body>
+    </html>
+    
