@@ -84,12 +84,6 @@ JOBS = {
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime',
         'port': 8080
     },
-    'com.india-ts.market_regime_analysis': {
-        'name': 'Market Regime Analysis (OLD - 30min)',
-        'script': 'market_regime_analyzer.py',
-        'schedule': 'DEPRECATED - Use 5min version',
-        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime'
-    },
     'com.india-ts.market_regime_analyzer_5min': {
         'name': 'Market Regime Analyzer (5-min)',
         'script': 'run_regime_analyzer_5min.sh',
