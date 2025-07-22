@@ -144,7 +144,14 @@ class DataCache:
         self.instruments_df = None
         self.instrument_tokens = {}
         self.data_cache = {}
+        self.cache_timestamps = {}  # Track when each entry was cached
         self.sector_data = None
+        self.cache_ttl_seconds = {  # TTL for different intervals
+            'minute': 60,      # 1 minute cache for minute data
+            '5minute': 300,    # 5 minutes cache for 5-minute data
+            '60minute': 3600,  # 1 hour cache for hourly data
+            'day': 86400       # 24 hours cache for daily data
+        }
 
 cache = DataCache()
 
@@ -285,9 +292,21 @@ def fetch_data_kite(ticker, interval, from_date, to_date):
     """Fetch historical data with caching and error handling"""
     cache_key = f"{ticker}_{interval}_{from_date}_{to_date}"
 
-    # Fast path: check cache first
-    if cache_key in cache.data_cache:
-        return cache.data_cache[cache_key]
+    # Check cache with expiration
+    if cache_key in cache.data_cache and cache_key in cache.cache_timestamps:
+        # Get TTL for this interval type
+        ttl = cache.cache_ttl_seconds.get(interval, 3600)  # Default 1 hour
+        
+        # Check if cache has expired
+        cache_age = time.time() - cache.cache_timestamps[cache_key]
+        if cache_age < ttl:
+            # Cache is still valid
+            return cache.data_cache[cache_key]
+        else:
+            # Cache has expired, remove it
+            logger.debug(f"Cache expired for {ticker} {interval} data (age: {cache_age:.1f}s)")
+            del cache.data_cache[cache_key]
+            del cache.cache_timestamps[cache_key]
 
     # Check for token
     token = get_instrument_token(ticker)
@@ -330,6 +349,7 @@ def fetch_data_kite(ticker, interval, from_date, to_date):
 
             # Cache and return on success
             cache.data_cache[cache_key] = df
+            cache.cache_timestamps[cache_key] = time.time()  # Store cache timestamp
             return df
 
         except Exception as e:

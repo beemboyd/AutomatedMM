@@ -124,12 +124,12 @@ class VSRTracker:
     def get_current_price_volume(self, ticker):
         """Get current price and volume for a ticker"""
         try:
-            # Get 1-minute data for the last hour
+            # Get 1-minute data for the last 2 hours to ensure we have recent data
             now = datetime.datetime.now()
-            from_date = (now - relativedelta(hours=1)).strftime('%Y-%m-%d')
-            to_date = now.strftime('%Y-%m-%d')
+            from_date = (now - relativedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+            to_date = now.strftime('%Y-%m-%d %H:%M:%S')
             
-            # Fetch 1-minute data
+            # Fetch 1-minute data - this will now refresh every minute due to cache TTL
             data = fetch_data_kite(ticker, 'minute', from_date, to_date)
             
             if data.empty:
