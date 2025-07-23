@@ -34,26 +34,54 @@ def parse_vsr_logs(hours=2):
         'sector': '',
         'occurrences': 0,
         'last_seen': None,
-        'scores': []
+        'scores': [],
+        'days_tracked': 0  # New field for enhanced tracker
     })
     
     # Get current time
     current_time = datetime.now(IST)
     cutoff_time = current_time - timedelta(hours=hours)
     
-    # Get today's log file
+    # Get today's log files (both basic and enhanced)
     today = current_time.strftime('%Y%m%d')
-    log_file = os.path.join(VSR_LOG_DIR, f'vsr_tracker_{today}.log')
+    log_files = [
+        os.path.join(VSR_LOG_DIR, f'vsr_tracker_{today}.log'),
+        os.path.join(VSR_LOG_DIR, f'vsr_tracker_enhanced_{today}.log')
+    ]
     
-    if not os.path.exists(log_file):
+    # Check for enhanced log first, then fall back to basic
+    log_file = None
+    enhanced_log = os.path.join(VSR_LOG_DIR, f'vsr_tracker_enhanced_{today}.log')
+    basic_log = os.path.join(VSR_LOG_DIR, f'vsr_tracker_{today}.log')
+    
+    if os.path.exists(enhanced_log):
+        log_file = enhanced_log
+        print(f"Using enhanced log file: {log_file}")
+    elif os.path.exists(basic_log):
+        log_file = basic_log
+        print(f"Using basic log file: {log_file}")
+    else:
+        print(f"No log files found for today ({today})")
+    
+    if not log_file:
         return {}
     
     # Pattern to match VSR tracker log lines
-    pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Sector:\s*(.+)'
+    # Basic format: ... | Build: X | Trend: Y | Sector: Z
+    # Enhanced format: ... | Build: X | Trend: Y | Days: N | Sector: Z
+    pattern_basic = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Sector:\s*(.+)'
+    pattern_enhanced = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Days:\s*(\d+)\s*\|\s*Sector:\s*(.+)'
     
     with open(log_file, 'r') as f:
         for line in f:
-            match = re.match(pattern, line)
+            # Try enhanced pattern first
+            match = re.match(pattern_enhanced, line)
+            is_enhanced = True
+            if not match:
+                # Fall back to basic pattern
+                match = re.match(pattern_basic, line)
+                is_enhanced = False
+            
             if match:
                 timestamp_str = match.group(1)
                 timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
@@ -72,7 +100,13 @@ def parse_vsr_logs(hours=2):
                 momentum = float(match.group(8))
                 build = int(match.group(9)) if match.group(9) else 0
                 trend = match.group(10).strip()
-                sector = match.group(11).strip()
+                
+                if is_enhanced:
+                    days_tracked = int(match.group(11))
+                    sector = match.group(12).strip()
+                else:
+                    days_tracked = 0  # Not available in basic format
+                    sector = match.group(11).strip()
                 
                 # Update ticker data
                 data = tickers_data[ticker]
@@ -85,6 +119,7 @@ def parse_vsr_logs(hours=2):
                 data['build'] = build
                 data['trend'] = trend
                 data['sector'] = sector
+                data['days_tracked'] = days_tracked
                 data['occurrences'] += 1
                 data['last_seen'] = timestamp
                 data['scores'].append(score)
@@ -94,8 +129,9 @@ def parse_vsr_logs(hours=2):
     for ticker, data in tickers_data.items():
         if data['scores']:
             data['avg_score'] = sum(data['scores']) / len(data['scores'])
-            # Include tickers with high scores or high momentum
-            if data['score'] >= 75 or data['momentum'] >= 5.0 or data['vsr'] >= 10.0:
+            # Include all tickers for the enhanced tracker (it already filters)
+            # For basic tracker, apply some filtering
+            if data['score'] >= 0:  # Include all tickers
                 result[ticker] = data
     
     return result
@@ -112,36 +148,48 @@ def get_trending_tickers():
     
     # Categorize tickers
     categories = {
-        'perfect_scores': [],
-        'high_vsr': [],
-        'high_momentum': [],
+        'high_scores': [],  # Score >= 50
+        'high_vsr': [],     # VSR >= 1.0
+        'positive_momentum': [],  # Momentum > 0
         'strong_build': [],
+        'persistence_leaders': [],  # 3-day tracked tickers
+        'new_entries': [],  # Days tracked = 1
         'all_tickers': []
     }
     
     for ticker in tickers_list:
         categories['all_tickers'].append(ticker)
         
-        if ticker['score'] == 100:
-            categories['perfect_scores'].append(ticker)
+        if ticker['score'] >= 50:
+            categories['high_scores'].append(ticker)
         
-        if ticker['vsr'] >= 10.0:
+        if ticker['vsr'] >= 1.0:
             categories['high_vsr'].append(ticker)
         
-        if ticker['momentum'] >= 5.0:
-            categories['high_momentum'].append(ticker)
+        if ticker['momentum'] > 0:
+            categories['positive_momentum'].append(ticker)
         
         if ticker['build'] >= 10:
             categories['strong_build'].append(ticker)
+        
+        if ticker['days_tracked'] >= 3:
+            categories['persistence_leaders'].append(ticker)
+        
+        if ticker['days_tracked'] == 1 and ticker['trend'] == 'NEW':
+            categories['new_entries'].append(ticker)
     
     # Sort each category
     for category in categories:
         if category == 'high_vsr':
             categories[category].sort(key=lambda x: x['vsr'], reverse=True)
-        elif category == 'high_momentum':
+        elif category == 'positive_momentum':
             categories[category].sort(key=lambda x: x['momentum'], reverse=True)
         elif category == 'strong_build':
             categories[category].sort(key=lambda x: x['build'], reverse=True)
+        elif category == 'persistence_leaders':
+            categories[category].sort(key=lambda x: (x['days_tracked'], x['score']), reverse=True)
+        elif category == 'high_scores':
+            categories[category].sort(key=lambda x: x['score'], reverse=True)
     
     return categories
 
