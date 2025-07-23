@@ -77,6 +77,12 @@ JOBS = {
         'schedule': 'Every 30 min (9:00-15:30, Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
     },
+    'com.india-ts.fno_liquid_reversal_scanners': {
+        'name': 'FNO Liquid Reversal Scanners',
+        'script': 'run_fno_liquid_reversal_scanners.py',
+        'schedule': 'Every hour at :19 (9:19-15:19, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
     'com.india-ts.market_breadth_scanner': {
         'name': 'Market Breadth Scanner',
         'script': 'Market_Breadth_Scanner.py',
