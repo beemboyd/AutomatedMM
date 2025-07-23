@@ -42,6 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **2025-05-05**: Enhanced the state reset logic to completely purge all MIS positions at the start of each trading day.
 - **2025-05-05**: Created cleanup_mis_positions.py utility to provide easy command-line tools for managing positions and cleaning state.
 - **2025-07-22**: Fixed VSR tracker real-time data updates by implementing cache expiration in VSR_Momentum_Scanner.py. The DataCache now has TTL-based expiration (1 min for minute data, 1 hour for hourly data) to ensure real-time updates instead of showing static/frozen data throughout the day. See Daily/docs/VSR_TRACKER_REALTIME_FIX.md for full details.
+- **2025-07-23**: Implemented Git-based plist management system to prevent accidental cross-project contamination. All India-TS plists are now backed up in Daily/scheduler/plists/ with install/validate scripts. This prevents issues like the Long/Short Reversal Daily jobs being accidentally archived when editing US-TS system.
 
 ## BT Module Guidelines
 - New strategies must inherit from BaseStrategy in strategies/base.py
@@ -78,3 +79,21 @@ git push origin master
 ```
 
 For multiple related changes, commit them together but push immediately after.
+
+## Plist Management - CRITICAL
+**Namespace Separation**: All India-TS scheduled jobs MUST use the `com.india-ts.*` namespace to prevent conflicts with US-TS jobs.
+
+**Git-Based Backup System**: 
+1. All plists are backed up in `Daily/scheduler/plists/`
+2. Use `python Daily/scheduler/install_plists.py` to install/restore all plists
+3. Use `python Daily/scheduler/validate_plists.py` to verify plist integrity
+4. Never manually edit plists in LaunchAgents without updating the backup
+
+**Adding New Scheduled Jobs**:
+1. Create plist with correct namespace: `com.india-ts.your_job_name`
+2. Save to `Daily/scheduler/plists/`
+3. Run install script to deploy
+4. Update `PLIST_MASTER_SCHEDULE.md`
+5. Add to job manager dashboard if needed
+
+**Important**: When working on US-TS, NEVER modify files with `com.india-ts.*` namespace. Similarly, when working on India-TS, NEVER modify files with `com.us-ts.*` namespace.

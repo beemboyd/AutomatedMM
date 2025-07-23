@@ -1,11 +1,26 @@
 # Master Plist Schedule Documentation
 
-Generated on: 2025-07-23 08:11:44
+Generated on: 2025-07-23 08:11:44  
+Last Updated: 2025-07-23 11:45:00
 
 ## Overview
 
 This document contains a comprehensive list of all scheduled jobs (plist files) in the system,
 organized by project. This helps manage plist changes and avoid conflicts between projects.
+
+## Plist Management System
+
+**Git-Based Backup Location:** `Daily/scheduler/plists/`
+
+**Management Scripts:**
+- `python Daily/scheduler/install_plists.py` - Install/restore all India-TS plists from backup
+- `python Daily/scheduler/validate_plists.py` - Validate plist integrity and namespace compliance
+
+**Namespace Separation:**
+- India-TS jobs MUST use: `com.india-ts.*`
+- US-TS jobs MUST use: `com.us-ts.*`
+
+**Important:** Always update the backup copy in `Daily/scheduler/plists/` when modifying any plist file
 
 ---
 
