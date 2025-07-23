@@ -211,28 +211,40 @@
         <div id="error" class="error" style="display: none;"></div>
         
         <div id="categories" class="categories" style="display: none;">
-            <!-- Perfect Scores -->
+            <!-- High Scores -->
             <div class="category-card">
-                <h2 class="category-title icon-perfect">Perfect Scores (100)</h2>
-                <div id="perfectScores" class="ticker-list"></div>
+                <h2 class="category-title icon-perfect">High Scores (≥50)</h2>
+                <div id="highScores" class="ticker-list"></div>
             </div>
             
             <!-- High VSR -->
             <div class="category-card">
-                <h2 class="category-title icon-vsr">High VSR (≥10)</h2>
+                <h2 class="category-title icon-vsr">High VSR (≥1.0)</h2>
                 <div id="highVsr" class="ticker-list"></div>
             </div>
             
-            <!-- High Momentum -->
+            <!-- Positive Momentum -->
             <div class="category-card">
-                <h2 class="category-title icon-momentum">High Momentum (≥5%)</h2>
-                <div id="highMomentum" class="ticker-list"></div>
+                <h2 class="category-title icon-momentum">Positive Momentum</h2>
+                <div id="positiveMomentum" class="ticker-list"></div>
             </div>
             
             <!-- Strong Build -->
             <div class="category-card">
                 <h2 class="category-title icon-build">Strong Build (≥10)</h2>
                 <div id="strongBuild" class="ticker-list"></div>
+            </div>
+            
+            <!-- Persistence Leaders -->
+            <div class="category-card">
+                <h2 class="category-title icon-perfect">3-Day Leaders</h2>
+                <div id="persistenceLeaders" class="ticker-list"></div>
+            </div>
+            
+            <!-- New Entries -->
+            <div class="category-card">
+                <h2 class="category-title icon-all">New Entries</h2>
+                <div id="newEntries" class="ticker-list"></div>
             </div>
         </div>
         
@@ -299,6 +311,12 @@
                             <span class="detail-value build-indicator">📈${ticker.build}</span>
                         </div>
                         ` : ''}
+                        ${ticker.days_tracked > 0 ? `
+                        <div class="detail-item">
+                            <span class="detail-label">Days</span>
+                            <span class="detail-value" style="color: ${ticker.days_tracked >= 3 ? '#10b981' : ticker.days_tracked >= 2 ? '#f59e0b' : '#6b7280'}">${ticker.days_tracked}d</span>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -307,19 +325,19 @@
         function updateCategories(data) {
             const categories = data.categories;
             
-            // Update perfect scores
-            const perfectScoresEl = document.getElementById('perfectScores');
-            if (categories.perfect_scores.length > 0) {
-                perfectScoresEl.innerHTML = categories.perfect_scores
+            // Update high scores
+            const highScoresEl = document.getElementById('highScores');
+            if (categories.high_scores && categories.high_scores.length > 0) {
+                highScoresEl.innerHTML = categories.high_scores
                     .map(ticker => createTickerElement(ticker))
                     .join('');
             } else {
-                perfectScoresEl.innerHTML = '<div class="empty-state">No tickers with perfect scores</div>';
+                highScoresEl.innerHTML = '<div class="empty-state">No tickers with high scores</div>';
             }
             
             // Update high VSR
             const highVsrEl = document.getElementById('highVsr');
-            if (categories.high_vsr.length > 0) {
+            if (categories.high_vsr && categories.high_vsr.length > 0) {
                 highVsrEl.innerHTML = categories.high_vsr
                     .map(ticker => createTickerElement(ticker))
                     .join('');
@@ -327,19 +345,19 @@
                 highVsrEl.innerHTML = '<div class="empty-state">No tickers with high VSR</div>';
             }
             
-            // Update high momentum
-            const highMomentumEl = document.getElementById('highMomentum');
-            if (categories.high_momentum.length > 0) {
-                highMomentumEl.innerHTML = categories.high_momentum
+            // Update positive momentum
+            const positiveMomentumEl = document.getElementById('positiveMomentum');
+            if (categories.positive_momentum && categories.positive_momentum.length > 0) {
+                positiveMomentumEl.innerHTML = categories.positive_momentum
                     .map(ticker => createTickerElement(ticker))
                     .join('');
             } else {
-                highMomentumEl.innerHTML = '<div class="empty-state">No tickers with high momentum</div>';
+                positiveMomentumEl.innerHTML = '<div class="empty-state">No tickers with positive momentum</div>';
             }
             
             // Update strong build
             const strongBuildEl = document.getElementById('strongBuild');
-            if (categories.strong_build.length > 0) {
+            if (categories.strong_build && categories.strong_build.length > 0) {
                 strongBuildEl.innerHTML = categories.strong_build
                     .map(ticker => createTickerElement(ticker))
                     .join('');
@@ -347,10 +365,30 @@
                 strongBuildEl.innerHTML = '<div class="empty-state">No tickers with strong build</div>';
             }
             
+            // Update persistence leaders
+            const persistenceLeadersEl = document.getElementById('persistenceLeaders');
+            if (categories.persistence_leaders && categories.persistence_leaders.length > 0) {
+                persistenceLeadersEl.innerHTML = categories.persistence_leaders
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                persistenceLeadersEl.innerHTML = '<div class="empty-state">No 3-day persistence leaders yet</div>';
+            }
+            
+            // Update new entries
+            const newEntriesEl = document.getElementById('newEntries');
+            if (categories.new_entries && categories.new_entries.length > 0) {
+                newEntriesEl.innerHTML = categories.new_entries
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                newEntriesEl.innerHTML = '<div class="empty-state">No new entries today</div>';
+            }
+            
             // Update all tickers
             const allTickersEl = document.getElementById('allTickers');
             const allTickersCard = document.getElementById('allTickersCard');
-            if (categories.all_tickers.length > 0) {
+            if (categories.all_tickers && categories.all_tickers.length > 0) {
                 allTickersEl.innerHTML = categories.all_tickers
                     .map(ticker => createTickerElement(ticker))
                     .join('');

@@ -1,7 +1,7 @@
 # Master Plist Schedule Documentation
 
 Generated on: 2025-07-23 08:11:44  
-Last Updated: 2025-07-23 11:45:00
+Last Updated: 2025-07-23 14:50:00
 
 ## Overview
 
@@ -26,7 +26,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 24
+**Total Jobs:** 27
 
 **Timezone:** Asia/Kolkata
 
@@ -56,6 +56,9 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | sl_watchdog_stop | 15:30 (Mon-Fri) | true | ⏸️ On Schedule |
 | strategyc_filter | 09:45 (Mon-Fri), 11:45 (Mon-Fri), 13:45 (Mon-Fri), 16:15 (Mon-Fri) | StrategyC_Auto.py | ⏸️ On Schedule |
 | synch_zerodha_local | 09:15 (Mon-Fri), 09:30 (Mon-Fri), 09:45 (Mon-Fri), 10:00 (Mon-Fri), 10:15 (Mon-Fri), 10:30 (Mon-Fri), 10:45 (Mon-Fri), 11:00 (Mon-Fri), 11:15 (Mon-Fri), 11:30 (Mon-Fri), 11:45 (Mon-Fri), 12:00 (Mon-Fri), 12:15 (Mon-Fri), 12:30 (Mon-Fri), 12:45 (Mon-Fri), 13:00 (Mon-Fri), 13:15 (Mon-Fri), 13:30 (Mon-Fri), 13:45 (Mon-Fri), 14:00 (Mon-Fri), 14:15 (Mon-Fri), 14:30 (Mon-Fri), 14:45 (Mon-Fri), 15:00 (Mon-Fri), 15:15 (Mon-Fri), 15:30 (Mon-Fri) | --force | ⏸️ On Schedule |
+| vsr_tracker_enhanced | 09:15 (Mon-Fri) | vsr_tracker_service_enhanced.py | ⏸️ On Schedule |
+| vsr_dashboard | 09:15 (Mon-Fri) | vsr_tracker_dashboard.py | ⏸️ On Schedule |
+| vsr_shutdown | 15:30 (Mon-Fri) | stop_vsr_services.py | ⏸️ On Schedule |
 | weekly_backup | 03:00 (Sun) | weekly_backup.sh | ⏸️ On Schedule |
 
 ---
@@ -294,6 +297,33 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Run at Load:** False
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/synch_zerodha_local.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/synch_zerodha_local.log`
+
+#### vsr_tracker_enhanced
+- **Label:** `com.india-ts.vsr-tracker-enhanced`
+- **Schedule:** 09:15 (Mon-Fri)
+- **Program:** `/Library/Frameworks/Python.framework/Versions/3.11/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/services/vsr_tracker_service_enhanced.py --user Sai --interval 60`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_enhanced_service.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_enhanced_service_error.log`
+
+#### vsr_dashboard
+- **Label:** `com.india-ts.vsr-dashboard`
+- **Schedule:** 09:15 (Mon-Fri)
+- **Program:** `/Library/Frameworks/Python.framework/Versions/3.11/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/dashboards/vsr_tracker_dashboard.py`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_dashboard.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_dashboard_error.log`
+
+#### vsr_shutdown
+- **Label:** `com.india-ts.vsr-shutdown`
+- **Schedule:** 15:30 (Mon-Fri)
+- **Program:** `/Library/Frameworks/Python.framework/Versions/3.11/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scripts/stop_vsr_services.py`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_shutdown.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_shutdown_error.log`
 
 #### weekly_backup
 - **Label:** `com.india-ts.weekly_backup`
