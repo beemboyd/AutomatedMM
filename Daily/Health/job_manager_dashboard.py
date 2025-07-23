@@ -289,13 +289,28 @@ def get_job_status(job_id):
 def reload_job(job_id):
     """Reload a job (unload and load)"""
     try:
+        # Determine the correct plist path
+        plist_paths = [
+            f'/Users/maverick/Library/LaunchAgents/{job_id}.plist',
+            f'/Library/LaunchDaemons/{job_id}.plist'
+        ]
+        
+        plist_path = None
+        for path in plist_paths:
+            if os.path.exists(path):
+                plist_path = path
+                break
+        
+        if not plist_path:
+            return {'success': False, 'message': f'Plist file not found for {job_id}'}
+        
         # First unload
-        subprocess.run(['launchctl', 'unload', f'/Library/LaunchDaemons/{job_id}.plist'], 
+        subprocess.run(['launchctl', 'unload', plist_path], 
                       capture_output=True, text=True)
         time.sleep(1)
         
         # Then load
-        result = subprocess.run(['launchctl', 'load', f'/Library/LaunchDaemons/{job_id}.plist'], 
+        result = subprocess.run(['launchctl', 'load', plist_path], 
                               capture_output=True, text=True)
         
         if result.returncode == 0:
