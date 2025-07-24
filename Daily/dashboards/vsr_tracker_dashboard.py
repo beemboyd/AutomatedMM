@@ -12,6 +12,24 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import glob
 import pytz
+import sys
+import time
+import logging
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import required modules for real-time data
+try:
+    from scanners.VSR_Momentum_Scanner import (
+        fetch_data_kite,
+        load_daily_config,
+        initialize_kite
+    )
+    KITE_AVAILABLE = True
+except ImportError:
+    KITE_AVAILABLE = False
+    logging.warning("Kite modules not available - real-time updates disabled")
 
 app = Flask(__name__)
 
@@ -19,6 +37,17 @@ app = Flask(__name__)
 PORT = 3001
 VSR_LOG_DIR = "/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker"
 IST = pytz.timezone('Asia/Kolkata')
+
+# Initialize Kite if available
+kite_client = None
+if KITE_AVAILABLE:
+    try:
+        config = load_daily_config('Sai')  # Default user
+        kite_client = initialize_kite()
+        print("Kite Connect initialized for real-time data")
+    except Exception as e:
+        print(f"Failed to initialize Kite Connect: {e}")
+        KITE_AVAILABLE = False
 
 def parse_vsr_logs(hours=2):
     """Parse VSR tracker logs from the last N hours"""
@@ -136,9 +165,60 @@ def parse_vsr_logs(hours=2):
     
     return result
 
+def fetch_real_time_prices(tickers):
+    """Fetch real-time prices and volume for given tickers"""
+    if not KITE_AVAILABLE or not kite_client:
+        return {}
+    
+    real_time_data = {}
+    
+    try:
+        # Get LTP for all tickers in batches
+        symbols = [f"NSE:{ticker}" for ticker in tickers]
+        
+        # Kite API has a limit on number of symbols per request
+        batch_size = 100
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i+batch_size]
+            try:
+                quotes = kite_client.quote(batch)
+                
+                for symbol, quote_data in quotes.items():
+                    ticker = symbol.replace("NSE:", "")
+                    if quote_data:
+                        real_time_data[ticker] = {
+                            'price': quote_data.get('last_price', 0),
+                            'volume': quote_data.get('volume', 0),
+                            'change': quote_data.get('net_change', 0),
+                            'change_percent': ((quote_data.get('last_price', 0) - quote_data.get('ohlc', {}).get('close', 0)) / quote_data.get('ohlc', {}).get('close', 1)) * 100 if quote_data.get('ohlc', {}).get('close', 0) > 0 else 0
+                        }
+            except Exception as e:
+                print(f"Error fetching batch {i}: {e}")
+                continue
+                
+    except Exception as e:
+        print(f"Error fetching real-time data: {e}")
+    
+    return real_time_data
+
 def get_trending_tickers():
     """Get trending tickers sorted by various criteria"""
     tickers_data = parse_vsr_logs(hours=2)
+    
+    # Get real-time data if available
+    if KITE_AVAILABLE and tickers_data:
+        ticker_symbols = list(tickers_data.keys())
+        real_time_data = fetch_real_time_prices(ticker_symbols)
+        
+        # Update ticker data with real-time prices
+        for ticker, rt_data in real_time_data.items():
+            if ticker in tickers_data:
+                # Update price and volume with real-time data
+                tickers_data[ticker]['price'] = rt_data['price']
+                tickers_data[ticker]['volume'] = rt_data['volume']
+                # Update momentum with real-time change percent
+                tickers_data[ticker]['momentum'] = rt_data['change_percent']
+                tickers_data[ticker]['real_time'] = True  # Mark as real-time data
     
     # Convert to list and filter for positive momentum only
     tickers_list = [ticker for ticker in tickers_data.values() if ticker['momentum'] > 0]
@@ -208,7 +288,9 @@ def api_trending_tickers():
         response = {
             'timestamp': current_time.strftime('%Y-%m-%d %H:%M:%S IST'),
             'categories': categories,
-            'total_tickers': len(categories['all_tickers'])
+            'total_tickers': len(categories['all_tickers']),
+            'real_time_enabled': KITE_AVAILABLE,
+            'real_time_count': len([t for t in categories['all_tickers'] if t.get('real_time', False)])
         }
         
         return jsonify(response)
