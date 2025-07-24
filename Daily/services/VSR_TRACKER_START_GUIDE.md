@@ -1,5 +1,50 @@
 # VSR Tracker Start Script Guide
 
+## Quick Start - VSR Enhanced Viewer & Dashboard
+
+### 1. Start VSR Enhanced Viewer (Dashboard)
+The VSR Enhanced Viewer provides a web dashboard on port 3001:
+
+```bash
+# Start the dashboard
+cd /Users/maverick/PycharmProjects/India-TS
+python Daily/dashboards/vsr_tracker_dashboard.py
+```
+
+**Access the dashboard**: Open http://localhost:3001 in your browser
+
+### 2. Start VSR Tracker Service
+The VSR Tracker Service performs the actual scanning and tracking:
+
+```bash
+# Navigate to services directory
+cd /Users/maverick/PycharmProjects/India-TS/Daily/services
+
+# Start with default user (Sai)
+./start_vsr_tracker.sh
+
+# OR start for different user
+./start_vsr_tracker.sh -u Som
+```
+
+### 3. Verify Both Services Running
+```bash
+# Check VSR Tracker Service
+ps aux | grep vsr_tracker_service
+
+# Check Dashboard
+lsof -i:3001
+```
+
+### 4. Monitor Logs
+```bash
+# VSR Tracker Service logs
+tail -f /Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_tracker_$(date +%Y%m%d).log
+
+# Dashboard logs (enhanced viewer)
+tail -f /Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_tracker_enhanced_$(date +%Y%m%d).log
+```
+
 ## Overview
 The `start_vsr_tracker.sh` script is a bash script that launches the VSR (Volume Spread Ratio) Tracker Service as a background daemon process. It handles process management, logging, and ensures only one instance runs per user.
 
