@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SL Watchdog Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            color: #fff;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .user-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        select {
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border: 1px solid #444;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .btn-start {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-start:hover:not(:disabled) {
+            background: #059669;
+        }
+        
+        .btn-stop {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-stop:hover:not(:disabled) {
+            background: #dc2626;
+        }
+        
+        .btn-refresh {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-refresh:hover {
+            background: #2563eb;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+        
+        .status-indicator.running {
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .log-container {
+            background: #0f0f0f;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            height: calc(100vh - 250px);
+            overflow-y: auto;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .log-info {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .log-line {
+            margin-bottom: 2px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            word-wrap: break-word;
+        }
+        
+        .log-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #f87171;
+        }
+        
+        .log-warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: #fbbf24;
+        }
+        
+        .log-info {
+            color: #e0e0e0;
+        }
+        
+        .log-debug {
+            color: #6b7280;
+        }
+        
+        .log-sell {
+            background: rgba(239, 68, 68, 0.1);
+            color: #f87171;
+            font-weight: 500;
+        }
+        
+        .log-buy {
+            background: rgba(16, 185, 129, 0.1);
+            color: #34d399;
+            font-weight: 500;
+        }
+        
+        .log-timestamp {
+            color: #6b7280;
+            margin-right: 10px;
+        }
+        
+        .log-level {
+            font-weight: bold;
+            margin-right: 10px;
+            min-width: 60px;
+            display: inline-block;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        
+        .error-message {
+            background: #dc2626;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .auto-refresh input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .last-update {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        /* Scrollbar styling */
+        .log-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .log-container::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        
+        .log-container::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+        
+        .log-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ SL Watchdog Dashboard</h1>
+            <div class="controls">
+                <div class="user-selector">
+                    <label for="userSelect">User:</label>
+                    <select id="userSelect">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <button id="refreshBtn" class="btn-refresh">🔄 Refresh</button>
+                <button id="startBtn" class="btn-start" disabled>Start Watchdog</button>
+                <button id="stopBtn" class="btn-stop" disabled>Stop Watchdog</button>
+                <div class="status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">Not Running</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="log-header">
+            <h2>Log Viewer</h2>
+            <div class="log-info">
+                <span id="fileInfo"></span>
+                <span class="last-update" id="lastUpdate"></span>
+            </div>
+        </div>
+        
+        <div class="log-container" id="logContainer">
+            <div class="loading">Select a user to view logs...</div>
+        </div>
+    </div>
+    
+    <script>
+        let currentUser = null;
+        let autoScroll = true;
+        
+        // DOM elements
+        const userSelect = document.getElementById('userSelect');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const logContainer = document.getElementById('logContainer');
+        const errorMessage = document.getElementById('errorMessage');
+        const fileInfo = document.getElementById('fileInfo');
+        const lastUpdate = document.getElementById('lastUpdate');
+        const refreshBtn = document.getElementById('refreshBtn');
+        
+        // Load available users
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const users = await response.json();
+                
+                userSelect.innerHTML = '<option value="">Select a user...</option>';
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user;
+                    option.textContent = user;
+                    userSelect.appendChild(option);
+                });
+                
+                // Select first user if available
+                if (users.length > 0) {
+                    userSelect.value = users[0];
+                    await selectUser(users[0]);
+                }
+            } catch (error) {
+                showError('Failed to load users: ' + error.message);
+            }
+        }
+        
+        // Select a user
+        async function selectUser(user) {
+            if (!user) {
+                currentUser = null;
+                logContainer.innerHTML = '<div class="loading">Select a user to view logs...</div>';
+                startBtn.disabled = true;
+                stopBtn.disabled = true;
+                return;
+            }
+            
+            currentUser = user;
+            await checkWatchdogStatus();
+            await loadLogs();
+        }
+        
+        // Check watchdog status
+        async function checkWatchdogStatus() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch(`/api/watchdog/status/${currentUser}`);
+                const data = await response.json();
+                
+                if (data.running) {
+                    statusIndicator.classList.add('running');
+                    statusText.textContent = 'Running';
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                } else {
+                    statusIndicator.classList.remove('running');
+                    statusText.textContent = 'Not Running';
+                    startBtn.disabled = false;
+                    stopBtn.disabled = true;
+                }
+            } catch (error) {
+                showError('Failed to check watchdog status: ' + error.message);
+            }
+        }
+        
+        // Load logs
+        async function loadLogs() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch(`/api/logs/${currentUser}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    logContainer.innerHTML = `<div class="loading">Error: ${data.error}</div>`;
+                    return;
+                }
+                
+                // Update file info
+                fileInfo.textContent = `${data.total_lines} lines (last 300), ${data.file_size}`;
+                lastUpdate.textContent = `Last modified: ${data.last_modified}`;
+                
+                // Remember scroll position
+                const wasAtBottom = logContainer.scrollHeight - logContainer.scrollTop === logContainer.clientHeight;
+                
+                // Display logs
+                logContainer.innerHTML = '';
+                data.lines.forEach(line => {
+                    const logLine = document.createElement('div');
+                    logLine.className = `log-line ${line.class}`;
+                    
+                    if (line.timestamp) {
+                        logLine.innerHTML = `<span class="log-timestamp">${line.timestamp}</span><span class="log-level">${line.level}</span>${escapeHtml(line.message)}`;
+                    } else {
+                        logLine.textContent = line.message;
+                    }
+                    
+                    logContainer.appendChild(logLine);
+                });
+                
+                // Auto-scroll to bottom if was at bottom
+                if (wasAtBottom && autoScroll) {
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+                
+            } catch (error) {
+                showError('Failed to load logs: ' + error.message);
+            }
+        }
+        
+        // Start watchdog
+        async function startWatchdog() {
+            if (!currentUser) return;
+            
+            try {
+                startBtn.disabled = true;
+                const response = await fetch(`/api/watchdog/start/${currentUser}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(data.message);
+                    await checkWatchdogStatus();
+                    await loadLogs();
+                } else {
+                    showError(data.error || 'Failed to start watchdog');
+                }
+            } catch (error) {
+                showError('Failed to start watchdog: ' + error.message);
+            } finally {
+                await checkWatchdogStatus();
+            }
+        }
+        
+        // Stop watchdog
+        async function stopWatchdog() {
+            if (!currentUser) return;
+            
+            try {
+                stopBtn.disabled = true;
+                const response = await fetch(`/api/watchdog/stop/${currentUser}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(data.message);
+                    await checkWatchdogStatus();
+                } else {
+                    showError(data.error || 'Failed to stop watchdog');
+                }
+            } catch (error) {
+                showError('Failed to stop watchdog: ' + error.message);
+            } finally {
+                await checkWatchdogStatus();
+            }
+        }
+        
+        // Manual refresh
+        async function refreshDashboard() {
+            if (!currentUser) {
+                showError('Please select a user first');
+                return;
+            }
+            
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = '⏳ Refreshing...';
+            
+            try {
+                await checkWatchdogStatus();
+                await loadLogs();
+                showSuccess('Dashboard refreshed');
+            } catch (error) {
+                showError('Failed to refresh: ' + error.message);
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 Refresh';
+            }
+        }
+        
+        // Utility functions
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.background = '#10b981';
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+                errorMessage.style.background = '#dc2626';
+            }, 3000);
+        }
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        // Event listeners
+        userSelect.addEventListener('change', (e) => selectUser(e.target.value));
+        startBtn.addEventListener('click', startWatchdog);
+        stopBtn.addEventListener('click', stopWatchdog);
+        refreshBtn.addEventListener('click', refreshDashboard);
+        
+        // Detect manual scrolling
+        logContainer.addEventListener('scroll', () => {
+            const isAtBottom = logContainer.scrollHeight - logContainer.scrollTop === logContainer.clientHeight;
+            autoScroll = isAtBottom;
+        });
+        
+        // Initialize
+        loadUsers();
+    </script>
+</body>
+</html>
