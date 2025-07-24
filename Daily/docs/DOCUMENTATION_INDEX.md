@@ -46,6 +46,7 @@ This index provides quick access to all documentation in the India-TS system, or
 | [Dashboard Hosting](dashboards/DASHBOARD_HOSTING_GUIDE.md) | Daily/docs/dashboards | Dashboard deployment |
 | [Dashboard Jobs Update](dashboards/DASHBOARD_JOBS_UPDATE.md) | Daily/docs/dashboards | Recent updates |
 | [Job Manager Dashboard](../Health/README.md) | Daily/Health | Central job control |
+| [SL Watchdog Dashboard](guides/SL_WATCHDOG_DASHBOARD_GUIDE.md) | Daily/docs/guides | Stop loss log viewer |
 
 ## 🔧 System Maintenance
 

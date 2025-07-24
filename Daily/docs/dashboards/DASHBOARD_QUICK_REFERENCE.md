@@ -15,6 +15,7 @@
 | **VSR Tracker** | http://localhost:3001 | 3001 | VSR-based trending stocks, momentum analysis |
 | **Market Breadth** | http://localhost:5001 | 5001 | Market internals, SMA breadth, sector analysis |
 | **Job Manager** | http://localhost:9090 | 9090 | All system jobs monitoring and control |
+| **SL Watchdog** | http://localhost:2001 | 2001 | Stop loss watchdog logs, position monitoring |
 
 ## 🎮 Control Commands
 
@@ -79,6 +80,14 @@ lsof -i :7080  # Health dashboard
 - **Early Bird** KC breakout patterns
 - **Real-time Updates** from scanner
 
+### SL Watchdog Dashboard (Port 2001)
+- **Real-time Log Viewer** for SL watchdog service
+- **User Selection** dropdown to switch between users
+- **Start/Stop Controls** for SL watchdog service
+- **Manual Refresh Button** for efficiency (loads last 300 lines)
+- **Color-coded Logs** (errors, warnings, buy/sell orders)
+- **Position Monitoring** with 2% peak drop warnings
+
 ## 🔧 Troubleshooting
 
 | Problem | Solution |
@@ -103,7 +112,9 @@ lsof -i :7080  # Health dashboard
 ├── dashboards/
 │   ├── vsr_tracker_dashboard.py # VSR tracker (3001)
 │   ├── start_vsr_dashboard.sh  # Start VSR dashboard
-│   └── stop_vsr_dashboard.sh   # Stop VSR dashboard
+│   ├── stop_vsr_dashboard.sh   # Stop VSR dashboard
+│   ├── sl_watchdog_dashboard.py # SL watchdog (2001)
+│   └── start_sl_watchdog_dashboard.sh # Start SL watchdog dashboard
 └── job_management/
     └── job_manager_dashboard.py # Job manager (9090)
 ```
