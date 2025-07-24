@@ -13,18 +13,24 @@ python Daily/dashboards/vsr_tracker_dashboard.py
 
 **Access the dashboard**: Open http://localhost:3001 in your browser
 
-### 2. Start VSR Tracker Service
-The VSR Tracker Service performs the actual scanning and tracking:
+### 2. VSR Enhanced Tracker Service
+The VSR Enhanced Tracker Service is automatically scheduled to run during market hours (9:15 AM - 3:30 PM).
 
+**Automated Schedule:**
+- Starts: 9:15 AM (Mon-Fri)
+- Stops: 3:30 PM (Mon-Fri)
+- Managed by: launchctl (macOS scheduler)
+
+**Manual Control (if needed):**
 ```bash
-# Navigate to services directory
-cd /Users/maverick/PycharmProjects/India-TS/Daily/services
+# Start manually
+launchctl load ~/Library/LaunchAgents/com.india-ts.vsr-tracker-enhanced.plist
 
-# Start with default user (Sai)
-./start_vsr_tracker.sh
+# Stop manually
+launchctl unload ~/Library/LaunchAgents/com.india-ts.vsr-tracker-enhanced.plist
 
-# OR start for different user
-./start_vsr_tracker.sh -u Som
+# Check status
+launchctl list | grep vsr
 ```
 
 ### 3. Verify Both Services Running
