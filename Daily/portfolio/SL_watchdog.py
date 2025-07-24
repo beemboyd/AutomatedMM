@@ -201,6 +201,7 @@ class SLWatchdog:
         self.daily_high_prices = {}  # ticker -> day's highest price (from market data) - kept for backward compatibility
         self.atr_data = {}  # ticker -> {'atr': value, 'atr_percentage': value, 'stop_loss': value, 'multiplier': value, 'position_high': value}
         self.sma20_hourly_data = {}  # ticker -> {'sma20_violations': count, 'hours_monitored': count, 'hours_above_sma20': count}
+        self.peak_warning_issued = {}  # ticker -> bool, tracks if 2% warning has been issued
 
         # VSR tracking data
         self.vsr_data = {}  # ticker -> {'entry_vsr': value, 'current_vsr': value, 'vsr_history': [], 'last_hourly_check': datetime}
@@ -500,6 +501,10 @@ class SLWatchdog:
         # Remove from SMA20 data
         if ticker in self.sma20_hourly_data:
             del self.sma20_hourly_data[ticker]
+            
+        # Remove from peak warning tracking
+        if ticker in self.peak_warning_issued:
+            del self.peak_warning_issued[ticker]
             
         # Remove from tick sizes
         if ticker in self.tick_sizes:
@@ -1305,7 +1310,16 @@ class SLWatchdog:
                                     elif price > self.position_high_prices[ticker]:
                                         old_high = self.position_high_prices[ticker]
                                         self.position_high_prices[ticker] = price
+                                        self.peak_warning_issued[ticker] = False  # Reset warning when new peak is reached
                                         self.logger.debug(f"{ticker}: Updated position high: ₹{price:.2f} (was: ₹{old_high:.2f})")
+                                    
+                                    # Check for 2% drop from peak
+                                    position_high = self.position_high_prices.get(ticker, price)
+                                    if position_high > 0:
+                                        drop_from_peak_pct = ((position_high - price) / position_high) * 100
+                                        if drop_from_peak_pct >= 2.0 and not self.peak_warning_issued.get(ticker, False):
+                                            self.logger.warning(f"⚠️  {ticker}: Price dropped {drop_from_peak_pct:.1f}% from peak! Current: ₹{price:.2f}, Peak: ₹{position_high:.2f}")
+                                            self.peak_warning_issued[ticker] = True
                                     
                                     # Also update daily high for backward compatibility
                                     if ticker in self.daily_high_prices and price > self.daily_high_prices[ticker]:
@@ -1955,6 +1969,8 @@ class SLWatchdog:
                                             del self.atr_data[ticker]
                                         if ticker in self.sma20_hourly_data:
                                             del self.sma20_hourly_data[ticker]
+                                        if ticker in self.peak_warning_issued:
+                                            del self.peak_warning_issued[ticker]
                                     else:
                                         self.logger.info(f"Partial exit for {ticker}, remaining shares: {remaining_qty}")
                             else:
@@ -1973,6 +1989,8 @@ class SLWatchdog:
                                         del self.atr_data[ticker]
                                     if ticker in self.sma20_hourly_data:
                                         del self.sma20_hourly_data[ticker]
+                                    if ticker in self.peak_warning_issued:
+                                        del self.peak_warning_issued[ticker]
 
                             # Log the sale
                             order_quantity = order_info["quantity"]
@@ -2021,6 +2039,8 @@ class SLWatchdog:
                                         del self.atr_data[ticker]
                                     if ticker in self.sma20_hourly_data:
                                         del self.sma20_hourly_data[ticker]
+                                    if ticker in self.peak_warning_issued:
+                                        del self.peak_warning_issued[ticker]
                                 elif is_partial and ticker in self.tracked_positions:
                                     self.tracked_positions[ticker]["has_pending_order"] = False
 
