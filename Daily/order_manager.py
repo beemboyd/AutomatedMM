@@ -304,14 +304,15 @@ class OrderManager:
                     logger.error(f"Failed to place GTT SL order for {tradingsymbol} after {max_retries} attempts due to exception")
                     return False  # Failed to place GTT after max retries
     
-    def place_order(self, tradingsymbol, transaction_type, order_type, quantity, is_closing_position=False, exit_reason=None, product_type=None):
-        """Place a market order
+    def place_order(self, tradingsymbol, transaction_type, order_type, quantity, price=None, is_closing_position=False, exit_reason=None, product_type=None):
+        """Place an order (market or limit)
         
         Args:
             tradingsymbol: Stock symbol
             transaction_type: BUY or SELL
             order_type: MARKET or LIMIT
             quantity: Number of shares
+            price: Price for LIMIT orders (optional, required for LIMIT orders)
             is_closing_position: Whether this is closing an existing position
             exit_reason: Reason for exit if closing
             product_type: Override product type (CNC/MIS) - if not specified, uses self.product_type
@@ -342,7 +343,15 @@ class OrderManager:
             "product": product,
             "validity": "DAY"
         }
-        logger.info(f"Placing {transaction_type} order for {tradingsymbol} with payload: {payload}")
+        
+        # Add price for LIMIT orders
+        if order_type == "LIMIT" and price is not None:
+            payload["price"] = price
+        elif order_type == "LIMIT" and price is None:
+            logger.error(f"Price is required for LIMIT orders but not provided for {tradingsymbol}")
+            return False
+            
+        logger.info(f"Placing {transaction_type} {order_type} order for {tradingsymbol} with payload: {payload}")
         try:
             response = requests.post(self.order_url, headers=self.headers, data=payload)
             if response.ok:

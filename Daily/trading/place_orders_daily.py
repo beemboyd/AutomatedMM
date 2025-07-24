@@ -655,16 +655,18 @@ def place_cnc_orders(stocks: List[Dict], available_capital: float, order_manager
             order_detail['position_size'] = position_size
             order_detail['investment_amount'] = investment_amount
 
-            logging.info(f"Placing CNC order for {ticker}: {position_size} shares at ₹{current_price:.2f} (₹{investment_amount:.2f})")
+            logging.info(f"Placing CNC LIMIT order for {ticker}: {position_size} shares at ₹{current_price:.2f} (₹{investment_amount:.2f})")
             logging.info(f"  SL: ₹{stop_loss:.2f}, Target: ₹{target_price:.2f}, R:R: {risk_reward:.1f}")
-            logging.info(f"  Product Type: {config['DEFAULT']['product_type']}")
+            logging.info(f"  Product Type: {config['DEFAULT']['product_type']}, Order Type: LIMIT")
 
             # Place the order with CNC product type explicitly passed
+            # Using limit order at current market price
             success = order_manager.place_order(
                 tradingsymbol=ticker,
                 transaction_type="BUY",
-                order_type="MARKET",
+                order_type="LIMIT",
                 quantity=position_size,
+                price=current_price,
                 is_closing_position=False,
                 product_type=config['DEFAULT']['product_type']
             )
@@ -682,7 +684,7 @@ def place_cnc_orders(stocks: List[Dict], available_capital: float, order_manager
                     position["risk_reward_ratio"] = risk_reward
                     state_manager._save_state()
 
-                logging.info(f"Successfully placed CNC order for {ticker}")
+                logging.info(f"Successfully placed CNC LIMIT order for {ticker}")
                 successful_orders.append(ticker)
 
                 # GTT stop loss orders are no longer created automatically
@@ -692,8 +694,8 @@ def place_cnc_orders(stocks: List[Dict], available_capital: float, order_manager
                 # Add a small delay between orders to avoid API rate limits
                 time.sleep(1)
             else:
-                order_detail['error_message'] = "Failed to place CNC order"
-                logging.error(f"Failed to place CNC order for {ticker}")
+                order_detail['error_message'] = "Failed to place CNC LIMIT order"
+                logging.error(f"Failed to place CNC LIMIT order for {ticker}")
 
         except Exception as e:
             order_detail['error_message'] = str(e)
@@ -779,7 +781,7 @@ def main():
         print("=" * 80)
 
         # Confirm before placing orders
-        confirm = input(f"\nPlace CNC orders for these {num_positions} stocks using {deployment_percent*100:.0f}% of available capital (₹{capital_per_position:,.2f} each)? (y/n): ")
+        confirm = input(f"\nPlace CNC LIMIT orders for these {num_positions} stocks using {deployment_percent*100:.0f}% of available capital (₹{capital_per_position:,.2f} each)? (y/n): ")
         if confirm.lower() != 'y':
             print("Order placement cancelled by user.")
             return 0
