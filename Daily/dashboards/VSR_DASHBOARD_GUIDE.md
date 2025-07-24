@@ -12,6 +12,7 @@ The VSR Tracker Dashboard provides real-time insights into trending stocks based
 - Parses VSR tracker logs every minute
 - Shows stocks from the last 2 hours by default
 - Auto-refreshes every 60 seconds
+- **NEW**: Auto-detects new Long_Reversal_Daily files every 5 minutes
 
 ### 2. Categorized View
 The dashboard organizes tickers into four main categories:
@@ -131,13 +132,29 @@ Tickers are included if they meet any of these criteria:
 ### Manual Refresh
 Click the "🔄 Refresh" button to manually update data
 
+## Auto-Reload Feature (NEW)
+
+### Automatic Ticker Updates
+The VSR Enhanced Tracker now automatically checks for new Long_Reversal_Daily files every 5 minutes:
+- **No Restart Required**: New tickers are loaded automatically
+- **Detection Indicator**: Look for `🆕 New Long_Reversal_Daily file detected` in logs
+- **New Ticker Alert**: `✨ New tickers found: TICKER1, TICKER2...`
+- **Dashboard Update**: New tickers appear on dashboard within 1-2 minutes
+
+### How It Works
+1. Every 5 minutes, the tracker checks the results folder
+2. If a newer Long_Reversal_Daily file exists, it loads the tickers
+3. New tickers are immediately added to tracking
+4. High-scoring new tickers appear on the dashboard
+
 ## Integration with Trading System
 
 The VSR Dashboard complements other trading tools:
-- **VSR Tracker Service:** Provides the raw data
+- **VSR Tracker Service:** Provides the raw data with auto-reload
+- **VSR Momentum Trading:** Uses dashboard data for order placement
 - **Market Breadth Dashboard (5001):** Shows market internals
 - **Market Regime Dashboard (8080):** Shows ML-based regime analysis
-- **Job Manager Dashboard (9090):** Monitors all system jobs
+- **SL Watchdog Dashboard (2001):** Monitors stop losses with 2% warnings
 
 ## Best Practices
 

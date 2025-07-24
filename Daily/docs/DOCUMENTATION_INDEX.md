@@ -19,6 +19,7 @@ This index provides quick access to all documentation in the India-TS system, or
 | [Market Regime Guide](../Market_Regime/README_ENHANCED.md) | Daily/Market_Regime | Market regime analysis |
 | [KC Pattern Analysis](../analysis/KC_Pattern_Analysis_Key_Insights.md) | Daily/analysis | KC pattern insights |
 | [VSR Momentum Tracker](guides/VSR_MOMENTUM_TRACKER.md) | Daily/docs/guides | VSR momentum detection |
+| [VSR Auto-Reload](VSR_TRACKER_AUTO_RELOAD.md) | Daily/docs | NEW: Auto-reload feature |
 
 ## 💰 Trading & Order Management
 
@@ -47,6 +48,7 @@ This index provides quick access to all documentation in the India-TS system, or
 | [Dashboard Jobs Update](dashboards/DASHBOARD_JOBS_UPDATE.md) | Daily/docs/dashboards | Recent updates |
 | [Job Manager Dashboard](../Health/README.md) | Daily/Health | Central job control |
 | [SL Watchdog Dashboard](guides/SL_WATCHDOG_DASHBOARD_GUIDE.md) | Daily/docs/guides | Stop loss log viewer |
+| [VSR Dashboard Guide](../dashboards/VSR_DASHBOARD_GUIDE.md) | Daily/dashboards | VSR tracker dashboard |
 
 ## 🔧 System Maintenance
 
@@ -77,11 +79,14 @@ This index provides quick access to all documentation in the India-TS system, or
 
 ## 📝 Recent Additions (2025)
 
-1. **Volume-Price Anomaly Detection** - Added to SL Watchdog for exhaustion pattern warnings
-2. **KC Pattern Analysis** - Deep dive into KC_Breakout_Watch patterns
-3. **Market Regime Integration** - Enhanced stop loss with market conditions
-4. **G Pattern Master** - Advanced pattern recognition system
-5. **Early Bird Dashboard** - First appearance tracking for KC patterns
+1. **VSR Auto-Reload Feature** - Automatic detection of new Long_Reversal_Daily files every 5 minutes
+2. **VSR Momentum Trading** - Automated order placement based on VSR scores
+3. **SL Watchdog 2% Warning** - Early warning when position drops 2% from peak
+4. **Volume-Price Anomaly Detection** - Added to SL Watchdog for exhaustion pattern warnings
+5. **KC Pattern Analysis** - Deep dive into KC_Breakout_Watch patterns
+6. **Market Regime Integration** - Enhanced stop loss with market conditions
+7. **G Pattern Master** - Advanced pattern recognition system
+8. **Early Bird Dashboard** - First appearance tracking for KC patterns
 
 ## 🗂️ Documentation Organization
 
@@ -106,4 +111,4 @@ This index provides quick access to all documentation in the India-TS system, or
 
 ---
 
-*Last Updated: 2025-07-17 - Reorganized documentation structure*
+*Last Updated: 2025-07-24 - Added VSR auto-reload and momentum trading features*

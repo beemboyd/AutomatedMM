@@ -180,6 +180,12 @@ JOBS = {
         'script': 'Short_Reversal_Daily_FNO.py',
         'schedule': 'Every hour at :19 (9:19-15:19, Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.vsr-enhanced-tracker': {
+        'name': 'VSR Enhanced Tracker (Auto-Reload)',
+        'script': 'vsr_tracker_service_enhanced.py',
+        'schedule': '9:15 AM - 3:30 PM (Mon-Fri, KeepAlive)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/services'
     }
 }
 
@@ -216,6 +222,22 @@ DASHBOARDS = {
         'port': 9090,
         'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/Health/start_job_manager.sh',
         'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/Health/stop_job_manager.sh'
+    },
+    'vsr_tracker_dashboard': {
+        'name': 'VSR Tracker Dashboard',
+        'script': 'vsr_tracker_dashboard.py',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 3001,
+        'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_vsr_dashboard.sh',
+        'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/stop_vsr_dashboard.sh'
+    },
+    'sl_watchdog_dashboard': {
+        'name': 'SL Watchdog Dashboard',
+        'script': 'sl_watchdog_dashboard.py',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 2001,
+        'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_sl_watchdog_dashboard.sh',
+        'stop_script': None
     }
 }
 

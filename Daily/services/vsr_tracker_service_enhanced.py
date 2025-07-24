@@ -45,6 +45,9 @@ class EnhancedVSRTracker:
         self.user_name = user_name
         self.data_cache = DataCache()
         self.persistence_manager = VSRTickerPersistence()
+        self.last_ticker_file = None
+        self.last_file_check_time = None
+        self.file_check_interval = 300  # Check for new files every 5 minutes
         
         # Setup logging
         self.setup_logging()
@@ -97,9 +100,22 @@ class EnhancedVSRTracker:
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"Logging to: {log_file}")
     
-    def get_latest_long_reversal_tickers(self):
+    def get_latest_long_reversal_tickers(self, force_check=False):
         """Get tickers from latest Long_Reversal_Daily file"""
         try:
+            # Check if we should look for new files
+            now = datetime.datetime.now()
+            should_check_files = force_check or (
+                self.last_file_check_time is None or 
+                (now - self.last_file_check_time).total_seconds() >= self.file_check_interval
+            )
+            
+            if should_check_files:
+                self.logger.info(f"[{self.user_name}] 🔍 Checking for new Long_Reversal_Daily files...")
+            
+            if not should_check_files and hasattr(self, '_cached_tickers'):
+                return self._cached_tickers
+            
             results_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
             long_reversal_files = glob.glob(os.path.join(results_dir, "Long_Reversal_Daily_*.xlsx"))
             
@@ -129,17 +145,35 @@ class EnhancedVSRTracker:
             long_reversal_files.sort(key=extract_timestamp, reverse=True)
             latest_file = long_reversal_files[0]
             
-            # Read the Excel file
-            df = pd.read_excel(latest_file)
-            if 'ticker' in df.columns:
-                tickers = df['ticker'].tolist()
-            elif 'Ticker' in df.columns:
-                tickers = df['Ticker'].tolist()
+            # Check if this is a new file
+            if latest_file != self.last_ticker_file:
+                self.logger.info(f"🆕 New Long_Reversal_Daily file detected: {os.path.basename(latest_file)}")
+                self.last_ticker_file = latest_file
+                
+                # Read the Excel file
+                df = pd.read_excel(latest_file)
+                if 'ticker' in df.columns:
+                    tickers = df['ticker'].tolist()
+                elif 'Ticker' in df.columns:
+                    tickers = df['Ticker'].tolist()
+                else:
+                    self.logger.error(f"No ticker column found in {latest_file}")
+                    return []
+                
+                # Check for new tickers
+                if hasattr(self, '_cached_tickers'):
+                    new_tickers = set(tickers) - set(self._cached_tickers)
+                    if new_tickers:
+                        self.logger.info(f"✨ New tickers found: {', '.join(sorted(new_tickers))}")
+                
+                self._cached_tickers = tickers
+                self.logger.info(f"[{self.user_name}] Loaded {len(tickers)} tickers from {os.path.basename(latest_file)}")
             else:
-                self.logger.error(f"No ticker column found in {latest_file}")
-                return []
+                # Same file, return cached tickers
+                tickers = self._cached_tickers if hasattr(self, '_cached_tickers') else []
             
-            self.logger.info(f"[{self.user_name}] Loaded {len(tickers)} tickers from {os.path.basename(latest_file)}")
+            # Update last check time
+            self.last_file_check_time = now
             return tickers
             
         except Exception as e:
@@ -300,7 +334,7 @@ class EnhancedVSRTracker:
     def run_tracking_cycle(self):
         """Run one complete tracking cycle"""
         try:
-            # Get current scan tickers
+            # Get current scan tickers (checks for new files every 5 minutes)
             current_tickers = self.get_latest_long_reversal_tickers()
             
             # Update persistence with current tickers (without momentum data yet)
