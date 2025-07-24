@@ -140,8 +140,8 @@ def get_trending_tickers():
     """Get trending tickers sorted by various criteria"""
     tickers_data = parse_vsr_logs(hours=2)
     
-    # Convert to list and sort
-    tickers_list = list(tickers_data.values())
+    # Convert to list and filter for positive momentum only
+    tickers_list = [ticker for ticker in tickers_data.values() if ticker['momentum'] > 0]
     
     # Sort by score, then VSR, then momentum
     tickers_list.sort(key=lambda x: (x['score'], x['vsr'], x['momentum']), reverse=True)
@@ -158,16 +158,15 @@ def get_trending_tickers():
     }
     
     for ticker in tickers_list:
+        # All tickers already have positive momentum due to filtering above
         categories['all_tickers'].append(ticker)
+        categories['positive_momentum'].append(ticker)
         
         if ticker['score'] >= 50:
             categories['high_scores'].append(ticker)
         
         if ticker['vsr'] >= 1.0:
             categories['high_vsr'].append(ticker)
-        
-        if ticker['momentum'] > 0:
-            categories['positive_momentum'].append(ticker)
         
         if ticker['build'] >= 10:
             categories['strong_build'].append(ticker)
