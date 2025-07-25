@@ -181,11 +181,23 @@ JOBS = {
         'schedule': 'Every hour at :19 (9:19-15:19, Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
     },
-    'com.india-ts.vsr-enhanced-tracker': {
-        'name': 'VSR Enhanced Tracker (Auto-Reload)',
+    'com.india-ts.vsr-tracker-enhanced': {
+        'name': 'VSR Enhanced Tracker',
         'script': 'vsr_tracker_service_enhanced.py',
-        'schedule': '9:15 AM - 3:30 PM (Mon-Fri, KeepAlive)',
+        'schedule': '9:15 AM (Mon-Fri, Runs continuously)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/services'
+    },
+    'com.india-ts.vsr-dashboard': {
+        'name': 'VSR Dashboard Service',
+        'script': 'vsr_tracker_dashboard.py',
+        'schedule': '9:15 AM (Mon-Fri, RunAtLoad)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
+    },
+    'com.india-ts.vsr-shutdown': {
+        'name': 'VSR Shutdown Service',
+        'script': 'stop_vsr_services.py',
+        'schedule': '3:30 PM (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scripts'
     }
 }
 
@@ -745,7 +757,7 @@ HTML_TEMPLATE = '''
         .jobs-table {
             background: #1a1a1a;
             border-radius: 8px;
-            overflow: hidden;
+            overflow-x: auto;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             margin-bottom: 20px;
         }
@@ -753,20 +765,23 @@ HTML_TEMPLATE = '''
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 900px;
         }
         
         th {
             background: #2a2a2a;
-            padding: 15px;
+            padding: 12px;
             text-align: left;
             font-weight: 600;
             color: #4fc3f7;
             border-bottom: 2px solid #333;
+            font-size: 0.95em;
         }
         
         td {
-            padding: 15px;
+            padding: 10px 12px;
             border-bottom: 1px solid #333;
+            font-size: 0.9em;
         }
         
         tr:hover {

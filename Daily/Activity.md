@@ -43,3 +43,19 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - Integrated with existing reversal scanning infrastructure
 
 ---
+
+### 2025-07-25 03:35 IST - [Claude/System]
+**Changes:**
+- Updated job_manager_dashboard.py to fix PID column visibility issue
+- Added horizontal scrolling to tables (overflow-x: auto)
+- Reduced font sizes and padding for better space utilization
+- Added minimum table width of 900px
+- Updated VSR job entries in JOBS dictionary
+
+**Impact:**
+- PID column now visible in job manager dashboard
+- Added VSR jobs: vsr-tracker-enhanced, vsr-dashboard, vsr-shutdown
+- Better table layout with horizontal scrolling when needed
+- VSR dashboard available on port 3001
+
+---
