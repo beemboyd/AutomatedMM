@@ -198,6 +198,18 @@ JOBS = {
         'script': 'stop_vsr_services.py',
         'schedule': '3:30 PM (Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scripts'
+    },
+    'com.india-ts.short-momentum-tracker': {
+        'name': 'Short Momentum Tracker',
+        'script': 'short_momentum_tracker_service.py',
+        'schedule': '9:15 AM (Mon-Fri, Runs continuously)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/services'
+    },
+    'com.india-ts.short-momentum-dashboard': {
+        'name': 'Short Momentum Dashboard',
+        'script': 'short_momentum_dashboard.py',
+        'schedule': '9:15 AM (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
     }
 }
 
@@ -249,6 +261,14 @@ DASHBOARDS = {
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
         'port': 2001,
         'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_sl_watchdog_dashboard.sh',
+        'stop_script': None
+    },
+    'short_momentum_dashboard': {
+        'name': 'Short Momentum Dashboard',
+        'script': 'short_momentum_dashboard.py',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 3003,
+        'start_script': None,  # Managed by launchctl
         'stop_script': None
     }
 }

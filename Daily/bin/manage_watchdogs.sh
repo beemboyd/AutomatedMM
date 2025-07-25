@@ -159,7 +159,8 @@ find_users_with_orders() {
 # Function to get most recent orders file for a user
 get_recent_orders_file() {
     local user_name="$1"
-    find "$ORDERS_DIR/$user_name" -name "orders_*.json" -type f 2>/dev/null | sort -r | head -1
+    # Exclude consolidated files to avoid loading historical positions
+    find "$ORDERS_DIR/$user_name" -name "orders_*.json" ! -name "*consolidated*" -type f 2>/dev/null | sort -r | head -1
 }
 
 # Function to get PID file for a user

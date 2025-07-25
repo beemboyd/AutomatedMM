@@ -26,7 +26,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 27
+**Total Jobs:** 29
 
 **Timezone:** Asia/Kolkata
 
@@ -59,6 +59,8 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | vsr_tracker_enhanced | 09:15 (Mon-Fri) | vsr_tracker_service_enhanced.py | ⏸️ On Schedule |
 | vsr_dashboard | 09:15 (Mon-Fri) | vsr_tracker_dashboard.py | ⏸️ On Schedule |
 | vsr_shutdown | 15:30 (Mon-Fri) | stop_vsr_services.py | ⏸️ On Schedule |
+| short_momentum_tracker | 09:15 (Mon-Fri) | short_momentum_tracker_service.py | ⏸️ On Schedule |
+| short_momentum_dashboard | 09:15 (Mon-Fri) | short_momentum_dashboard.py | ⏸️ On Schedule |
 | weekly_backup | 03:00 (Sun) | weekly_backup.sh | ⏸️ On Schedule |
 
 ---
@@ -333,6 +335,25 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Run at Load:** False
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/weekly_backup.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/weekly_backup_error.log`
+
+#### short_momentum_tracker
+- **Label:** `com.india-ts.short-momentum-tracker`
+- **Schedule:** 09:15 (Mon-Fri)
+- **Program:** `/Library/Frameworks/Python.framework/Versions/3.11/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/services/short_momentum_tracker_service.py --user Sai --interval 60`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_tracker.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_tracker_error.log`
+
+#### short_momentum_dashboard
+- **Label:** `com.india-ts.short-momentum-dashboard`
+- **Schedule:** 09:15 (Mon-Fri)
+- **Program:** `/Library/Frameworks/Python.framework/Versions/3.11/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/dashboards/short_momentum_dashboard.py`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_dashboard.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_dashboard_error.log`
+- **Dashboard URL:** http://localhost:3003
 
 ### US-TS Jobs Details
 
