@@ -59,3 +59,16 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - VSR dashboard available on port 3001
 
 ---
+
+### 2025-07-25 09:07 IST - [Claude/System]
+**Changes:**
+- Updated job_manager_dashboard.py time restrictions
+- Changed from 9:30 AM - 3:30 PM to 9:00 AM - 4:00 PM IST
+- Updated all error messages to reflect new time range
+
+**Impact:**
+- Job manager dashboard now accessible from 9:00 AM to 4:00 PM IST
+- Provides 30 minutes earlier access and 30 minutes later access
+- Better accommodates pre-market and post-market activities
+
+---

@@ -29,13 +29,13 @@ CORS(app)
 
 # Time restriction function
 def is_within_market_hours():
-    """Check if current time is between 9:30 AM and 3:30 PM IST"""
+    """Check if current time is between 9:00 AM and 4:00 PM IST"""
     ist = pytz.timezone('Asia/Kolkata')
     current_time = datetime.now(ist)
     
-    # Market hours: 9:30 AM to 3:30 PM
-    market_start = current_time.replace(hour=9, minute=30, second=0, microsecond=0)
-    market_end = current_time.replace(hour=15, minute=30, second=0, microsecond=0)
+    # Extended hours: 9:00 AM to 4:00 PM
+    market_start = current_time.replace(hour=9, minute=0, second=0, microsecond=0)
+    market_end = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
     
     return market_start <= current_time <= market_end
 
@@ -546,7 +546,7 @@ def index():
             <div class="message-container">
                 <h1>India-TS Job Manager Dashboard</h1>
                 <p>This dashboard is only available during market hours</p>
-                <p class="time">9:30 AM - 3:30 PM IST</p>
+                <p class="time">9:00 AM - 4:00 PM IST</p>
                 <p>Please access during market hours</p>
             </div>
         </body>
@@ -558,7 +558,7 @@ def index():
 def get_jobs():
     """Get all jobs with their current status"""
     if not is_within_market_hours():
-        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+        return jsonify({'error': 'Dashboard only available during market hours (9:00 AM - 4:00 PM IST)'}), 403
     
     jobs_data = []
     
@@ -599,7 +599,7 @@ def get_jobs():
 def api_reload_job(job_id):
     """Reload a specific job"""
     if not is_within_market_hours():
-        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+        return jsonify({'error': 'Dashboard only available during market hours (9:00 AM - 4:00 PM IST)'}), 403
     
     if job_id not in JOBS:
         return jsonify({'success': False, 'message': 'Invalid job ID'}), 404
@@ -611,7 +611,7 @@ def api_reload_job(job_id):
 def api_restart_job(job_id):
     """Restart a specific job"""
     if not is_within_market_hours():
-        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+        return jsonify({'error': 'Dashboard only available during market hours (9:00 AM - 4:00 PM IST)'}), 403
     
     if job_id not in JOBS:
         return jsonify({'success': False, 'message': 'Invalid job ID'}), 404
@@ -623,7 +623,7 @@ def api_restart_job(job_id):
 def api_stop_job(job_id):
     """Stop a specific job"""
     if not is_within_market_hours():
-        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+        return jsonify({'error': 'Dashboard only available during market hours (9:00 AM - 4:00 PM IST)'}), 403
     
     if job_id not in JOBS:
         return jsonify({'success': False, 'message': 'Invalid job ID'}), 404
@@ -635,7 +635,7 @@ def api_stop_job(job_id):
 def api_start_dashboard(dashboard_id):
     """Start a specific dashboard"""
     if not is_within_market_hours():
-        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+        return jsonify({'error': 'Dashboard only available during market hours (9:00 AM - 4:00 PM IST)'}), 403
     
     if dashboard_id not in DASHBOARDS:
         return jsonify({'success': False, 'message': 'Invalid dashboard ID'}), 404
@@ -647,7 +647,7 @@ def api_start_dashboard(dashboard_id):
 def api_stop_dashboard(dashboard_id):
     """Stop a specific dashboard"""
     if not is_within_market_hours():
-        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+        return jsonify({'error': 'Dashboard only available during market hours (9:00 AM - 4:00 PM IST)'}), 403
     
     if dashboard_id not in DASHBOARDS:
         return jsonify({'success': False, 'message': 'Invalid dashboard ID'}), 404
@@ -659,7 +659,7 @@ def api_stop_dashboard(dashboard_id):
 def api_restart_dashboard(dashboard_id):
     """Restart a specific dashboard"""
     if not is_within_market_hours():
-        return jsonify({'error': 'Dashboard only available during market hours (9:30 AM - 3:30 PM IST)'}), 403
+        return jsonify({'error': 'Dashboard only available during market hours (9:00 AM - 4:00 PM IST)'}), 403
     
     if dashboard_id not in DASHBOARDS:
         return jsonify({'success': False, 'message': 'Invalid dashboard ID'}), 404
