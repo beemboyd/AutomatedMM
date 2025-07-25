@@ -1,0 +1,45 @@
+# India-TS Activity Log
+
+This file maintains a chronological record of all changes made to the India-TS system.
+Each entry should include: Date, Time, Author, Changes Made, and Impact.
+
+## Format
+```
+### YYYY-MM-DD HH:MM IST - [Author]
+**Changes:**
+- Description of changes
+
+**Impact:**
+- Systems/services affected
+- Any configuration updates
+- Testing performed
+
+---
+```
+
+## Activity Log
+
+### 2025-07-23 14:50 IST - [System]
+**Changes:**
+- Implemented Git-based plist management system
+- Created backup of all India-TS plists in Daily/scheduler/plists/
+- Added install_plists.py and validate_plists.py scripts
+- Updated PLIST_MASTER_SCHEDULE.md documentation
+
+**Impact:**
+- Prevents accidental cross-project plist contamination
+- All India-TS plists now have versioned backups
+- Easier recovery from plist corruption or accidental changes
+
+---
+
+### 2025-07-23 09:28 IST - [System]
+**Changes:**
+- Added FNO Liquid reversal scanner plist (com.india-ts.fno_liquid_reversal_scanners)
+- Configured to run on hourly schedule
+
+**Impact:**
+- New automated scanner for FNO liquid stocks
+- Integrated with existing reversal scanning infrastructure
+
+---

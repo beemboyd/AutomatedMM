@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Activity Logging
+**IMPORTANT**: When making any changes to the India-TS system, you MUST update the activity log:
+- Location: `/Users/maverick/PycharmProjects/India-TS/Daily/Activity.md`
+- Format: Include date/time (IST), author (Claude/System), changes made, and impact
+- Update BEFORE committing changes
+- Include service names, file paths, and configuration changes
+
 ## Build/Test Commands
 - Run full system test: `python test_system.py`
 - Run backtest (unified interface): `python BT/backtest.py --mode [interactive|single|portfolio] --strategy strategy_name --start-date YYYY-MM-DD --end-date YYYY-MM-DD`
