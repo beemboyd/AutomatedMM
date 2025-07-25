@@ -26,7 +26,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 29
+**Total Jobs:** 30
 
 **Timezone:** Asia/Kolkata
 
@@ -62,6 +62,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | short_momentum_tracker | 09:15 (Mon-Fri) | short_momentum_tracker_service.py | ⏸️ On Schedule |
 | short_momentum_dashboard | 09:15 (Mon-Fri) | short_momentum_dashboard.py | ⏸️ On Schedule |
 | weekly_backup | 03:00 (Sun) | weekly_backup.sh | ⏸️ On Schedule |
+| regime_data_updater_10min | Every 10 min (9:10-15:30 Mon-Fri) | update_regime_data.py | ⏸️ On Schedule |
 
 ---
 
@@ -354,6 +355,16 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_dashboard.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_dashboard_error.log`
 - **Dashboard URL:** http://localhost:3003
+
+#### regime_data_updater_10min
+- **Label:** `com.india-ts.regime_data_updater_10min`
+- **Schedule:** Every 10 minutes from 9:10 AM to 3:30 PM (Mon-Fri)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/update_regime_data.py`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/regime_data_updater.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/regime_data_updater_error.log`
+- **Purpose:** Ensures consistent multi-timeframe data updates for market regime analysis
 
 ### US-TS Jobs Details
 

@@ -183,6 +183,50 @@ ENHANCED_DASHBOARD_HTML = '''
             color: #6c757d;
             padding: 20px;
         }
+        
+        /* Multi-timeframe styles */
+        .timeframe-card {
+            border: 2px solid #dee2e6;
+            transition: all 0.3s ease;
+        }
+        
+        .timeframe-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .tf-regime {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+        
+        .timeframe-card.strong_downtrend {
+            border-color: #c0392b;
+        }
+        
+        .timeframe-card.downtrend {
+            border-color: #e74c3c;
+        }
+        
+        .timeframe-card.choppy_bearish {
+            border-color: #e67e22;
+        }
+        
+        .timeframe-card.choppy {
+            border-color: #95a5a6;
+        }
+        
+        .timeframe-card.choppy_bullish {
+            border-color: #3498db;
+        }
+        
+        .timeframe-card.uptrend {
+            border-color: #27ae60;
+        }
+        
+        .timeframe-card.strong_uptrend {
+            border-color: #2ecc71;
+        }
     </style>
 </head>
 <body>
@@ -429,93 +473,94 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
-        <!-- G Pattern Strategy Section -->
+        <!-- Multi-Timeframe Analysis Section -->
         <div class="row mt-4">
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title">🎯 G Pattern Strategy</h5>
+                        <h5 class="card-title">📊 Multi-Timeframe Analysis</h5>
                         
-                        <div class="row">
-                            <!-- G Pattern Confirmed -->
-                            <div class="col-md-4 mb-3">
-                                <div class="card" style="border: 2px solid #27ae60; background: rgba(39, 174, 96, 0.1);">
+                        <!-- Individual Timeframes -->
+                        <div class="row mb-3">
+                            <div class="col-md-3 mb-3">
+                                <div class="card timeframe-card" id="daily-tf-card">
                                     <div class="card-body text-center">
-                                        <h6 style="color: #27ae60;">G PATTERN CONFIRMED</h6>
-                                        <div id="g-pattern-confirmed-count" style="font-size: 2.5em; font-weight: bold; color: #27ae60;">-</div>
-                                        <p class="mb-2">10% Allocation per Position</p>
-                                        <div id="g-pattern-confirmed-list" style="font-size: 0.9em; text-left; max-height: 150px; overflow-y: auto;">
-                                            <div class="text-muted">Loading...</div>
+                                        <h6 class="text-muted">DAILY</h6>
+                                        <div class="tf-regime fw-bold mb-2" id="daily-regime">-</div>
+                                        <div class="small">
+                                            <div>L/S: <span id="daily-ls">-</span></div>
+                                            <div>Ratio: <span id="daily-ratio">-</span></div>
+                                            <div>Conf: <span id="daily-conf">-</span></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Pattern Emerging -->
-                            <div class="col-md-4 mb-3">
-                                <div class="card" style="border: 2px solid #3498db; background: rgba(52, 152, 219, 0.1);">
+                            <div class="col-md-3 mb-3">
+                                <div class="card timeframe-card" id="weekly-tf-card">
                                     <div class="card-body text-center">
-                                        <h6 style="color: #3498db;">PATTERN EMERGING</h6>
-                                        <div id="g-pattern-emerging-count" style="font-size: 2.5em; font-weight: bold; color: #3498db;">-</div>
-                                        <p class="mb-2">5% Allocation per Position</p>
-                                        <div id="g-pattern-emerging-list" style="font-size: 0.9em; text-left; max-height: 150px; overflow-y: auto;">
-                                            <div class="text-muted">Loading...</div>
+                                        <h6 class="text-muted">WEEKLY</h6>
+                                        <div class="tf-regime fw-bold mb-2" id="weekly-regime">-</div>
+                                        <div class="small">
+                                            <div>L/S: <span id="weekly-ls">-</span></div>
+                                            <div>Ratio: <span id="weekly-ratio">-</span></div>
+                                            <div>Conf: <span id="weekly-conf">-</span></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Watch Closely -->
-                            <div class="col-md-4 mb-3">
-                                <div class="card" style="border: 2px solid #f39c12; background: rgba(243, 156, 18, 0.1);">
+                            <div class="col-md-3 mb-3">
+                                <div class="card timeframe-card" id="biweekly-tf-card">
                                     <div class="card-body text-center">
-                                        <h6 style="color: #f39c12;">PATTERN DEVELOPING</h6>
-                                        <div id="g-pattern-developing-count" style="font-size: 2.5em; font-weight: bold; color: #f39c12;">-</div>
-                                        <p class="mb-2">5% Allocation per Position</p>
-                                        <div id="g-pattern-developing-list" style="font-size: 0.9em; text-left; max-height: 150px; overflow-y: auto;">
-                                            <div class="text-muted">Loading...</div>
+                                        <h6 class="text-muted">BI-WEEKLY</h6>
+                                        <div class="tf-regime fw-bold mb-2" id="biweekly-regime">-</div>
+                                        <div class="small">
+                                            <div>L/S: <span id="biweekly-ls">-</span></div>
+                                            <div>Ratio: <span id="biweekly-ratio">-</span></div>
+                                            <div>Conf: <span id="biweekly-conf">-</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <div class="card timeframe-card" id="monthly-tf-card">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">MONTHLY</h6>
+                                        <div class="tf-regime fw-bold mb-2" id="monthly-regime">-</div>
+                                        <div class="small">
+                                            <div>L/S: <span id="monthly-ls">-</span></div>
+                                            <div>Ratio: <span id="monthly-ratio">-</span></div>
+                                            <div>Conf: <span id="monthly-conf">-</span></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Strategy Summary -->
-                        <div class="alert alert-info mt-3">
-                            <h6 class="alert-heading">📅 Trading Strategy</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <p class="mb-1"><strong>G Pattern Confirmed:</strong> 10% allocation per position</p>
-                                    <p class="mb-1"><strong>Pattern Emerging/Developing:</strong> 5% allocation per position</p>
-                                    <p class="mb-1"><strong>Risk Management:</strong> Follow predefined stop losses</p>
+                        <!-- Combined Analysis -->
+                        <div class="alert alert-info">
+                            <div class="row align-items-center">
+                                <div class="col-md-4 text-center">
+                                    <h4 class="mb-0">Alignment: <span id="mtf-alignment" class="fw-bold">-</span></h4>
+                                    <small id="mtf-alignment-status">-</small>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="bg-white p-2 rounded">
-                                        <strong>Active Opportunities:</strong> <span id="g-pattern-opportunities" class="text-primary">Loading...</span><br>
-                                        <strong>Next Action:</strong> <span class="text-success">Review positions for allocation</span>
-                                    </div>
+                                <div class="col-md-4 text-center">
+                                    <h4 class="mb-0">Combined: <span id="mtf-combined-regime" class="fw-bold">-</span></h4>
+                                    <small>Confidence: <span id="mtf-confidence">-</span></small>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Recommendation:</strong>
+                                    <div id="mtf-recommendation" class="mt-1">-</div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Top VSR Scores Section -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">🚀 Top VSR Momentum Scores</h5>
-                        <p class="text-muted mb-3">High scoring stocks based on Volume Spread Ratio analysis - Updated every minute</p>
                         
-                        <div class="row" id="vsr-scores-container">
-                            <div class="col-12 text-center">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                            </div>
+                        <!-- Divergence Alert (if any) -->
+                        <div id="mtf-divergence-alert" class="alert alert-warning d-none">
+                            <strong>⚠️ Timeframe Divergences Detected:</strong>
+                            <div id="mtf-divergences"></div>
                         </div>
                     </div>
                 </div>
@@ -737,18 +782,15 @@ ENHANCED_DASHBOARD_HTML = '''
                     // Update Macro/Micro View
                     updateMacroMicroView(data);
                     
+                    // Update Multi-Timeframe Analysis
+                    updateMultiTimeframeAnalysis(data);
+                    
                     previousData = data;
                 })
                 .catch(error => console.error('Error fetching data:', error));
             
-            // Update G Pattern data
-            updateGPatternData();
-            
             // Update Reversal Patterns data
             updateReversalPatterns();
-            
-            // Update VSR Scores data
-            updateVSRScores();
         }
         
         function updateGPatternData() {
@@ -990,6 +1032,110 @@ ENHANCED_DASHBOARD_HTML = '''
             }
         }
         
+        function updateMultiTimeframeAnalysis(data) {
+            if (!data.multi_timeframe_analysis) {
+                console.log('No multi-timeframe data available');
+                return;
+            }
+            
+            const mtf = data.multi_timeframe_analysis;
+            
+            // Update individual timeframes
+            const timeframes = ['daily', 'weekly', 'biweekly', 'monthly'];
+            
+            timeframes.forEach(tf => {
+                if (mtf.timeframes && mtf.timeframes[tf]) {
+                    const tfData = mtf.timeframes[tf];
+                    
+                    // Update regime
+                    const regimeElement = document.getElementById(`${tf}-regime`);
+                    if (regimeElement) {
+                        regimeElement.textContent = tfData.regime.replace(/_/g, ' ').toUpperCase();
+                        regimeElement.className = `tf-regime fw-bold mb-2 ${tfData.regime}`;
+                    }
+                    
+                    // Update L/S
+                    const lsElement = document.getElementById(`${tf}-ls`);
+                    if (lsElement) {
+                        lsElement.textContent = `${tfData.long_count}/${tfData.short_count}`;
+                    }
+                    
+                    // Update ratio
+                    const ratioElement = document.getElementById(`${tf}-ratio`);
+                    if (ratioElement) {
+                        ratioElement.textContent = tfData.ratio.toFixed(2);
+                    }
+                    
+                    // Update confidence
+                    const confElement = document.getElementById(`${tf}-conf`);
+                    if (confElement) {
+                        confElement.textContent = `${(tfData.confidence * 100).toFixed(0)}%`;
+                    }
+                    
+                    // Update card border color based on regime
+                    const card = document.getElementById(`${tf}-tf-card`);
+                    if (card) {
+                        card.className = `card timeframe-card ${tfData.regime}`;
+                    }
+                }
+            });
+            
+            // Update combined analysis
+            if (mtf.combined_signals) {
+                const combined = mtf.combined_signals;
+                
+                // Update alignment
+                const alignmentElement = document.getElementById('mtf-alignment');
+                if (alignmentElement) {
+                    alignmentElement.textContent = `${(combined.alignment_score * 100).toFixed(0)}%`;
+                    alignmentElement.style.color = combined.alignment_score >= 0.8 ? '#2ecc71' : 
+                                                   combined.alignment_score >= 0.6 ? '#3498db' : 
+                                                   combined.alignment_score >= 0.4 ? '#f39c12' : '#e74c3c';
+                }
+                
+                // Update alignment status
+                const statusElement = document.getElementById('mtf-alignment-status');
+                if (statusElement) {
+                    let status = 'Divergence';
+                    if (combined.alignment_score >= 0.8) status = 'Strong Alignment';
+                    else if (combined.alignment_score >= 0.6) status = 'Moderate Alignment';
+                    else if (combined.alignment_score >= 0.4) status = 'Weak Alignment';
+                    statusElement.textContent = status;
+                }
+                
+                // Update combined regime
+                const regimeElement = document.getElementById('mtf-combined-regime');
+                if (regimeElement) {
+                    regimeElement.textContent = combined.combined_regime.replace(/_/g, ' ').toUpperCase();
+                    regimeElement.className = `fw-bold ${combined.combined_regime}`;
+                }
+                
+                // Update confidence
+                const confElement = document.getElementById('mtf-confidence');
+                if (confElement) {
+                    confElement.textContent = `${(combined.confidence * 100).toFixed(0)}%`;
+                }
+            }
+            
+            // Update recommendation
+            if (mtf.recommendation) {
+                const recElement = document.getElementById('mtf-recommendation');
+                if (recElement) {
+                    recElement.textContent = mtf.recommendation;
+                }
+            }
+            
+            // Update divergences if any
+            const divergenceAlert = document.getElementById('mtf-divergence-alert');
+            const divergencesElement = document.getElementById('mtf-divergences');
+            if (mtf.divergences && mtf.divergences.length > 0) {
+                divergenceAlert.classList.remove('d-none');
+                divergencesElement.innerHTML = mtf.divergences.map(d => `<div>• ${d}</div>`).join('');
+            } else {
+                divergenceAlert.classList.add('d-none');
+            }
+        }
+        
         function updateVSRScores() {
             fetch('/api/vsr_scores')
                 .then(response => response.json())
@@ -1205,7 +1351,8 @@ def get_current_analysis():
             'volatility': data.get('volatility', {}),
             'position_recommendations': data.get('position_recommendations', {}),
             'model_performance': data.get('model_performance', {}),
-            'historical_context': data.get('historical_context', {})
+            'historical_context': data.get('historical_context', {}),
+            'multi_timeframe_analysis': data.get('multi_timeframe_analysis', {})
         }
         
         # Store in history

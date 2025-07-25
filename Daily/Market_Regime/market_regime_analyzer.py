@@ -28,6 +28,7 @@ from position_recommender import PositionRecommender
 from regime_history_tracker import RegimeHistoryTracker
 from regime_smoother import RegimeSmoother
 from index_sma_analyzer import IndexSMAAnalyzer
+from multi_timeframe_analyzer import MultiTimeframeAnalyzer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from analysis.market_regime.market_indicators import MarketIndicators
 
@@ -63,6 +64,7 @@ class MarketRegimeAnalyzer:
         self.history_tracker = RegimeHistoryTracker()
         self.regime_smoother = RegimeSmoother()
         self.index_analyzer = IndexSMAAnalyzer()
+        self.multi_tf_analyzer = MultiTimeframeAnalyzer()
         
         # Market regime definitions
         self.regimes = {
@@ -439,6 +441,14 @@ class MarketRegimeAnalyzer:
                 'short': scan_results.get('short_file')
             }
         }
+        
+        # Enhance report with multi-timeframe analysis
+        try:
+            enhanced_report = self.multi_tf_analyzer.generate_enhanced_analysis(report)
+            report = enhanced_report
+            logger.info("Successfully added multi-timeframe analysis to report")
+        except Exception as e:
+            logger.error(f"Error adding multi-timeframe analysis: {e}")
         
         # Add to history tracker
         history_entry = {
