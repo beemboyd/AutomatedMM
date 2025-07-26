@@ -132,8 +132,14 @@ class EnhancedMarketScoreCalculator:
     
     def _calculate_breadth_score(self, breadth_data: Dict) -> float:
         """Calculate score from market breadth (-1 to +1)"""
+        # Handle both percentage (0-100) and decimal (0-1) formats
         bullish_pct = breadth_data.get('bullish_percent', 50)
         bearish_pct = breadth_data.get('bearish_percent', 50)
+        
+        # Convert to percentage if in decimal format
+        if bullish_pct <= 1 and bearish_pct <= 1:
+            bullish_pct = bullish_pct * 100
+            bearish_pct = bearish_pct * 100
         
         # Normalize to -1 to +1
         # If 100% bullish: score = +1
