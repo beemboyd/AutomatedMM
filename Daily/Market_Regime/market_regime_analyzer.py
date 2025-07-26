@@ -29,6 +29,8 @@ from regime_history_tracker import RegimeHistoryTracker
 from regime_smoother import RegimeSmoother
 from index_sma_analyzer import IndexSMAAnalyzer
 from multi_timeframe_analyzer import MultiTimeframeAnalyzer
+from breadth_regime_consistency import BreadthRegimeConsistencyChecker
+from enhanced_market_score_calculator import EnhancedMarketScoreCalculator
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from analysis.market_regime.market_indicators import MarketIndicators
 
@@ -65,6 +67,8 @@ class MarketRegimeAnalyzer:
         self.regime_smoother = RegimeSmoother()
         self.index_analyzer = IndexSMAAnalyzer()
         self.multi_tf_analyzer = MultiTimeframeAnalyzer()
+        self.breadth_consistency_checker = BreadthRegimeConsistencyChecker()
+        self.enhanced_score_calculator = EnhancedMarketScoreCalculator()
         
         # Market regime definitions
         self.regimes = {
@@ -292,6 +296,21 @@ class MarketRegimeAnalyzer:
             logger.error("Failed to generate trend report")
             return None
             
+        # Calculate enhanced market score with breadth integration
+        enhanced_score_result = None
+        if breadth_indicators:
+            try:
+                enhanced_score_result = self.enhanced_score_calculator.calculate_enhanced_market_score(
+                    reversal_counts=trend_report['counts'],
+                    breadth_data=breadth_indicators,
+                    momentum_data=trend_report.get('momentum')
+                )
+                logger.info(f"Enhanced market score: {enhanced_score_result['market_score']:.3f}, "
+                          f"Direction: {enhanced_score_result['direction']}, "
+                          f"Confidence: {enhanced_score_result['confidence']:.1%}")
+            except Exception as e:
+                logger.error(f"Error calculating enhanced market score: {e}")
+        
         # Determine market regime
         new_regime = self.determine_market_regime(trend_report)
         
@@ -341,6 +360,33 @@ class MarketRegimeAnalyzer:
         }
         confidence = self.confidence_calc.calculate_confidence(confidence_data)
         
+        # Check breadth-regime consistency and adjust confidence if needed
+        consistency_result = self.breadth_consistency_checker.check_consistency(
+            regime, breadth_indicators, confidence
+        )
+        
+        # Check if we should override the regime due to extreme divergence
+        regime_override = self.breadth_consistency_checker.get_regime_override(
+            regime, breadth_indicators
+        )
+        
+        if regime_override:
+            logger.warning(f"Regime override due to extreme breadth divergence: {regime} -> {regime_override}")
+            regime = regime_override
+            regime_info = self.regimes[regime]
+        
+        # Use adjusted confidence from consistency check
+        original_confidence = confidence
+        confidence = consistency_result['adjusted_confidence']
+        confidence_level = self.confidence_calc.get_confidence_level(confidence)
+        
+        # Add divergence alert to insights if needed
+        divergence_alert = None
+        if consistency_result['divergence_type'] != 'none':
+            divergence_alert = self.breadth_consistency_checker.format_divergence_alert(
+                regime, breadth_indicators, consistency_result
+            )
+        
         # Calculate volatility from scanner data
         volatility_data = {}
         if not df_combined.empty and 'ATR' in df_combined.columns:
@@ -374,6 +420,22 @@ class MarketRegimeAnalyzer:
         position_recommendations = self.position_rec.get_recommendations(
             regime, confidence, volatility_data
         )
+        
+        # Add breadth consistency warnings to position recommendations
+        if consistency_result['warnings']:
+            if 'specific_guidance' not in position_recommendations:
+                position_recommendations['specific_guidance'] = []
+            # Add warnings at the beginning
+            position_recommendations['specific_guidance'] = (
+                consistency_result['warnings'] + 
+                position_recommendations.get('specific_guidance', [])
+            )
+            
+        # Update recommendation based on divergence
+        if consistency_result['recommendation'] == 'avoid_or_reduce':
+            position_recommendations['position_size_multiplier'] *= 0.5
+            position_recommendations['max_positions'] = max(2, position_recommendations['max_positions'] // 2)
+            position_recommendations['avoid'] = "Trading against breadth divergence"
         
         # Update predictor with actual regime
         self.predictor.update_actual_regime(datetime.datetime.now().isoformat(), regime)
@@ -413,6 +475,10 @@ class MarketRegimeAnalyzer:
         # Generate actionable insights
         insights = self._generate_insights(regime, trend_report, prediction, index_analysis)
         
+        # Add divergence alert to insights if present
+        if divergence_alert:
+            insights.insert(0, divergence_alert)
+        
         # Prepare complete report
         report = {
             'timestamp': datetime.datetime.now().isoformat(),
@@ -422,16 +488,31 @@ class MarketRegimeAnalyzer:
                 'characteristics': regime_info['characteristics'],
                 'strategy': regime_info['strategy'],
                 'confidence': confidence,
-                'confidence_level': self.position_rec._get_confidence_level(confidence)
+                'confidence_level': confidence_level,
+                'original_confidence': original_confidence if original_confidence != confidence else None,
+                'confidence_adjusted_reason': consistency_result.get('warnings', []) if consistency_result['divergence_type'] != 'none' else None
             },
             'reversal_counts': trend_report['counts'],
             'smoothed_counts': trend_report.get('smoothed_counts', trend_report['counts']),
-            'trend_analysis': trend_report['trend_strength'],
+            'trend_analysis': {
+                **trend_report['trend_strength'],
+                'enhanced_market_score': enhanced_score_result['market_score'] if enhanced_score_result else None,
+                'breadth_score': enhanced_score_result['breadth_score'] if enhanced_score_result else None,
+                'weekly_bias': enhanced_score_result['weekly_bias'] if enhanced_score_result else None,
+                'enhanced_direction': enhanced_score_result['direction'] if enhanced_score_result else None
+            },
             'momentum_analysis': trend_report.get('momentum'),
             'breadth_indicators': breadth_indicators,
+            'breadth_consistency': {
+                'is_consistent': consistency_result['is_consistent'],
+                'divergence_type': consistency_result['divergence_type'],
+                'warnings': consistency_result['warnings'],
+                'recommendation': consistency_result['recommendation']
+            },
             'volatility': volatility_data,
             'index_analysis': index_analysis,
             'position_recommendations': position_recommendations,
+            'enhanced_strategy_recommendation': enhanced_score_result['strategy_recommendation'] if enhanced_score_result else None,
             'prediction': prediction,
             'model_performance': self.predictor.get_model_insights(),
             'historical_context': self.history_tracker.get_performance_summary(),
@@ -744,6 +825,20 @@ def main():
             
             if report.get('momentum_analysis'):
                 print(f"\nMomentum: {report['momentum_analysis']['description']}")
+            
+            # Display breadth consistency check results
+            if report.get('breadth_consistency'):
+                bc = report['breadth_consistency']
+                if bc['divergence_type'] != 'none':
+                    print(f"\n⚠️  BREADTH-REGIME CONSISTENCY CHECK:")
+                    print(f"  Divergence Type: {bc['divergence_type'].upper()}")
+                    print(f"  Recommendation: {bc['recommendation'].replace('_', ' ').title()}")
+                    if bc['warnings']:
+                        print(f"  Warnings:")
+                        for warning in bc['warnings']:
+                            print(f"    - {warning}")
+                    if report['market_regime'].get('original_confidence'):
+                        print(f"  Confidence Adjusted: {report['market_regime']['original_confidence']:.1%} → {report['market_regime']['confidence']:.1%}")
             
             if report.get('volatility') and report['volatility']:
                 print(f"\nVolatility Analysis:")

@@ -302,6 +302,50 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
+        <!-- Weekly Bias Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-calendar-week"></i> Weekly Market Bias</h5>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <h3 id="weekly-direction" class="mb-0">-</h3>
+                                    <small class="text-muted">Primary Direction</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <h3 id="weekly-strength" class="mb-0">-</h3>
+                                    <small class="text-muted">Strength</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <h3 id="weekly-allocation" class="mb-0">-</h3>
+                                    <small class="text-muted">Allocation %</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="alert alert-light mb-0">
+                                <strong>Rationale:</strong> <span id="weekly-rationale">-</span>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <small class="text-muted">Enhanced Market Score: <strong id="enhanced-score">-</strong></small>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="text-muted">Breadth Score: <strong id="breadth-score-display">-</strong></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Index Analysis Section -->
         <div class="row mb-4">
             <div class="col-12">
@@ -703,6 +747,26 @@ ENHANCED_DASHBOARD_HTML = '''
                     const avgAtrElement = document.getElementById('avg-atr');
                     if (avgAtrElement && data.volatility && data.volatility.avg_atr) {
                         avgAtrElement.textContent = `Avg ATR: ${data.volatility.avg_atr.toFixed(2)}%`;
+                    }
+                    
+                    // Update weekly bias section
+                    if (data.weekly_bias) {
+                        const bias = data.weekly_bias;
+                        document.getElementById('weekly-direction').textContent = bias.direction;
+                        document.getElementById('weekly-direction').className = 
+                            bias.direction === 'LONG' ? 'mb-0 text-success' : 
+                            bias.direction === 'SHORT' ? 'mb-0 text-danger' : 'mb-0 text-warning';
+                        document.getElementById('weekly-strength').textContent = bias.strength;
+                        document.getElementById('weekly-allocation').textContent = bias.allocation + '%';
+                        document.getElementById('weekly-rationale').textContent = bias.rationale;
+                    }
+                    
+                    // Update enhanced scores
+                    if (data.indicators.market_score !== undefined) {
+                        document.getElementById('enhanced-score').textContent = data.indicators.market_score.toFixed(3);
+                    }
+                    if (data.indicators.breadth_score !== undefined) {
+                        document.getElementById('breadth-score-display').textContent = data.indicators.breadth_score.toFixed(3);
                     }
                     
                     // Update pattern counts
@@ -1343,11 +1407,13 @@ def get_current_analysis():
             'smoothed_counts': data.get('smoothed_counts', data['reversal_counts']),
             'index_analysis': data.get('index_analysis', {}),
             'indicators': {
-                'market_score': data['trend_analysis'].get('market_score', 0),
+                'market_score': data['trend_analysis'].get('enhanced_market_score', data['trend_analysis'].get('market_score', 0)),
                 'trend_score': data['trend_analysis'].get('trend_score', 0),
                 'volatility_score': data.get('volatility', {}).get('volatility_score', 0),
-                'breadth_score': data.get('breadth_indicators', {}).get('breadth_score', 0)
+                'breadth_score': data['trend_analysis'].get('breadth_score', data.get('breadth_indicators', {}).get('breadth_score', 0))
             },
+            'weekly_bias': data['trend_analysis'].get('weekly_bias'),
+            'enhanced_direction': data['trend_analysis'].get('enhanced_direction'),
             'volatility': data.get('volatility', {}),
             'position_recommendations': data.get('position_recommendations', {}),
             'model_performance': data.get('model_performance', {}),

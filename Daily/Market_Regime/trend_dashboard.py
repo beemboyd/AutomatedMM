@@ -492,6 +492,115 @@ class TrendDashboard:
         </div>
         """
         
+        # Add multi-timeframe analysis section if available
+        if report.get('multi_timeframe_analysis'):
+            mtf = report['multi_timeframe_analysis']
+            html_content += f"""
+        <div class="breadth-section" style="margin-bottom: 30px;">
+            <h2 class="section-title">📊 Multi-Timeframe Analysis</h2>
+            
+            <!-- Individual Timeframes -->
+            <div class="metrics-grid" style="margin-bottom: 20px;">
+        """
+            
+            # Add each timeframe
+            timeframe_colors = {
+                'strong_uptrend': '#2ecc71',
+                'uptrend': '#27ae60',
+                'choppy_bullish': '#3498db',
+                'choppy': '#95a5a6',
+                'choppy_bearish': '#e67e22',
+                'downtrend': '#e74c3c',
+                'strong_downtrend': '#c0392b'
+            }
+            
+            for tf_name, tf_data in mtf.get('timeframes', {}).items():
+                tf_regime = tf_data.get('regime', 'choppy')
+                tf_color = timeframe_colors.get(tf_regime, '#95a5a6')
+                tf_ratio = tf_data.get('ratio', 1.0)
+                tf_confidence = tf_data.get('confidence', 0.5)
+                
+                html_content += f"""
+                <div class="metric-card">
+                    <div style="font-size: 1.1em; font-weight: bold; color: {tf_color}; margin-bottom: 10px;">{tf_name.upper()}</div>
+                    <div style="font-size: 0.9em;">
+                        <div>L/S: {tf_data.get('long_count', 0)}/{tf_data.get('short_count', 0)}</div>
+                        <div>Ratio: {tf_ratio:.2f}</div>
+                        <div>Regime: {tf_regime.replace('_', ' ')}</div>
+                        <div>Conf: {tf_confidence:.0%}</div>
+                    </div>
+                </div>
+                """
+            
+            html_content += """
+            </div>
+            
+            <!-- Combined Analysis -->
+            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px;">
+                <h3 style="margin-bottom: 15px;">Combined Multi-Timeframe Signal</h3>
+            """
+            
+            if mtf.get('combined_signals'):
+                combined = mtf['combined_signals']
+                combined_regime = combined.get('combined_regime', 'choppy')
+                combined_color = timeframe_colors.get(combined_regime, '#95a5a6')
+                alignment_score = combined.get('alignment_score', 0.5)
+                combined_confidence = combined.get('confidence', 0.5)
+                
+                # Determine alignment status
+                if alignment_score >= 0.8:
+                    alignment_status = "Strong Alignment"
+                    alignment_color = "#2ecc71"
+                elif alignment_score >= 0.6:
+                    alignment_status = "Moderate Alignment"
+                    alignment_color = "#3498db"
+                elif alignment_score >= 0.4:
+                    alignment_status = "Weak Alignment"
+                    alignment_color = "#f39c12"
+                else:
+                    alignment_status = "Divergence"
+                    alignment_color = "#e74c3c"
+                
+                html_content += f"""
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center;">
+                    <div>
+                        <div style="font-size: 1.5em; color: {combined_color}; font-weight: bold;">{combined_regime.replace('_', ' ').upper()}</div>
+                        <div style="color: #7f8c8d;">Combined Regime</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 1.5em; color: {alignment_color}; font-weight: bold;">{alignment_score:.0%}</div>
+                        <div style="color: #7f8c8d;">{alignment_status}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 1.5em; font-weight: bold;">{combined_confidence:.0%}</div>
+                        <div style="color: #7f8c8d;">Confidence</div>
+                    </div>
+                </div>
+                """
+            
+            # Add divergences if any
+            if mtf.get('divergences'):
+                html_content += """
+                <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
+                    <h4 style="color: #856404; margin-bottom: 10px;">⚠️ Timeframe Divergences Detected</h4>
+                """
+                for divergence in mtf['divergences']:
+                    html_content += f"<div>• {divergence}</div>"
+                html_content += "</div>"
+            
+            # Add recommendation
+            if mtf.get('recommendation'):
+                html_content += f"""
+                <div style="margin-top: 20px; padding: 15px; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px;">
+                    <strong>Multi-Timeframe Recommendation:</strong> {mtf['recommendation']}
+                </div>
+                """
+            
+            html_content += """
+            </div>
+        </div>
+        """
+        
         # Add index analysis section if available
         if report.get('index_analysis'):
             idx = report['index_analysis']

@@ -383,15 +383,18 @@ class ShortMomentumTracker:
                 self.logger.info("="*80)
                 
                 for i, ticker_data in enumerate(top_shorts):
+                    # Log in VSR-style format for dashboard parsing
                     self.logger.info(
-                        f"{i+1:2d}. {ticker_data['ticker']:12s} | "
-                        f"Score: {ticker_data['total_score']:3.0f} | "
-                        f"Momentum: {ticker_data['momentum_score']:3.0f} | "
-                        f"1H: {ticker_data['price_change_1h']:6.2f}% | "
-                        f"3H: {ticker_data['price_change_3h']:6.2f}% | "
-                        f"1D: {ticker_data['price_change_1d']:6.2f}% | "
-                        f"RSI: {ticker_data['rsi']:5.1f} | "
-                        f"{ticker_data['momentum_status']}"
+                        f"[{self.user_name}] {ticker_data['ticker']} | "
+                        f"Score: {ticker_data['total_score']} | "
+                        f"VSR: {ticker_data['vsr']:.2f} | "
+                        f"Price: ₹{ticker_data['close']:.2f} | "
+                        f"Vol: {ticker_data['volume']:,} | "
+                        f"Momentum: {ticker_data['price_change_1d']:.2f}% | "
+                        f"Build: {ticker_data['momentum_score']} | "
+                        f"Trend: {ticker_data['momentum_status']} | "
+                        f"Days: {ticker_data['appearances']} | "
+                        f"Sector: {ticker_data['sector']}"
                     )
                 
                 self.logger.info("="*80)
