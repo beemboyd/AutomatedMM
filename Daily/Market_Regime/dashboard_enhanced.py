@@ -2122,10 +2122,10 @@ def get_current_analysis():
             'smoothed_counts': data.get('smoothed_counts', data['reversal_counts']),
             'index_analysis': data.get('index_analysis', {}),
             'indicators': {
-                'market_score': data['trend_analysis'].get('enhanced_market_score', data['trend_analysis'].get('market_score', 0)),
+                'market_score': data['trend_analysis'].get('enhanced_market_score') or data['trend_analysis'].get('market_score', 0),
                 'trend_score': data['trend_analysis'].get('trend_score', 0),
                 'volatility_score': data.get('volatility', {}).get('volatility_score', 0),
-                'breadth_score': data['trend_analysis'].get('breadth_score', data.get('breadth_indicators', {}).get('breadth_score', 0))
+                'breadth_score': data['trend_analysis'].get('breadth_score') or (data.get('breadth_indicators', {}).get('breadth_score', 0) if data.get('breadth_indicators') else 0)
             },
             'weekly_bias': data['trend_analysis'].get('weekly_bias'),
             'enhanced_direction': data['trend_analysis'].get('enhanced_direction'),

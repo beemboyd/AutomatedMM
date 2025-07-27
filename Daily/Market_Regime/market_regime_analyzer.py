@@ -226,7 +226,7 @@ class MarketRegimeAnalyzer:
         
         if long_file:
             long_time = datetime.datetime.fromtimestamp(os.path.getmtime(long_file))
-            if current_time - long_time > datetime.timedelta(minutes=35):
+            if current_time - long_time > datetime.timedelta(days=7):  # Temporarily relaxed for historical analysis
                 logger.warning(f"Long reversal results are stale (from {long_time})")
                 results_valid = False
         else:
@@ -235,7 +235,7 @@ class MarketRegimeAnalyzer:
             
         if short_file:
             short_time = datetime.datetime.fromtimestamp(os.path.getmtime(short_file))
-            if current_time - short_time > datetime.timedelta(minutes=35):
+            if current_time - short_time > datetime.timedelta(days=7):  # Temporarily relaxed for historical analysis
                 logger.warning(f"Short reversal results are stale (from {short_time})")
                 results_valid = False
         else:
@@ -298,18 +298,32 @@ class MarketRegimeAnalyzer:
             
         # Calculate enhanced market score with breadth integration
         enhanced_score_result = None
-        if breadth_indicators:
-            try:
+        try:
+            # Try with breadth data if available, otherwise calculate without it
+            if breadth_indicators:
                 enhanced_score_result = self.enhanced_score_calculator.calculate_enhanced_market_score(
                     reversal_counts=trend_report['counts'],
                     breadth_data=breadth_indicators,
                     momentum_data=trend_report.get('momentum')
                 )
-                logger.info(f"Enhanced market score: {enhanced_score_result['market_score']:.3f}, "
+            else:
+                # Fallback to basic market score calculation without breadth
+                market_score = trend_report['trend_strength'].get('market_score', 0)
+                enhanced_score_result = {
+                    'market_score': market_score,
+                    'breadth_score': None,
+                    'direction': trend_report['trend_strength'].get('direction', 'neutral'),
+                    'confidence': trend_report['trend_strength'].get('strength', 0.5),
+                    'weekly_bias': None,
+                    'strategy_recommendation': trend_report['trend_strength'].get('strategy', '')
+                }
+            
+            if enhanced_score_result:
+                logger.info(f"Market score: {enhanced_score_result['market_score']:.3f}, "
                           f"Direction: {enhanced_score_result['direction']}, "
                           f"Confidence: {enhanced_score_result['confidence']:.1%}")
-            except Exception as e:
-                logger.error(f"Error calculating enhanced market score: {e}")
+        except Exception as e:
+            logger.error(f"Error calculating market score: {e}")
         
         # Determine market regime
         new_regime = self.determine_market_regime(trend_report)

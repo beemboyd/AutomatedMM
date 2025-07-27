@@ -150,11 +150,12 @@ class KellyPositionRecommender:
             # Apply maximum limit
             final_kelly = min(safe_kelly, params['max_kelly_fraction'])
             
-            # Adjust for breadth divergence
-            if breadth_score < 0.3:  # Poor breadth
-                final_kelly *= 0.5
-            elif breadth_score > 0.7:  # Strong breadth
-                final_kelly *= 1.2
+            # Adjust for breadth divergence if breadth data is available
+            if breadth_score is not None:
+                if breadth_score < 0.3:  # Poor breadth
+                    final_kelly *= 0.5
+                elif breadth_score > 0.7:  # Strong breadth
+                    final_kelly *= 1.2
             
             # Ensure minimum position size if Kelly > 0
             if final_kelly > 0 and final_kelly < self.min_position_size:
