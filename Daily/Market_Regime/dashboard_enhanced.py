@@ -1281,29 +1281,38 @@ ENHANCED_DASHBOARD_HTML = '''
                     // Update Kelly Criterion recommendations
                     if (data.position_recommendations) {
                         const recs = data.position_recommendations;
+                        console.log('Position Recommendations:', recs);  // Debug log
                         
-                        // Kelly metrics
-                        document.getElementById('kelly-fraction').textContent = recs.position_size_percent + '%';
-                        document.getElementById('kelly-fraction').style.color = recs.kelly_fraction > 0.15 ? '#27ae60' : 
-                                                                               recs.kelly_fraction > 0.05 ? '#f39c12' : '#e74c3c';
+                        // Check if we have Kelly data or old format
+                        const hasKellyData = recs.hasOwnProperty('kelly_fraction');
+                        
+                        // Kelly metrics with null checks
+                        const kellyPercent = recs.position_size_percent || 0;
+                        document.getElementById('kelly-fraction').textContent = kellyPercent.toFixed(2) + '%';
+                        document.getElementById('kelly-fraction').style.color = (recs.kelly_fraction || 0) > 0.15 ? '#27ae60' : 
+                                                                               (recs.kelly_fraction || 0) > 0.05 ? '#f39c12' : '#e74c3c';
                         
                         // Expected value with color coding
                         const ev = recs.expected_value || 0;
-                        document.getElementById('expected-value').textContent = (ev > 0 ? '+' : '') + (ev * 100).toFixed(1) + '%';
+                        const evText = isNaN(ev) ? '0.0%' : (ev > 0 ? '+' : '') + (ev * 100).toFixed(1) + '%';
+                        document.getElementById('expected-value').textContent = evText;
                         document.getElementById('expected-value').style.color = ev > 0 ? '#27ae60' : '#e74c3c';
                         
                         // Win probability
-                        document.getElementById('win-probability').textContent = (recs.win_probability * 100).toFixed(1) + '%';
-                        document.getElementById('win-probability').style.color = recs.win_probability > 0.6 ? '#27ae60' : 
-                                                                                recs.win_probability > 0.5 ? '#f39c12' : '#e74c3c';
+                        const winProb = recs.win_probability || 0.5;
+                        document.getElementById('win-probability').textContent = (winProb * 100).toFixed(1) + '%';
+                        document.getElementById('win-probability').style.color = winProb > 0.6 ? '#27ae60' : 
+                                                                                winProb > 0.5 ? '#f39c12' : '#e74c3c';
                         
                         // Win/Loss ratio
-                        document.getElementById('win-loss-ratio').textContent = recs.win_loss_ratio.toFixed(2) + ':1';
+                        const wlRatio = recs.win_loss_ratio || 1.0;
+                        document.getElementById('win-loss-ratio').textContent = wlRatio.toFixed(2) + ':1';
                         
-                        // Traditional metrics
-                        document.getElementById('max-positions').textContent = recs.max_positions;
-                        document.getElementById('stop-loss').textContent = recs.stop_loss_percent + '%';
-                        document.getElementById('preferred-direction').textContent = recs.preferred_direction.toUpperCase();
+                        // Traditional metrics (handle both formats)
+                        document.getElementById('max-positions').textContent = recs.max_positions || 0;
+                        const stopLoss = recs.stop_loss_percent || (recs.stop_loss_multiplier ? (recs.stop_loss_multiplier * 2).toFixed(1) : 2.0);
+                        document.getElementById('stop-loss').textContent = typeof stopLoss === 'number' ? stopLoss.toFixed(1) + '%' : stopLoss;
+                        document.getElementById('preferred-direction').textContent = (recs.preferred_direction || 'none').toUpperCase();
                         
                         // Update guidance section if present
                         if (recs.specific_guidance && recs.specific_guidance.length > 0) {

@@ -178,21 +178,21 @@ class KellyPositionRecommender:
             # Build recommendations
             recommendations = {
                 # Core Kelly metrics
-                'kelly_fraction': round(final_kelly, 4),
-                'position_size_percent': round(final_kelly * 100, 2),
-                'win_probability': round(win_probability, 3),
-                'win_loss_ratio': round(adjusted_ratio, 2),
-                'expected_value': round((win_probability * adjusted_ratio - (1 - win_probability)), 3),
+                'kelly_fraction': float(round(final_kelly, 4)),
+                'position_size_percent': float(round(final_kelly * 100, 2)),
+                'win_probability': float(round(win_probability, 3)),
+                'win_loss_ratio': float(round(adjusted_ratio, 2)),
+                'expected_value': float(round((win_probability * adjusted_ratio - (1 - win_probability)), 3)),
                 
                 # Position sizing
-                'position_size_multiplier': round(final_kelly / 0.05, 2),  # Relative to 5% base
-                'max_positions': max_positions,
-                'total_exposure_limit': round(min(self.max_total_exposure, max_positions * final_kelly), 2),
+                'position_size_multiplier': float(round(final_kelly / 0.05, 2)),  # Relative to 5% base
+                'max_positions': int(max_positions),
+                'total_exposure_limit': float(round(min(self.max_total_exposure, max_positions * final_kelly), 2)),
                 
                 # Risk management
-                'stop_loss_percent': round(stop_loss * 100, 2),
-                'stop_loss_multiplier': round(vol_stop_multiplier, 2),
-                'risk_per_trade': round(final_kelly * stop_loss, 4),
+                'stop_loss_percent': float(round(stop_loss * 100, 2)),
+                'stop_loss_multiplier': float(round(vol_stop_multiplier, 2)),
+                'risk_per_trade': float(round(final_kelly * stop_loss, 4)),
                 
                 # Directional bias
                 'preferred_direction': preferred_direction,
@@ -201,10 +201,10 @@ class KellyPositionRecommender:
                 
                 # Kelly components (for transparency)
                 'kelly_components': {
-                    'raw_kelly': round(raw_kelly, 4),
-                    'safety_factor': self.kelly_safety_factor,
-                    'regime_limit': params['max_kelly_fraction'],
-                    'breadth_adjustment': round(final_kelly / safe_kelly if safe_kelly > 0 else 1.0, 2)
+                    'raw_kelly': float(round(raw_kelly, 4)),
+                    'safety_factor': float(self.kelly_safety_factor),
+                    'regime_limit': float(params['max_kelly_fraction']),
+                    'breadth_adjustment': float(round(final_kelly / safe_kelly if safe_kelly > 0 else 1.0, 2))
                 },
                 
                 # Guidance

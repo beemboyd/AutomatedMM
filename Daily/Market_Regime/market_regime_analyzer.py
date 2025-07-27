@@ -378,7 +378,17 @@ class MarketRegimeAnalyzer:
         # Use adjusted confidence from consistency check
         original_confidence = confidence
         confidence = consistency_result['adjusted_confidence']
-        confidence_level = self.confidence_calc.get_confidence_level(confidence)
+        # Calculate confidence level
+        if confidence >= 0.8:
+            confidence_level = 'very_high'
+        elif confidence >= 0.6:
+            confidence_level = 'high'
+        elif confidence >= 0.4:
+            confidence_level = 'moderate'
+        elif confidence >= 0.2:
+            confidence_level = 'low'
+        else:
+            confidence_level = 'very_low'
         
         # Add divergence alert to insights if needed
         divergence_alert = None
