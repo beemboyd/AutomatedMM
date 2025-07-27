@@ -705,12 +705,18 @@
                         backgroundColor: 'rgba(74, 222, 128, 0.1)',
                         borderWidth: 2,
                         fill: true,
-                        tension: 0.4
+                        tension: 0.4,
+                        pointRadius: 1,
+                        pointHoverRadius: 5
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -724,6 +730,19 @@
                         }
                     },
                     scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#b8c5d6',
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 15
+                            }
+                        },
                         y: {
                             beginAtZero: true,
                             max: 100,
@@ -738,23 +757,12 @@
                             }
                         },
                         x: {
-                            type: 'time',
-                            time: {
-                                unit: 'day',
-                                round: 'day',
-                                displayFormats: {
-                                    day: 'MMM DD',
-                                    week: 'MMM DD',
-                                    month: 'MMM YYYY'
-                                },
-                                tooltipFormat: 'MMM DD, YYYY'
-                            },
                             ticks: {
                                 color: '#8892b0',
                                 maxRotation: 45,
                                 minRotation: 45,
                                 maxTicksLimit: 15,
-                                source: 'data'
+                                autoSkip: true
                             },
                             grid: {
                                 color: 'rgba(136, 146, 176, 0.1)'
@@ -775,7 +783,9 @@
                         backgroundColor: 'rgba(96, 165, 250, 0.1)',
                         borderWidth: 2,
                         fill: true,
-                        tension: 0.4
+                        tension: 0.4,
+                        pointRadius: 1,
+                        pointHoverRadius: 5
                     }]
                 },
                 options: {
@@ -808,23 +818,12 @@
                             }
                         },
                         x: {
-                            type: 'time',
-                            time: {
-                                unit: 'day',
-                                round: 'day',
-                                displayFormats: {
-                                    day: 'MMM DD',
-                                    week: 'MMM DD',
-                                    month: 'MMM YYYY'
-                                },
-                                tooltipFormat: 'MMM DD, YYYY'
-                            },
                             ticks: {
                                 color: '#8892b0',
                                 maxRotation: 45,
                                 minRotation: 45,
                                 maxTicksLimit: 15,
-                                source: 'data'
+                                autoSkip: true
                             },
                             grid: {
                                 color: 'rgba(136, 146, 176, 0.1)'
@@ -1115,11 +1114,22 @@
                     return;
                 }
                 
+                console.log('SMA Breadth Data:', {
+                    labels: data.labels.length,
+                    sma20_values: data.sma20_values.length,
+                    sma50_values: data.sma50_values.length,
+                    sample_labels: data.labels.slice(0, 5),
+                    sample_sma20: data.sma20_values.slice(0, 5),
+                    sample_sma50: data.sma50_values.slice(0, 5)
+                });
+                
                 // Update SMA20 chart
                 if (sma20BreadthChart) {
                     sma20BreadthChart.data.labels = data.labels;
                     sma20BreadthChart.data.datasets[0].data = data.sma20_values;
                     sma20BreadthChart.update('active');
+                } else {
+                    console.error('SMA20 chart not initialized');
                 }
                 
                 // Update SMA50 chart
@@ -1221,13 +1231,21 @@
             `).join('');
         }
         
-        // Initialize charts first (only once)
-        if (typeof Chart !== 'undefined') {
-            initializeCharts();
+        // Initialize when everything is ready
+        function initializeApp() {
+            if (typeof Chart !== 'undefined') {
+                console.log('Chart.js loaded, initializing charts...');
+                initializeCharts();
+                // Initial load
+                refreshData();
+            } else {
+                console.error('Chart.js not loaded!');
+                setTimeout(initializeApp, 100); // Retry after 100ms
+            }
         }
         
-        // Initial load
-        refreshData();
+        // Start initialization
+        initializeApp();
         
         // Auto-refresh every 2 minutes
         refreshInterval = setInterval(refreshData, 120000);

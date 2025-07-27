@@ -197,7 +197,7 @@ class SMABreadthHistoricalCollector:
             return None
     
     def calculate_sma_metrics(self, ticker_data):
-        """Calculate SMA metrics for a ticker"""
+        """Calculate SMA metrics and volume analysis for a ticker"""
         try:
             df = pd.DataFrame(ticker_data['data'])
             df['Date'] = pd.to_datetime(df['Date'])
@@ -207,20 +207,31 @@ class SMABreadthHistoricalCollector:
             df['SMA20'] = df['Close'].rolling(window=20, min_periods=1).mean()
             df['SMA50'] = df['Close'].rolling(window=50, min_periods=1).mean()
             
+            # Calculate Volume metrics
+            df['Volume_SMA20'] = df['Volume'].rolling(window=20, min_periods=1).mean()
+            df['Volume_SMA50'] = df['Volume'].rolling(window=50, min_periods=1).mean()
+            df['Volume_Ratio'] = df['Volume'] / df['Volume_SMA20']
+            
             # Calculate daily metrics
             results = []
             for _, row in df.iterrows():
                 above_sma20 = 1 if row['Close'] > row['SMA20'] else 0
                 above_sma50 = 1 if row['Close'] > row['SMA50'] else 0
+                above_avg_volume = 1 if row['Volume'] > row['Volume_SMA20'] else 0
                 
                 results.append({
                     'date': row['Date'].strftime('%Y-%m-%d'),
                     'ticker': ticker_data['ticker'],
                     'close': row['Close'],
+                    'volume': row['Volume'],
                     'sma20': row['SMA20'],
                     'sma50': row['SMA50'],
+                    'volume_sma20': row['Volume_SMA20'],
+                    'volume_sma50': row['Volume_SMA50'],
+                    'volume_ratio': row['Volume_Ratio'],
                     'above_sma20': above_sma20,
-                    'above_sma50': above_sma50
+                    'above_sma50': above_sma50,
+                    'above_avg_volume': above_avg_volume
                 })
             
             return results
@@ -230,7 +241,7 @@ class SMABreadthHistoricalCollector:
             return []
     
     def aggregate_daily_breadth(self, all_metrics):
-        """Aggregate individual ticker metrics into daily breadth data"""
+        """Aggregate individual ticker metrics into daily breadth data with volume analysis"""
         try:
             # Convert to DataFrame for easier aggregation
             df = pd.DataFrame(all_metrics)
@@ -243,12 +254,20 @@ class SMABreadthHistoricalCollector:
                 total_stocks = len(group)
                 above_sma20 = group['above_sma20'].sum()
                 above_sma50 = group['above_sma50'].sum()
+                above_avg_volume = group['above_avg_volume'].sum()
                 
                 sma20_percent = (above_sma20 / total_stocks) * 100
                 sma50_percent = (above_sma50 / total_stocks) * 100
+                volume_breadth_percent = (above_avg_volume / total_stocks) * 100
                 
-                # Calculate market regime based on breadth
-                if sma20_percent >= 70 and sma50_percent >= 70:
+                # Calculate average volume ratio
+                avg_volume_ratio = group['volume_ratio'].mean()
+                
+                # Volume participation score
+                volume_participation = volume_breadth_percent * avg_volume_ratio / 100
+                
+                # Calculate market regime based on breadth and volume
+                if sma20_percent >= 70 and sma50_percent >= 70 and volume_participation > 1.0:
                     regime = "Strong Uptrend"
                 elif sma20_percent >= 60 and sma50_percent >= 60:
                     regime = "Uptrend"
@@ -259,8 +278,8 @@ class SMABreadthHistoricalCollector:
                 else:
                     regime = "Choppy/Sideways"
                 
-                # Calculate market score (0-1 scale)
-                market_score = (sma20_percent * 0.6 + sma50_percent * 0.4) / 100
+                # Calculate market score (0-1 scale) with volume component
+                market_score = (sma20_percent * 0.5 + sma50_percent * 0.3 + volume_participation * 0.2) / 100
                 
                 daily_breadth.append({
                     'date': date.strftime('%Y-%m-%d'),
@@ -274,6 +293,13 @@ class SMABreadthHistoricalCollector:
                         'below_sma50': int(total_stocks - above_sma50),
                         'sma50_percent': round(float(sma50_percent), 2)
                     },
+                    'volume_breadth': {
+                        'above_avg_volume': int(above_avg_volume),
+                        'below_avg_volume': int(total_stocks - above_avg_volume),
+                        'volume_breadth_percent': round(float(volume_breadth_percent), 2),
+                        'avg_volume_ratio': round(float(avg_volume_ratio), 2),
+                        'volume_participation': round(float(volume_participation), 2)
+                    },
                     'market_regime': regime,
                     'market_score': round(float(market_score), 3)
                 })
@@ -284,18 +310,24 @@ class SMABreadthHistoricalCollector:
             logger.error(f"Error aggregating daily breadth: {e}")
             return []
     
-    def collect_historical_data(self, months=7, batch_size=100, break_minutes=5):
-        """Main method to collect historical SMA breadth data with batch processing"""
+    def collect_historical_data(self, months=7, batch_size=50, break_minutes=60):
+        """Main method to collect historical SMA breadth data with volume analysis"""
         try:
             # Calculate date range
             end_date = datetime.now()
             start_date = end_date - timedelta(days=months * 30)
             
-            logger.info(f"Collecting data from {start_date.date()} to {end_date.date()}")
+            logger.info(f"Collecting price and volume data from {start_date.date()} to {end_date.date()}")
+            logger.info(f"Batch size: {batch_size} tickers with {break_minutes} minute breaks")
             
             # Load tickers
             tickers = self.load_ticker_list()
             logger.info(f"Processing {len(tickers)} tickers in batches of {batch_size}")
+            
+            # Estimate completion time
+            total_batches = (len(tickers) + batch_size - 1) // batch_size
+            estimated_hours = (total_batches - 1) * break_minutes / 60
+            logger.info(f"Estimated completion time: {estimated_hours:.1f} hours")
             
             # Collect data for all tickers
             all_ticker_data = []
@@ -364,6 +396,12 @@ class SMABreadthHistoricalCollector:
                 logger.info(f"   - Successful: {batch_success}")
                 logger.info(f"   - Failed: {batch_size_actual - batch_success}")
                 logger.info(f"   - Overall Progress: {batch_end}/{len(tickers)} ({(batch_end/len(tickers)*100):.1f}%)")
+                
+                # Time estimate
+                batches_remaining = total_batches - batch_num - 1
+                if batches_remaining > 0:
+                    hours_remaining = batches_remaining * break_minutes / 60
+                    logger.info(f"   - Estimated time remaining: {hours_remaining:.1f} hours")
                 
                 # Take a break between batches (except for the last batch)
                 if batch_num < total_batches - 1:
@@ -443,6 +481,10 @@ class SMABreadthHistoricalCollector:
                     'sma20_percent': day['sma_breadth']['sma20_percent'],
                     'above_sma50': day['sma_breadth']['above_sma50'],
                     'sma50_percent': day['sma_breadth']['sma50_percent'],
+                    'above_avg_volume': day['volume_breadth']['above_avg_volume'],
+                    'volume_breadth_percent': day['volume_breadth']['volume_breadth_percent'],
+                    'avg_volume_ratio': day['volume_breadth']['avg_volume_ratio'],
+                    'volume_participation': day['volume_breadth']['volume_participation'],
                     'market_regime': day['market_regime'],
                     'market_score': day['market_score']
                 }
@@ -464,9 +506,9 @@ class SMABreadthHistoricalCollector:
         except Exception as e:
             logger.error(f"Error saving historical data: {e}")
 
-def main(months=7, test_mode=False, batch_size=100, break_minutes=5):
-    """Main execution function with batch processing"""
-    logger.info("Starting SMA Breadth Historical Data Collection")
+def main(months=7, test_mode=False, batch_size=50, break_minutes=60):
+    """Main execution function with batch processing for price and volume data"""
+    logger.info("Starting SMA Breadth + Volume Historical Data Collection")
     logger.info(f"Batch size: {batch_size} tickers, Break time: {break_minutes} minutes")
     
     collector = SMABreadthHistoricalCollector()
@@ -474,8 +516,9 @@ def main(months=7, test_mode=False, batch_size=100, break_minutes=5):
     # For test mode, use only 1 month and smaller batch
     if test_mode:
         months = 1
-        batch_size = 10
-        logger.info("TEST MODE: Collecting only 1 month of data with 10 ticker batches")
+        batch_size = 5
+        break_minutes = 5
+        logger.info("TEST MODE: Collecting only 1 month of data with 5 ticker batches")
     
     # Collect historical data
     daily_breadth = collector.collect_historical_data(
@@ -494,6 +537,13 @@ def main(months=7, test_mode=False, batch_size=100, break_minutes=5):
         
         logger.info(f"SMA20 Breadth - Min: {min(sma20_values):.1f}%, Max: {max(sma20_values):.1f}%, Avg: {np.mean(sma20_values):.1f}%")
         logger.info(f"SMA50 Breadth - Min: {min(sma50_values):.1f}%, Max: {max(sma50_values):.1f}%, Avg: {np.mean(sma50_values):.1f}%")
+        
+        # Volume statistics
+        volume_values = [day['volume_breadth']['volume_breadth_percent'] for day in daily_breadth]
+        participation_values = [day['volume_breadth']['volume_participation'] for day in daily_breadth]
+        
+        logger.info(f"Volume Breadth - Min: {min(volume_values):.1f}%, Max: {max(volume_values):.1f}%, Avg: {np.mean(volume_values):.1f}%")
+        logger.info(f"Volume Participation - Min: {min(participation_values):.2f}, Max: {max(participation_values):.2f}, Avg: {np.mean(participation_values):.2f}")
         
     else:
         logger.error("✗ Failed to collect historical data")

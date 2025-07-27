@@ -24,7 +24,7 @@ from trend_strength_calculator import TrendStrengthCalculator
 from market_regime_predictor import MarketRegimePredictor
 from trend_dashboard import TrendDashboard
 from confidence_calculator import ConfidenceCalculator
-from position_recommender import PositionRecommender
+from kelly_position_recommender import KellyPositionRecommender
 from regime_history_tracker import RegimeHistoryTracker
 from regime_smoother import RegimeSmoother
 from index_sma_analyzer import IndexSMAAnalyzer
@@ -62,7 +62,7 @@ class MarketRegimeAnalyzer:
         
         # Initialize new components
         self.confidence_calc = ConfidenceCalculator()
-        self.position_rec = PositionRecommender()
+        self.position_rec = KellyPositionRecommender()
         self.history_tracker = RegimeHistoryTracker()
         self.regime_smoother = RegimeSmoother()
         self.index_analyzer = IndexSMAAnalyzer()
@@ -416,9 +416,15 @@ class MarketRegimeAnalyzer:
                     'volatility_regime': 'low' if avg_atr < 2.0 else 'normal' if avg_atr < 4.0 else 'high' if avg_atr < 6.0 else 'extreme'
                 }
         
-        # Get position recommendations
+        # Get position recommendations using Kelly Criterion
+        # Extract market score and breadth score for Kelly calculations
+        market_score = enhanced_score_result['market_score'] if enhanced_score_result else trend_report['trend_strength'].get('market_score', 0)
+        breadth_score = enhanced_score_result['breadth_score'] if enhanced_score_result else breadth_indicators.get('breadth_score', 0.5) if breadth_indicators else 0.5
+        
         position_recommendations = self.position_rec.get_recommendations(
-            regime, confidence, volatility_data
+            regime, confidence, volatility_data,
+            market_score=market_score,
+            breadth_score=breadth_score
         )
         
         # Add breadth consistency warnings to position recommendations
