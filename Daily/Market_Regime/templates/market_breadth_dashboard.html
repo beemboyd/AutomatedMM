@@ -16,6 +16,7 @@
             background-color: #0a0e27;
             color: #ffffff;
             line-height: 1.6;
+            overflow-x: hidden;
         }
         
         .container {
@@ -483,6 +484,9 @@
             background: rgba(107, 114, 128, 0.1);
         }
     </style>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
 <body>
     <div class="container">
@@ -589,6 +593,43 @@
             </div>
         </div>
         
+        <!-- SMA Breadth Charts Section -->
+        <div class="sma-charts-section" style="background: #1a1f3a; border-radius: 10px; padding: 20px; margin-bottom: 30px;">
+            <h2 style="margin-bottom: 20px;">SMA Breadth Analysis (Daily Timeframe)</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="chart-container" style="background: #0a0e27; border-radius: 8px; padding: 15px; position: relative; height: 350px;">
+                    <h3 style="text-align: center; font-size: 1.1em; margin-bottom: 15px; color: #4ade80;">SMA20 Breadth History</h3>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="sma20-breadth-chart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container" style="background: #0a0e27; border-radius: 8px; padding: 15px; position: relative; height: 350px;">
+                    <h3 style="text-align: center; font-size: 1.1em; margin-bottom: 15px; color: #60a5fa;">SMA50 Breadth History</h3>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="sma50-breadth-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 20px; background: #0a0e27; border-radius: 8px; padding: 15px;">
+                <div style="text-align: center;">
+                    <div style="color: #8892b0; font-size: 0.9em;">Current SMA20</div>
+                    <div style="font-size: 1.5em; font-weight: bold; color: #4ade80;" id="current-sma20-breadth">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #8892b0; font-size: 0.9em;">Current SMA50</div>
+                    <div style="font-size: 1.5em; font-weight: bold; color: #60a5fa;" id="current-sma50-breadth">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #8892b0; font-size: 0.9em;">SMA20 Trend</div>
+                    <div style="font-size: 1.5em; font-weight: bold;" id="sma20-trend">-</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #8892b0; font-size: 0.9em;">SMA50 Trend</div>
+                    <div style="font-size: 1.5em; font-weight: bold;" id="sma50-trend">-</div>
+                </div>
+            </div>
+        </div>
+        
         <div class="sector-performance">
             <h2>Sector Performance</h2>
             <div class="sector-grid" id="sector-grid">
@@ -645,6 +686,154 @@
     
     <script>
         let refreshInterval;
+        let sma20BreadthChart;
+        let sma50BreadthChart;
+        
+        // Initialize SMA breadth charts
+        function initializeCharts() {
+            const ctx20 = document.getElementById('sma20-breadth-chart').getContext('2d');
+            const ctx50 = document.getElementById('sma50-breadth-chart').getContext('2d');
+            
+            sma20BreadthChart = new Chart(ctx20, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'SMA20 Breadth %',
+                        data: [],
+                        borderColor: '#4ade80',
+                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Above SMA20: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                },
+                                color: '#8892b0'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        },
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                round: 'day',
+                                displayFormats: {
+                                    day: 'MMM DD',
+                                    week: 'MMM DD',
+                                    month: 'MMM YYYY'
+                                },
+                                tooltipFormat: 'MMM DD, YYYY'
+                            },
+                            ticks: {
+                                color: '#8892b0',
+                                maxRotation: 45,
+                                minRotation: 45,
+                                maxTicksLimit: 15,
+                                source: 'data'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            sma50BreadthChart = new Chart(ctx50, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'SMA50 Breadth %',
+                        data: [],
+                        borderColor: '#60a5fa',
+                        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Above SMA50: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                },
+                                color: '#8892b0'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        },
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                round: 'day',
+                                displayFormats: {
+                                    day: 'MMM DD',
+                                    week: 'MMM DD',
+                                    month: 'MMM YYYY'
+                                },
+                                tooltipFormat: 'MMM DD, YYYY'
+                            },
+                            ticks: {
+                                color: '#8892b0',
+                                maxRotation: 45,
+                                minRotation: 45,
+                                maxTicksLimit: 15,
+                                source: 'data'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
         
         async function fetchBreadthData() {
             try {
@@ -915,6 +1104,66 @@
             }
         }
         
+        async function updateSMABreadthCharts() {
+            try {
+                const response = await fetch('/api/sma-breadth-history');
+                if (!response.ok) throw new Error('Failed to fetch SMA breadth history');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('Error fetching SMA breadth history:', data.error);
+                    return;
+                }
+                
+                // Update SMA20 chart
+                if (sma20BreadthChart) {
+                    sma20BreadthChart.data.labels = data.labels;
+                    sma20BreadthChart.data.datasets[0].data = data.sma20_values;
+                    sma20BreadthChart.update('active');
+                }
+                
+                // Update SMA50 chart
+                if (sma50BreadthChart) {
+                    sma50BreadthChart.data.labels = data.labels;
+                    sma50BreadthChart.data.datasets[0].data = data.sma50_values;
+                    sma50BreadthChart.update('active');
+                }
+                
+                console.log(`Updated charts with ${data.labels.length} daily data points from ${data.labels[0]} to ${data.labels[data.labels.length-1]}`);
+                
+                // Update current values and trends
+                if (data.sma20_values.length > 0) {
+                    const currentSMA20 = data.sma20_values[data.sma20_values.length - 1];
+                    const previousSMA20 = data.sma20_values.length > 1 ? data.sma20_values[data.sma20_values.length - 2] : currentSMA20;
+                    document.getElementById('current-sma20-breadth').textContent = currentSMA20.toFixed(1) + '%';
+                    
+                    // Calculate trend
+                    const sma20Trend = currentSMA20 > previousSMA20 ? '↑ Improving' : 
+                                     currentSMA20 < previousSMA20 ? '↓ Declining' : '→ Stable';
+                    const sma20TrendElement = document.getElementById('sma20-trend');
+                    sma20TrendElement.textContent = sma20Trend;
+                    sma20TrendElement.style.color = currentSMA20 > previousSMA20 ? '#4ade80' : 
+                                                   currentSMA20 < previousSMA20 ? '#f87171' : '#8892b0';
+                }
+                
+                if (data.sma50_values.length > 0) {
+                    const currentSMA50 = data.sma50_values[data.sma50_values.length - 1];
+                    const previousSMA50 = data.sma50_values.length > 1 ? data.sma50_values[data.sma50_values.length - 2] : currentSMA50;
+                    document.getElementById('current-sma50-breadth').textContent = currentSMA50.toFixed(1) + '%';
+                    
+                    // Calculate trend
+                    const sma50Trend = currentSMA50 > previousSMA50 ? '↑ Improving' : 
+                                     currentSMA50 < previousSMA50 ? '↓ Declining' : '→ Stable';
+                    const sma50TrendElement = document.getElementById('sma50-trend');
+                    sma50TrendElement.textContent = sma50Trend;
+                    sma50TrendElement.style.color = currentSMA50 > previousSMA50 ? '#60a5fa' : 
+                                                   currentSMA50 < previousSMA50 ? '#f87171' : '#8892b0';
+                }
+            } catch (error) {
+                console.error('Error updating SMA breadth charts:', error);
+            }
+        }
+        
         async function refreshData() {
             const breadthData = await fetchBreadthData();
             if (breadthData) {
@@ -929,6 +1178,9 @@
             
             const earlyBirdData = await fetchEarlyBirdData();
             updateEarlyBirdDisplay(earlyBirdData);
+            
+            // Update SMA breadth charts
+            updateSMABreadthCharts();
         }
         
         function updateEarlyBirdDisplay(data) {
@@ -967,6 +1219,11 @@
                     </div>
                 </div>
             `).join('');
+        }
+        
+        // Initialize charts first (only once)
+        if (typeof Chart !== 'undefined') {
+            initializeCharts();
         }
         
         // Initial load

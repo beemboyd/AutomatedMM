@@ -13,6 +13,11 @@ import pytz
 from collections import deque
 import pandas as pd
 import re
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -182,6 +187,42 @@ ENHANCED_DASHBOARD_HTML = '''
             text-align: center;
             color: #6c757d;
             padding: 20px;
+        }
+        
+        /* SMA Breadth Section Styles */
+        #sma20-breadth-chart,
+        #sma50-breadth-chart {
+            max-height: 450px !important;
+            height: 450px !important;
+        }
+        
+        .sma-breadth-stats {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .sma-breadth-stats .col-md-2 {
+            border-right: 1px solid #dee2e6;
+            padding: 10px;
+        }
+        
+        .sma-breadth-stats .col-md-2:last-child {
+            border-right: none;
+        }
+        
+        .sma-breadth-stats strong {
+            display: block;
+            font-size: 0.85rem;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        
+        .sma-breadth-stats .h5 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
         }
         
         /* Multi-timeframe styles */
@@ -517,6 +558,98 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
+        <!-- SMA Breadth Historical Analysis Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📊 SMA Breadth Historical Analysis <small class="text-success">[176 stocks tracked]</small></h5>
+                        
+                        <!-- Separate Charts for SMA20 and SMA50 -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">SMA20 Breadth History</h6>
+                                    <canvas id="sma20-breadth-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">SMA50 Breadth History</h6>
+                                    <canvas id="sma50-breadth-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Current Stats Row -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="sma-breadth-stats">
+                                    <div class="row text-center">
+                                        <div class="col-md-2">
+                                            <strong>Current SMA20</strong>
+                                            <div class="h5 text-primary"><span id="current-sma20-breadth">-</span>%</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <strong>Current SMA50</strong>
+                                            <div class="h5 text-danger"><span id="current-sma50-breadth">-</span>%</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <strong>Market Regime</strong>
+                                            <div id="current-market-regime" class="h5">-</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <strong>Market Score</strong>
+                                            <div id="current-market-score" class="h5 text-secondary">-</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <strong>5-Day Trend</strong>
+                                            <div id="sma-5day-trend" class="small">-</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <strong>20-Day Trend</strong>
+                                            <div id="sma-20day-trend" class="small">-</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Breadth Levels Analysis -->
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-subtitle mb-2 text-muted">Breadth Zones</h6>
+                                        <small>
+                                            <div><span class="badge bg-success">Strong Bullish</span> SMA20 & SMA50 > 70%</div>
+                                            <div><span class="badge bg-primary">Bullish</span> SMA20 & SMA50 > 60%</div>
+                                            <div><span class="badge bg-secondary">Neutral</span> Between 30-60%</div>
+                                            <div><span class="badge bg-warning">Bearish</span> SMA20 & SMA50 < 40%</div>
+                                            <div><span class="badge bg-danger">Strong Bearish</span> SMA20 & SMA50 < 30%</div>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-subtitle mb-2 text-muted">Key Statistics</h6>
+                                        <small>
+                                            <div>Data Points: <span id="sma-data-points">-</span> days</div>
+                                            <div>Date Range: <span id="sma-date-range">-</span></div>
+                                            <div>Stocks Tracked: <span id="sma-stocks-tracked">-</span></div>
+                                            <div>Last Update: <span id="sma-last-update">-</span></div>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Multi-Timeframe Analysis Section -->
         <div class="row mt-4">
             <div class="col-12">
@@ -657,8 +790,19 @@ ENHANCED_DASHBOARD_HTML = '''
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js Date Adapter for time scale -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     
     <script>
+        // Test if JavaScript is executing
+        console.log('Dashboard JavaScript loaded at', new Date().toISOString());
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded');
+        });
+        window.addEventListener('load', function() {
+            console.log('Window fully loaded');
+        });
+        
         // Chart configurations
         const chartOptions = {
             responsive: true,
@@ -697,27 +841,402 @@ ENHANCED_DASHBOARD_HTML = '''
             options: chartOptions
         });
         
-        let previousData = null;
+        // Initialize SMA breadth charts - TEMPORARILY DISABLED
+        /*
+        const sma20Canvas = document.getElementById('sma20-breadth-chart');
+        const sma50Canvas = document.getElementById('sma50-breadth-chart');
         
-        function updateDashboard() {
-            fetch('/api/current_analysis')
+        if (sma20Canvas) {
+            window.sma20BreadthChart = new Chart(sma20Canvas, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'SMA20 Breadth %',
+                    data: [],
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Above SMA20: ' + context.parsed.y.toFixed(1) + '%';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'day',
+                            round: 'day',
+                            displayFormats: {
+                                day: 'MMM DD',
+                                week: 'MMM DD',
+                                month: 'MMM YYYY'
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        }
+        
+        if (sma50Canvas) {
+            window.sma50BreadthChart = new Chart(sma50Canvas, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'SMA50 Breadth %',
+                    data: [],
+                    borderColor: '#17a2b8',
+                    backgroundColor: 'rgba(23, 162, 184, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Above SMA50: ' + context.parsed.y.toFixed(1) + '%';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'day',
+                            round: 'day',
+                            displayFormats: {
+                                day: 'MMM DD',
+                                week: 'MMM DD',
+                                month: 'MMM YYYY'
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        }
+        */
+        
+        // SMA Breadth Chart Variables
+        let sma20BreadthChart = null;
+        let sma50BreadthChart = null;
+        
+        // Initialize SMA Breadth Charts
+        function initializeSMABreadthChart() {
+            // Initialize SMA20 Chart
+            const ctx20 = document.getElementById('sma20-breadth-chart');
+            if (!ctx20) {
+                console.error('SMA20 Breadth canvas element not found');
+                return;
+            }
+            
+            sma20BreadthChart = new Chart(ctx20, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'SMA20 Breadth %',
+                        data: [],
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: 'rgb(54, 162, 235)',
+                        pointBorderColor: 'rgb(54, 162, 235)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: false },
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Above SMA20: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'Date' },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 30,
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: { display: true, text: 'Breadth %' },
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            },
+                            grid: {
+                                color: function(context) {
+                                    if (context.tick.value === 30) return 'rgba(255, 0, 0, 0.3)';
+                                    if (context.tick.value === 50) return 'rgba(128, 128, 128, 0.3)';
+                                    if (context.tick.value === 70) return 'rgba(0, 255, 0, 0.3)';
+                                    return 'rgba(0, 0, 0, 0.1)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Initialize SMA50 Chart
+            const ctx50 = document.getElementById('sma50-breadth-chart');
+            if (!ctx50) {
+                console.error('SMA50 Breadth canvas element not found');
+                return;
+            }
+            
+            sma50BreadthChart = new Chart(ctx50, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'SMA50 Breadth %',
+                        data: [],
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: 'rgb(255, 99, 132)',
+                        pointBorderColor: 'rgb(255, 99, 132)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: false },
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Above SMA50: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'Date' },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 30,
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: { display: true, text: 'Breadth %' },
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            },
+                            grid: {
+                                color: function(context) {
+                                    if (context.tick.value === 30) return 'rgba(255, 0, 0, 0.3)';
+                                    if (context.tick.value === 50) return 'rgba(128, 128, 128, 0.3)';
+                                    if (context.tick.value === 70) return 'rgba(0, 255, 0, 0.3)';
+                                    return 'rgba(0, 0, 0, 0.1)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update SMA Breadth Charts
+        function updateSMABreadthChart(data) {
+            if (!sma20BreadthChart || !sma50BreadthChart) {
+                console.error('SMA Breadth charts not initialized');
+                return;
+            }
+            
+            try {
+                // Update SMA20 chart
+                sma20BreadthChart.data.labels = data.labels;
+                sma20BreadthChart.data.datasets[0].data = data.sma20_values;
+                sma20BreadthChart.update();
+                
+                // Update SMA50 chart  
+                sma50BreadthChart.data.labels = data.labels;
+                sma50BreadthChart.data.datasets[0].data = data.sma50_values;
+                sma50BreadthChart.update();
+                
+                // Update current stats
+                document.getElementById('current-sma20-breadth').textContent = data.current_sma20.toFixed(1);
+                document.getElementById('current-sma50-breadth').textContent = data.current_sma50.toFixed(1);
+                document.getElementById('current-market-regime').textContent = data.market_regime;
+                document.getElementById('current-market-score').textContent = data.market_score ? data.market_score.toFixed(3) : '-';
+                
+                // Update trends with arrows
+                const sma20Trend = data.sma20_5d_change > 0 ? '↑' : '↓';
+                const sma50Trend = data.sma50_5d_change > 0 ? '↑' : '↓';
+                const trend5d = `SMA20: ${sma20Trend} ${Math.abs(data.sma20_5d_change).toFixed(1)}%<br>SMA50: ${sma50Trend} ${Math.abs(data.sma50_5d_change).toFixed(1)}%`;
+                
+                const sma20Trend20d = data.sma20_20d_change > 0 ? '↑' : '↓';
+                const sma50Trend20d = data.sma50_20d_change > 0 ? '↑' : '↓';
+                const trend20d = `SMA20: ${sma20Trend20d} ${Math.abs(data.sma20_20d_change).toFixed(1)}%<br>SMA50: ${sma50Trend20d} ${Math.abs(data.sma50_20d_change).toFixed(1)}%`;
+                
+                document.getElementById('sma-5day-trend').innerHTML = trend5d;
+                document.getElementById('sma-20day-trend').innerHTML = trend20d;
+                
+                // Update statistics
+                document.getElementById('sma-data-points').textContent = data.data_points;
+                document.getElementById('sma-date-range').textContent = data.date_range;
+                document.getElementById('sma-stocks-tracked').textContent = data.total_stocks;
+                document.getElementById('sma-last-update').textContent = new Date().toLocaleTimeString();
+                
+                // Color code regime
+                const regimeElement = document.getElementById('current-market-regime');
+                regimeElement.className = 'h5';
+                if (data.market_regime.includes('Strong Uptrend')) {
+                    regimeElement.classList.add('text-success');
+                } else if (data.market_regime.includes('Uptrend')) {
+                    regimeElement.classList.add('text-primary');
+                } else if (data.market_regime.includes('Strong Downtrend')) {
+                    regimeElement.classList.add('text-danger');
+                } else if (data.market_regime.includes('Downtrend')) {
+                    regimeElement.classList.add('text-warning');
+                } else {
+                    regimeElement.classList.add('text-secondary');
+                }
+                
+            } catch (error) {
+                console.error('Error updating SMA breadth chart:', error);
+            }
+        }
+        
+        // Fetch SMA Breadth Data
+        function fetchSMABreadthData() {
+            fetch('/api/sma-breadth-historical')
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        console.error(data.error);
+                        console.error('Error fetching SMA breadth data:', data.error);
+                        return;
+                    }
+                    updateSMABreadthChart(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching SMA breadth data:', error);
+                });
+        }
+        
+        let previousData = null;
+        
+        function updateDashboard() {
+            console.log('Fetching current analysis...');
+            fetch('/api/current_analysis')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Received data:', data);
+                    if (data.error) {
+                        console.error('API error:', data.error);
                         return;
                     }
                     
                     // Update regime display
                     const regimeBadge = document.getElementById('regime-badge');
-                    regimeBadge.className = 'regime-badge ' + data.regime;
-                    regimeBadge.innerHTML = data.regime.replace('_', ' ').toUpperCase();
+                    if (regimeBadge) {
+                        regimeBadge.className = 'regime-badge ' + data.regime;
+                        regimeBadge.innerHTML = data.regime.replace('_', ' ').toUpperCase();
+                    }
                     
                     // Update confidence and ratio
-                    document.getElementById('confidence-display').textContent = 
-                        (data.confidence * 100).toFixed(1) + '%';
-                    document.getElementById('ratio-display').textContent = 
-                        data.ratio === 'inf' ? '∞' : data.ratio.toFixed(2);
+                    const confDisplay = document.getElementById('confidence-display');
+                    if (confDisplay) {
+                        confDisplay.textContent = (data.confidence * 100).toFixed(1) + '%';
+                    }
+                    
+                    const ratioDisplay = document.getElementById('ratio-display');
+                    if (ratioDisplay) {
+                        ratioDisplay.textContent = data.ratio === 'inf' ? '∞' : data.ratio.toFixed(2);
+                    }
                     
                     // Update proximity marker
                     const marketScore = data.indicators.market_score || 0;
@@ -839,6 +1358,9 @@ ENHANCED_DASHBOARD_HTML = '''
                     
                     // Update charts
                     updateCharts(data);
+                    
+                    // Update SMA breadth charts - TEMPORARILY DISABLED
+                    // updateSMABreadthCharts();
                     
                     // Draw sparklines
                     drawSparklines(data);
@@ -1324,6 +1846,69 @@ ENHANCED_DASHBOARD_HTML = '''
                 });
         }
         
+        function updateSMABreadthCharts() {
+            // Check if charts exist
+            if (!window.sma20BreadthChart || !window.sma50BreadthChart) {
+                console.log('SMA breadth charts not yet initialized');
+                return;
+            }
+            
+            // Fetch SMA breadth history
+            fetch('/api/sma_breadth_history')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error fetching SMA breadth history:', data.error);
+                        // Clear loading message
+                        const container = document.querySelector('.sma-breadth-container');
+                        if (container) {
+                            container.innerHTML = '<div class="text-center text-muted">No SMA breadth data available</div>';
+                        }
+                        return;
+                    }
+                    
+                    // Update SMA20 chart
+                    sma20BreadthChart.data.labels = data.labels;
+                    sma20BreadthChart.data.datasets[0].data = data.sma20_values;
+                    sma20BreadthChart.update('none');
+                    
+                    // Update SMA50 chart
+                    sma50BreadthChart.data.labels = data.labels;
+                    sma50BreadthChart.data.datasets[0].data = data.sma50_values;
+                    sma50BreadthChart.update('none');
+                    
+                    // Update current values and trends
+                    if (data.sma20_values.length > 0) {
+                        const currentSMA20 = data.sma20_values[data.sma20_values.length - 1];
+                        const previousSMA20 = data.sma20_values.length > 1 ? data.sma20_values[data.sma20_values.length - 2] : currentSMA20;
+                        document.getElementById('current-sma20-breadth').textContent = currentSMA20.toFixed(1);
+                        
+                        // Calculate trend
+                        const sma20Trend = currentSMA20 > previousSMA20 ? '↑ Improving' : 
+                                         currentSMA20 < previousSMA20 ? '↓ Declining' : '→ Stable';
+                        const sma20TrendElement = document.getElementById('sma20-trend');
+                        sma20TrendElement.textContent = sma20Trend;
+                        sma20TrendElement.style.color = currentSMA20 > previousSMA20 ? '#28a745' : 
+                                                       currentSMA20 < previousSMA20 ? '#dc3545' : '#6c757d';
+                    }
+                    
+                    if (data.sma50_values.length > 0) {
+                        const currentSMA50 = data.sma50_values[data.sma50_values.length - 1];
+                        const previousSMA50 = data.sma50_values.length > 1 ? data.sma50_values[data.sma50_values.length - 2] : currentSMA50;
+                        document.getElementById('current-sma50-breadth').textContent = currentSMA50.toFixed(1);
+                        
+                        // Calculate trend
+                        const sma50Trend = currentSMA50 > previousSMA50 ? '↑ Improving' : 
+                                         currentSMA50 < previousSMA50 ? '↓ Declining' : '→ Stable';
+                        const sma50TrendElement = document.getElementById('sma50-trend');
+                        sma50TrendElement.textContent = sma50Trend;
+                        sma50TrendElement.style.color = currentSMA50 > previousSMA50 ? '#17a2b8' : 
+                                                       currentSMA50 < previousSMA50 ? '#dc3545' : '#6c757d';
+                    }
+                })
+                .catch(error => console.error('Error updating SMA breadth charts:', error));
+        }
+        
         function drawSparklines(data) {
             // Simple sparkline implementation using canvas
             const metrics = ['market-score', 'trend-score', 'volatility-score'];
@@ -1369,11 +1954,62 @@ ENHANCED_DASHBOARD_HTML = '''
             });
         }
         
-        // Update every 30 seconds
-        setInterval(updateDashboard, 30000);
+        // Initialize when everything is loaded
+        function initializeDashboard() {
+            console.log('Dashboard initialization started');
+            
+            // Show initialization message
+            const regimeBadge = document.getElementById('regime-badge');
+            if (regimeBadge) {
+                regimeBadge.innerHTML = 'Initializing...';
+            }
+            
+            // Initialize SMA Breadth Chart
+            try {
+                initializeSMABreadthChart();
+                fetchSMABreadthData();
+                console.log('SMA Breadth chart initialized');
+            } catch (error) {
+                console.error('Error initializing SMA breadth chart:', error);
+            }
+            
+            // Initial update with error handling
+            try {
+                updateDashboard();
+                console.log('Initial update triggered');
+            } catch (error) {
+                console.error('Error in updateDashboard:', error);
+                if (regimeBadge) {
+                    regimeBadge.innerHTML = 'Error loading data';
+                }
+            }
+            
+            // Update every 30 seconds
+            setInterval(function() {
+                try {
+                    updateDashboard();
+                } catch (error) {
+                    console.error('Error in periodic update:', error);
+                }
+            }, 30000);
+            
+            // Update SMA breadth data every 60 seconds
+            setInterval(function() {
+                try {
+                    fetchSMABreadthData();
+                } catch (error) {
+                    console.error('Error updating SMA breadth data:', error);
+                }
+            }, 60000);
+        }
         
-        // Initial update
-        updateDashboard();
+        // Try multiple initialization methods
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeDashboard);
+        } else {
+            // DOM is already loaded
+            initializeDashboard();
+        }
     </script>
 </body>
 </html>
@@ -1676,6 +2312,112 @@ def get_vsr_scores():
             'total_count': 0
         })
 
+@app.route('/api/sma_breadth_history')
+def get_sma_breadth_history():
+    """Get historical SMA breadth data for charting - 7 months of data"""
+    try:
+        # Check for historical data file first
+        historical_data_file = os.path.join(SCRIPT_DIR, 'historical_breadth_data', 'sma_breadth_historical_latest.json')
+        
+        labels = []
+        sma20_values = []
+        sma50_values = []
+        
+        if os.path.exists(historical_data_file):
+            # Use the 7-month historical data
+            try:
+                with open(historical_data_file, 'r') as f:
+                    historical_data = json.load(f)
+                
+                # Process historical data
+                for day_data in historical_data:
+                    # Parse the date
+                    date_str = day_data.get('date', '')
+                    if date_str:
+                        # Convert to proper date format for Chart.js time scale
+                        try:
+                            from datetime import datetime
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                            formatted_date = date_obj.strftime('%Y-%m-%d')
+                            # Add data point
+                            labels.append(formatted_date)
+                            sma20_values.append(day_data.get('sma_breadth', {}).get('sma20_percent', 0))
+                            sma50_values.append(day_data.get('sma_breadth', {}).get('sma50_percent', 0))
+                        except Exception as e:
+                            logger.error(f"Error parsing date {date_str}: {e}")
+                            continue
+                
+                logger.info(f"Loaded {len(labels)} days of historical SMA breadth data")
+                
+            except Exception as e:
+                logger.error(f"Error loading historical data: {e}")
+        
+        # If no historical data or it's empty, fall back to current breadth data
+        if not labels:
+            logger.warning("No historical data found, falling back to current breadth data")
+            
+            breadth_dir = os.path.join(SCRIPT_DIR, 'breadth_data')
+            if os.path.exists(breadth_dir):
+                # Get all breadth files except 'latest'
+                all_files = [f for f in os.listdir(breadth_dir) 
+                            if f.startswith('market_breadth_') and f.endswith('.json') 
+                            and 'latest' not in f]
+                
+                # Sort by filename (which includes timestamp)
+                all_files.sort()
+                
+                # Take the last 30 days worth of data (assuming ~14 files per day)
+                breadth_files = all_files[-420:]  # 30 days * 14 files/day
+                
+                # Process each file
+                for filename in breadth_files:
+                    filepath = os.path.join(breadth_dir, filename)
+                    try:
+                        with open(filepath, 'r') as f:
+                            data = json.load(f)
+                        
+                        # Extract timestamp from data
+                        timestamp_str = data.get('timestamp', '')
+                        if timestamp_str:
+                            # Parse the timestamp
+                            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            
+                            # Format label as daily date only
+                            date_str = timestamp.strftime('%Y-%m-%d')
+                            
+                            # Add data point (daily aggregation)
+                            labels.append(date_str)
+                            sma20_values.append(data.get('sma_breadth', {}).get('sma20_percent', 0))
+                            sma50_values.append(data.get('sma_breadth', {}).get('sma50_percent', 0))
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing breadth file {filename}: {e}")
+                        continue
+        
+        # Downsample for better chart display (keep every nth point for optimal viewing)
+        if len(labels) > 100:
+            step = max(1, len(labels) // 100)
+            labels = labels[::step]
+            sma20_values = sma20_values[::step]
+            sma50_values = sma50_values[::step]
+        
+        return jsonify({
+            'labels': labels,
+            'sma20_values': sma20_values,
+            'sma50_values': sma50_values,
+            'data_points': len(labels)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching SMA breadth history: {e}")
+        return jsonify({
+            'error': str(e),
+            'labels': [],
+            'sma20_values': [],
+            'sma50_values': [],
+            'data_points': 0
+        })
+
 @app.route('/api/reversal_patterns')
 def get_reversal_patterns():
     """Get top Long and Short Reversal patterns"""
@@ -1796,6 +2538,57 @@ def get_reversal_patterns():
             'short_reversals': []
         })
 
+@app.route('/api/sma-breadth-historical')
+def get_sma_breadth_historical():
+    """Get historical SMA breadth data"""
+    try:
+        # Load historical data
+        data_file = os.path.join(SCRIPT_DIR, 'historical_breadth_data', 'sma_breadth_historical_latest.json')
+        
+        if not os.path.exists(data_file):
+            return jsonify({'error': 'Historical data not found'})
+        
+        with open(data_file, 'r') as f:
+            data = json.load(f)
+        
+        if not data:
+            return jsonify({'error': 'No data available'})
+        
+        # Calculate trend metrics
+        current = data[-1]
+        five_days_ago = data[-6] if len(data) >= 6 else data[0]
+        twenty_days_ago = data[-21] if len(data) >= 21 else data[0]
+        
+        sma20_5d_change = current['sma_breadth']['sma20_percent'] - five_days_ago['sma_breadth']['sma20_percent']
+        sma50_5d_change = current['sma_breadth']['sma50_percent'] - five_days_ago['sma_breadth']['sma50_percent']
+        sma20_20d_change = current['sma_breadth']['sma20_percent'] - twenty_days_ago['sma_breadth']['sma20_percent']
+        sma50_20d_change = current['sma_breadth']['sma50_percent'] - twenty_days_ago['sma_breadth']['sma50_percent']
+        
+        # Prepare response
+        response_data = {
+            'labels': [d['date'] for d in data],
+            'sma20_values': [d['sma_breadth']['sma20_percent'] for d in data],
+            'sma50_values': [d['sma_breadth']['sma50_percent'] for d in data],
+            'market_scores': [d['market_score'] for d in data],
+            'data_points': len(data),
+            'current_sma20': current['sma_breadth']['sma20_percent'],
+            'current_sma50': current['sma_breadth']['sma50_percent'],
+            'market_regime': current['market_regime'],
+            'market_score': current['market_score'],
+            'total_stocks': current['total_stocks'],
+            'date_range': f"{data[0]['date']} to {data[-1]['date']}",
+            'sma20_5d_change': sma20_5d_change,
+            'sma50_5d_change': sma50_5d_change,
+            'sma20_20d_change': sma20_20d_change,
+            'sma50_20d_change': sma50_20d_change
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        app.logger.error(f"Error in get_sma_breadth_historical: {e}")
+        return jsonify({'error': str(e)})
+
 if __name__ == '__main__':
     print("\n" + "="*60)
     print("Daily Market Regime - Enhanced Dashboard")
@@ -1804,4 +2597,4 @@ if __name__ == '__main__':
     print("\nPress Ctrl+C to stop the server")
     print("="*60 + "\n")
     
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    app.run(host='0.0.0.0', port=8080, debug=True)

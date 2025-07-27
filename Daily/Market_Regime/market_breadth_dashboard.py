@@ -373,6 +373,111 @@ def test_page():
     """Test page for diagnostics"""
     return render_template('test.html')
 
+@app.route('/api/sma-breadth-history')
+def get_sma_breadth_history():
+    """Get historical SMA breadth data for charting - 7 months of data"""
+    try:
+        # Check for historical data file first
+        historical_data_file = os.path.join(SCRIPT_DIR, 'historical_breadth_data', 'sma_breadth_historical_latest.json')
+        
+        labels = []
+        sma20_values = []
+        sma50_values = []
+        
+        if os.path.exists(historical_data_file):
+            # Use the 7-month historical data
+            try:
+                with open(historical_data_file, 'r') as f:
+                    historical_data = json.load(f)
+                
+                # Process historical data
+                for day_data in historical_data:
+                    # Parse the date
+                    date_str = day_data.get('date', '')
+                    if date_str:
+                        # Convert to proper date format for Chart.js time scale
+                        try:
+                            from datetime import datetime
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                            formatted_date = date_obj.strftime('%Y-%m-%d')
+                            # Add data point
+                            labels.append(formatted_date)
+                            sma20_values.append(day_data.get('sma_breadth', {}).get('sma20_percent', 0))
+                            sma50_values.append(day_data.get('sma_breadth', {}).get('sma50_percent', 0))
+                        except Exception as e:
+                            logger.error(f"Error parsing date {date_str}: {e}")
+                            continue
+                
+                logger.info(f"Loaded {len(labels)} days of historical SMA breadth data")
+                
+            except Exception as e:
+                logger.error(f"Error loading historical data: {e}")
+        
+        # If no historical data or it's empty, fall back to current breadth data
+        if not labels:
+            logger.warning("No historical data found, falling back to current breadth data")
+            
+            if os.path.exists(BREADTH_DATA_DIR):
+                # Get all breadth files except 'latest'
+                all_files = [f for f in os.listdir(BREADTH_DATA_DIR) 
+                            if f.startswith('market_breadth_') and f.endswith('.json') 
+                            and 'latest' not in f]
+                
+                # Sort by filename (which includes timestamp)
+                all_files.sort()
+                
+                # Take the last 30 days worth of data (assuming ~14 files per day)
+                breadth_files = all_files[-420:]  # 30 days * 14 files/day
+                
+                # Process each file
+                for filename in breadth_files:
+                    filepath = os.path.join(BREADTH_DATA_DIR, filename)
+                    try:
+                        with open(filepath, 'r') as f:
+                            data = json.load(f)
+                        
+                        # Extract timestamp from data
+                        timestamp_str = data.get('timestamp', '')
+                        if timestamp_str:
+                            # Parse the timestamp
+                            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            
+                            # Format label as daily date only
+                            date_str = timestamp.strftime('%Y-%m-%d')
+                            
+                            # Add data point (daily aggregation)
+                            labels.append(date_str)
+                            sma20_values.append(data.get('sma_breadth', {}).get('sma20_percent', 0))
+                            sma50_values.append(data.get('sma_breadth', {}).get('sma50_percent', 0))
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing breadth file {filename}: {e}")
+                        continue
+        
+        # Downsample for better chart display (keep every nth point for optimal viewing)
+        if len(labels) > 100:
+            step = max(1, len(labels) // 100)
+            labels = labels[::step]
+            sma20_values = sma20_values[::step]
+            sma50_values = sma50_values[::step]
+        
+        return jsonify({
+            'labels': labels,
+            'sma20_values': sma20_values,
+            'sma50_values': sma50_values,
+            'data_points': len(labels)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching SMA breadth history: {e}")
+        return jsonify({
+            'error': str(e),
+            'labels': [],
+            'sma20_values': [],
+            'sma50_values': [],
+            'data_points': 0
+        })
+
 @app.route('/api/sector-rotation')
 def get_sector_rotation():
     """API endpoint for sector rotation analysis"""
