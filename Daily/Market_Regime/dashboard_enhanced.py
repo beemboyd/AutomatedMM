@@ -214,6 +214,13 @@ ENHANCED_DASHBOARD_HTML = '''
             height: 450px !important;
         }
         
+        /* Volume Breadth Section Styles */
+        #volume-breadth-chart,
+        #volume-participation-chart {
+            max-height: 450px !important;
+            height: 450px !important;
+        }
+        
         .sma-breadth-stats {
             background: #f8f9fa;
             border-radius: 8px;
@@ -613,6 +620,25 @@ ENHANCED_DASHBOARD_HTML = '''
                             </div>
                         </div>
                         
+                        <!-- Volume Breadth Charts -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <h6 class="text-center mb-3">Volume Breadth Analysis</h6>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">Volume Breadth History</h6>
+                                    <canvas id="volume-breadth-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">Volume Participation Rate</h6>
+                                    <canvas id="volume-participation-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Current Stats Row -->
                         <div class="row mt-3">
                             <div class="col-12">
@@ -1000,6 +1026,8 @@ ENHANCED_DASHBOARD_HTML = '''
         // SMA Breadth Chart Variables
         let sma20BreadthChart = null;
         let sma50BreadthChart = null;
+        let volumeBreadthChart = null;
+        let volumeParticipationChart = null;
         
         // Initialize SMA Breadth Charts
         function initializeSMABreadthChart() {
@@ -1154,6 +1182,128 @@ ENHANCED_DASHBOARD_HTML = '''
                     }
                 }
             });
+            
+            // Initialize Volume Breadth Chart
+            const ctxVolume = document.getElementById('volume-breadth-chart');
+            if (ctxVolume) {
+                volumeBreadthChart = new Chart(ctxVolume, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Volume Breadth %',
+                            data: [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 2,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: false },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'Above Avg Volume: ' + context.parsed.y.toFixed(1) + '%';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: { display: true, text: 'Date' },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 30,
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                display: true,
+                                title: { display: true, text: 'Volume Breadth %' },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Initialize Volume Participation Chart
+            const ctxParticipation = document.getElementById('volume-participation-chart');
+            if (ctxParticipation) {
+                volumeParticipationChart = new Chart(ctxParticipation, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Volume Participation',
+                            data: [],
+                            borderColor: 'rgb(153, 102, 255)',
+                            backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 2,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: false },
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'Participation: ' + context.parsed.y.toFixed(1) + '%';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: { display: true, text: 'Date' },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 30,
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                display: true,
+                                title: { display: true, text: 'Participation Rate (%)' },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value.toFixed(0) + '%';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         }
         
         // Update SMA Breadth Charts
@@ -1174,11 +1324,18 @@ ENHANCED_DASHBOARD_HTML = '''
                 sma50BreadthChart.data.datasets[0].data = data.sma50_values;
                 sma50BreadthChart.update();
                 
-                // Update current stats
-                document.getElementById('current-sma20-breadth').textContent = data.current_sma20.toFixed(1);
-                document.getElementById('current-sma50-breadth').textContent = data.current_sma50.toFixed(1);
-                document.getElementById('current-market-regime').textContent = data.market_regime;
-                document.getElementById('current-market-score').textContent = data.market_score ? data.market_score.toFixed(3) : '-';
+                // Update current stats with null checks
+                const sma20Element = document.getElementById('current-sma20-breadth');
+                if (sma20Element) sma20Element.textContent = data.current_sma20.toFixed(1);
+                
+                const sma50Element = document.getElementById('current-sma50-breadth');
+                if (sma50Element) sma50Element.textContent = data.current_sma50.toFixed(1);
+                
+                const regimeTextElement = document.getElementById('current-market-regime');
+                if (regimeTextElement) regimeTextElement.textContent = data.market_regime;
+                
+                const scoreElement = document.getElementById('current-market-score');
+                if (scoreElement) scoreElement.textContent = data.market_score ? data.market_score.toFixed(3) : '-';
                 
                 // Update trends with arrows
                 const sma20Trend = data.sma20_5d_change > 0 ? '↑' : '↓';
@@ -1189,28 +1346,65 @@ ENHANCED_DASHBOARD_HTML = '''
                 const sma50Trend20d = data.sma50_20d_change > 0 ? '↑' : '↓';
                 const trend20d = `SMA20: ${sma20Trend20d} ${Math.abs(data.sma20_20d_change).toFixed(1)}%<br>SMA50: ${sma50Trend20d} ${Math.abs(data.sma50_20d_change).toFixed(1)}%`;
                 
-                document.getElementById('sma-5day-trend').innerHTML = trend5d;
-                document.getElementById('sma-20day-trend').innerHTML = trend20d;
+                const trend5dElement = document.getElementById('sma-5day-trend');
+                if (trend5dElement) trend5dElement.innerHTML = trend5d;
                 
-                // Update statistics
-                document.getElementById('sma-data-points').textContent = data.data_points;
-                document.getElementById('sma-date-range').textContent = data.date_range;
-                document.getElementById('sma-stocks-tracked').textContent = data.total_stocks;
-                document.getElementById('sma-last-update').textContent = new Date().toLocaleTimeString();
+                const trend20dElement = document.getElementById('sma-20day-trend');
+                if (trend20dElement) trend20dElement.innerHTML = trend20d;
+                
+                // Update statistics with null checks
+                const dataPointsElement = document.getElementById('sma-data-points');
+                if (dataPointsElement) dataPointsElement.textContent = data.data_points;
+                
+                const dateRangeElement = document.getElementById('sma-date-range');
+                if (dateRangeElement) dateRangeElement.textContent = data.date_range;
+                
+                const stocksTrackedElement = document.getElementById('sma-stocks-tracked');
+                if (stocksTrackedElement) stocksTrackedElement.textContent = data.total_stocks;
+                
+                const lastUpdateElement = document.getElementById('sma-last-update');
+                if (lastUpdateElement) lastUpdateElement.textContent = new Date().toLocaleTimeString();
                 
                 // Color code regime
                 const regimeElement = document.getElementById('current-market-regime');
-                regimeElement.className = 'h5';
-                if (data.market_regime.includes('Strong Uptrend')) {
-                    regimeElement.classList.add('text-success');
-                } else if (data.market_regime.includes('Uptrend')) {
-                    regimeElement.classList.add('text-primary');
-                } else if (data.market_regime.includes('Strong Downtrend')) {
-                    regimeElement.classList.add('text-danger');
-                } else if (data.market_regime.includes('Downtrend')) {
-                    regimeElement.classList.add('text-warning');
+                if (regimeElement) {
+                    regimeElement.className = 'h5';
+                    if (data.market_regime.includes('Strong Uptrend')) {
+                        regimeElement.classList.add('text-success');
+                    } else if (data.market_regime.includes('Uptrend')) {
+                        regimeElement.classList.add('text-primary');
+                    } else if (data.market_regime.includes('Strong Downtrend')) {
+                        regimeElement.classList.add('text-danger');
+                    } else if (data.market_regime.includes('Downtrend')) {
+                        regimeElement.classList.add('text-warning');
+                    } else {
+                        regimeElement.classList.add('text-secondary');
+                    }
+                }
+                
+                // Update volume breadth charts if they exist
+                if (volumeBreadthChart && data.volume_breadth_values) {
+                    volumeBreadthChart.data.labels = data.labels;
+                    volumeBreadthChart.data.datasets[0].data = data.volume_breadth_values;
+                    volumeBreadthChart.update();
+                    
+                    // Update current volume breadth stat
+                    if (data.current_volume_breadth !== undefined) {
+                        const volumeBreadthElement = document.getElementById('current-volume-breadth');
+                        if (volumeBreadthElement) {
+                            volumeBreadthElement.textContent = data.current_volume_breadth.toFixed(1);
+                        }
+                    }
+                }
+                
+                if (volumeParticipationChart && data.volume_participation_values) {
+                    console.log('Volume Participation Data:', data.volume_participation_values);
+                    console.log('Labels:', data.labels);
+                    volumeParticipationChart.data.labels = data.labels;
+                    volumeParticipationChart.data.datasets[0].data = data.volume_participation_values;
+                    volumeParticipationChart.update();
                 } else {
-                    regimeElement.classList.add('text-secondary');
+                    console.log('Volume Participation Chart issue - Chart exists:', !!volumeParticipationChart, 'Data exists:', !!data.volume_participation_values);
                 }
                 
             } catch (error) {
@@ -2664,8 +2858,15 @@ def get_sma_breadth_historical():
             'sma20_5d_change': sma20_5d_change,
             'sma50_5d_change': sma50_5d_change,
             'sma20_20d_change': sma20_20d_change,
-            'sma50_20d_change': sma50_20d_change
+            'sma50_20d_change': sma50_20d_change,
+            # Add volume breadth data
+            'volume_breadth_values': [d.get('volume_breadth', {}).get('volume_breadth_percent', 0) for d in data],
+            'volume_participation_values': [d.get('volume_breadth', {}).get('volume_participation', 0) * 100 for d in data],  # Convert to percentage
+            'current_volume_breadth': current.get('volume_breadth', {}).get('volume_breadth_percent', 0)
         }
+        
+        # Debug log
+        logger.info(f"Volume participation values sample: {response_data['volume_participation_values'][:5]}")
         
         return jsonify(response_data)
         

@@ -1,7 +1,7 @@
 # Master Plist Schedule Documentation
 
 Generated on: 2025-07-23 08:11:44  
-Last Updated: 2025-07-23 14:50:00
+Last Updated: 2025-07-30 00:15:00
 
 ## Overview
 
@@ -26,7 +26,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 30
+**Total Jobs:** 34
 
 **Timezone:** Asia/Kolkata
 
@@ -59,8 +59,12 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | vsr_tracker_enhanced | 09:15 (Mon-Fri) | vsr_tracker_service_enhanced.py | ⏸️ On Schedule |
 | vsr_dashboard | 09:15 (Mon-Fri) | vsr_tracker_dashboard.py | ⏸️ On Schedule |
 | vsr_shutdown | 15:30 (Mon-Fri) | stop_vsr_services.py | ⏸️ On Schedule |
+| vsr_telegram_alerts | 09:07 (Mon-Fri) | vsr_telegram_service.py | ⏸️ On Schedule |
+| vsr_telegram_shutdown | 15:30 (Mon-Fri) | pkill -f vsr_telegram_service.py | ⏸️ On Schedule |
 | short_momentum_tracker | 09:15 (Mon-Fri) | short_momentum_tracker_service.py | ⏸️ On Schedule |
 | short_momentum_dashboard | 09:15 (Mon-Fri) | short_momentum_dashboard.py | ⏸️ On Schedule |
+| long_reversal_hourly | Every 30 min (9:30-15:30, Mon-Fri) | Long_Reversal_Hourly.py | ⏸️ On Schedule |
+| short_reversal_hourly | Every 30 min (9:30-15:30, Mon-Fri) | Short_Reversal_Hourly.py | ⏸️ On Schedule |
 | weekly_backup | 03:00 (Sun) | weekly_backup.sh | ⏸️ On Schedule |
 | regime_data_updater_10min | Every 10 min (9:10-15:30 Mon-Fri) | update_regime_data.py | ⏸️ On Schedule |
 
@@ -328,6 +332,24 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_shutdown.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_tracker/vsr_shutdown_error.log`
 
+#### vsr_telegram_alerts
+- **Label:** `com.india-ts.vsr-telegram-alerts`
+- **Schedule:** 09:07 (Mon-Fri)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/Alerts/vsr_telegram_service.py --momentum-threshold 1.0 --score-threshold 60 --interval 60`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram/vsr_telegram.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram/vsr_telegram_error.log`
+
+#### vsr_telegram_shutdown
+- **Label:** `com.india-ts.vsr-telegram-shutdown`
+- **Schedule:** 15:30 (Mon-Fri)
+- **Program:** `/bin/bash -c pkill -f "vsr_telegram_service.py" || true`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram_shutdown.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram_shutdown_error.log`
+
 #### weekly_backup
 - **Label:** `com.india-ts.weekly_backup`
 - **Schedule:** 03:00 (Sun)
@@ -355,6 +377,28 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_dashboard.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum/short_momentum_dashboard_error.log`
 - **Dashboard URL:** http://localhost:3003
+
+#### long_reversal_hourly
+- **Label:** `com.india-ts.long-reversal-hourly`
+- **Schedule:** Every 30 minutes from 9:30 AM to 3:30 PM (Mon-Fri)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/Long_Reversal_Hourly.py --user Sai`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/long_reversal_hourly.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/long_reversal_hourly_error.log`
+- **Output Directory:** `/Users/maverick/PycharmProjects/India-TS/Daily/results-h/`
+- **Purpose:** Hourly LONG reversal pattern scanning (xlsx output only, no HTML)
+
+#### short_reversal_hourly
+- **Label:** `com.india-ts.short-reversal-hourly`
+- **Schedule:** Every 30 minutes from 9:30 AM to 3:30 PM (Mon-Fri)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/Short_Reversal_Hourly.py --user Sai`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_reversal_hourly.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_reversal_hourly_error.log`
+- **Output Directory:** `/Users/maverick/PycharmProjects/India-TS/Daily/results-s-h/`
+- **Purpose:** Hourly SHORT reversal pattern scanning (xlsx output only, no HTML)
 
 #### regime_data_updater_10min
 - **Label:** `com.india-ts.regime_data_updater_10min`

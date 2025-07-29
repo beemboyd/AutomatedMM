@@ -298,3 +298,25 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - Process IDs: VSR (32732), Short Momentum (32728), SL Watchdog (33883)
 
 ---
+
+### 2025-07-30 03:30 IST - [Claude]
+**Changes:**
+- Created Long_Reversal_Hourly.py and Short_Reversal_Hourly.py scanners by cloning daily versions
+- Modified hourly scanners to output to results-h and results-s-h directories
+- Disabled HTML generation in hourly scanners (xlsx output only)
+- Created plists for both scanners to run every 30 minutes from 9:30 AM to 3:30 PM
+- Updated job manager dashboard and PLIST_MASTER_SCHEDULE.md
+
+**Impact:**
+- Two new automated scanners running every 30 minutes during market hours
+- Long_Reversal_Hourly outputs to Daily/results-h/
+- Short_Reversal_Hourly outputs to Daily/results-s-h/
+- Both scanners produce xlsx files only (no HTML reports)
+- Total India-TS scheduled jobs increased from 32 to 34
+- Files created:
+  - /Daily/scanners/Long_Reversal_Hourly.py
+  - /Daily/scanners/Short_Reversal_Hourly.py
+  - /Daily/scheduler/plists/com.india-ts.long-reversal-hourly.plist
+  - /Daily/scheduler/plists/com.india-ts.short-reversal-hourly.plist
+
+---
