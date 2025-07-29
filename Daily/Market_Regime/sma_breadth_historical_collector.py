@@ -310,7 +310,7 @@ class SMABreadthHistoricalCollector:
             logger.error(f"Error aggregating daily breadth: {e}")
             return []
     
-    def collect_historical_data(self, months=7, batch_size=50, break_minutes=60):
+    def collect_historical_data(self, months=7, batch_size=100, break_minutes=60):
         """Main method to collect historical SMA breadth data with volume analysis"""
         try:
             # Calculate date range

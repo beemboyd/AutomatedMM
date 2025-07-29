@@ -150,6 +150,10 @@ class SLWatchdog:
         self.exchange = config.get('DEFAULT', 'exchange', fallback='NSE')
         self.product_type = config.get('DEFAULT', 'product_type', fallback='CNC')
         
+        # Historical data cache for performance
+        self.historical_cache = {}  # ticker -> (data, timestamp)
+        self.cache_ttl = 300  # 5 minutes
+        
         # Profit target exits configuration
         profit_target_str = config.get('DEFAULT', 'profit_target_exits', fallback='no').lower()
         self.profit_target_exits_enabled = profit_target_str in ['yes', 'true', '1', 'on']
@@ -386,6 +390,14 @@ class SLWatchdog:
     def verify_position_exists(self, ticker: str, expected_quantity: int = None) -> bool:
         """Verify if a position exists with Zerodha before attempting to trade"""
         try:
+            # First check our tracked positions (which handles partial sells correctly)
+            tracked_pos = self.tracked_positions.get(ticker)
+            if tracked_pos and tracked_pos.get('quantity', 0) > 0:
+                actual_quantity = tracked_pos['quantity']
+                if expected_quantity and actual_quantity != expected_quantity:
+                    self.logger.warning(f"{ticker}: Expected {expected_quantity} shares but found {actual_quantity} in tracking")
+                return True
+            
             # Get current positions from Zerodha
             positions = self.kite.positions()
             
@@ -402,7 +414,8 @@ class SLWatchdog:
                         return True
                     else:
                         self.logger.warning(f"{ticker}: Position exists but quantity is {actual_quantity}")
-                        return False
+                        # Don't return False yet - check holdings for partial sell cases
+                        pass
             
             # Also check holdings (including T1 positions)
             try:
@@ -557,12 +570,27 @@ class SLWatchdog:
 
                 holdings_count = 0
                 existing_tickers = {pos['tradingsymbol'] for pos in cnc_positions}
+                
+                # Create a map of positions by ticker for easy lookup
+                positions_by_ticker = {pos['tradingsymbol']: pos for pos in cnc_positions}
 
                 for holding in holdings:
                     ticker = holding.get('tradingsymbol', '')
                     quantity = int(holding.get('quantity', 0))
                     t1_quantity = int(holding.get('t1_quantity', 0))
                     total_quantity = quantity + t1_quantity
+
+                    # Check if this ticker has a negative position (partial sell)
+                    existing_pos = positions_by_ticker.get(ticker)
+                    if existing_pos and int(existing_pos.get('quantity', 0)) < 0:
+                        # This is a partial sell case - update the position with holding data
+                        self.logger.info(f"{ticker}: Found partial sell - Position shows {existing_pos['quantity']} (sold), Holdings shows {total_quantity} (remaining)")
+                        # Update the position quantity to reflect remaining shares
+                        existing_pos['quantity'] = total_quantity
+                        existing_pos['original_quantity'] = int(holding.get('opening_quantity', total_quantity))
+                        existing_pos['average_price'] = holding.get('average_price', existing_pos.get('average_price', 0))
+                        existing_pos['used_quantity'] = int(holding.get('used_quantity', 0))
+                        continue
 
                     if total_quantity > 0 and ticker != '' and ticker not in existing_tickers:
                         # Convert holding to position-like format
@@ -603,35 +631,60 @@ class SLWatchdog:
                 self.logger.warning("No CNC positions found in account")
                 return 0
 
-            # Create tracked positions from CNC positions
+            # Load all order files to reconstruct position history
+            self.logger.info("\n" + "="*60)
+            self.logger.info("STATELESS MODE: Loading order files to reconstruct position history...")
+            order_files = self.load_all_order_files()
+            
+            # Create a position lookup dictionary for easy access
+            cnc_positions_by_ticker = {pos['tradingsymbol']: pos for pos in cnc_positions}
+            
+            # Process each CNC position with stateless reconstruction
             for position in cnc_positions:
                 ticker = position['tradingsymbol']
                 quantity = int(position['quantity'])
 
-                # Skip if quantity is 0 or negative (sold positions or short positions)
+                # Skip if quantity is 0 or negative (will be handled by holdings check)
                 if quantity <= 0:
-                    self.logger.info(f"Skipping {ticker}: quantity is {quantity} (no position or already sold)")
+                    self.logger.info(f"Skipping {ticker}: quantity is {quantity} (will check holdings for remaining shares)")
                     continue
 
-                # Calculate entry price (average price if available, else last price)
-                entry_price = float(position.get('average_price', 0))
-                if entry_price <= 0:
-                    # If no average price, get current price as fallback
-                    try:
-                        ltp_data = self.kite.ltp(f"{self.exchange}:{ticker}")
-                        entry_price = ltp_data[f"{self.exchange}:{ticker}"]["last_price"]
-                    except Exception as e:
-                        self.logger.warning(f"Could not get price for {ticker}: {e}")
-                        entry_price = float(position.get('last_price', 100))  # Fallback
-
-                # Calculate investment amount
-                investment_amount = entry_price * quantity
-
+                self.logger.info(f"\n{'='*60}")
+                self.logger.info(f"Reconstructing state for {ticker}...")
+                
+                # Reconstruct complete position state
+                reconstructed_state = self.reconstruct_position_state(ticker, position, order_files)
+                
+                if not reconstructed_state:
+                    self.logger.error(f"Failed to reconstruct state for {ticker}, using fallback approach...")
+                    # Fallback to basic tracking without historical data
+                    entry_price = float(position.get('average_price', position.get('last_price', 100)))
+                    self.tracked_positions[ticker] = {
+                        "type": "LONG",
+                        "quantity": quantity,
+                        "entry_price": entry_price,
+                        "investment_amount": entry_price * quantity,
+                        "product": position['product'],
+                        "exchange": position['exchange'],
+                        "instrument_token": position['instrument_token'],
+                        "pnl": float(position.get('pnl', 0)),
+                        "unrealised": float(position.get('unrealised', 0)),
+                        "realised": float(position.get('realised', 0)),
+                        "has_pending_order": False,
+                        "zerodha_position": True,
+                        "t1_quantity": position.get('t1_quantity', 0),
+                        "settled_quantity": position.get('settled_quantity', quantity),
+                        "entry_timestamp": datetime.now().isoformat()
+                    }
+                    self.position_high_prices[ticker] = entry_price
+                    continue
+                
+                # Build tracked position from reconstructed state
                 self.tracked_positions[ticker] = {
-                    "type": "LONG",  # All remaining positions are LONG
+                    "type": "LONG",
                     "quantity": quantity,
-                    "entry_price": entry_price,
-                    "investment_amount": investment_amount,
+                    "entry_price": reconstructed_state['entry_price'],
+                    "investment_amount": reconstructed_state['entry_price'] * quantity,
                     "product": position['product'],
                     "exchange": position['exchange'],
                     "instrument_token": position['instrument_token'],
@@ -639,18 +692,67 @@ class SLWatchdog:
                     "unrealised": float(position.get('unrealised', 0)),
                     "realised": float(position.get('realised', 0)),
                     "has_pending_order": False,
-                    "zerodha_position": True,  # Flag to indicate this came from Zerodha
-                    "t1_quantity": position.get('t1_quantity', 0),  # Track T1 quantity
-                    "settled_quantity": position.get('settled_quantity', quantity),  # Track settled quantity
-                    "entry_timestamp": datetime.now().isoformat()  # Track when position was loaded
+                    "zerodha_position": True,
+                    "t1_quantity": position.get('t1_quantity', 0),
+                    "settled_quantity": position.get('settled_quantity', quantity),
+                    "entry_timestamp": reconstructed_state['entry_timestamp'],
+                    "position_source": reconstructed_state['source'],
+                    "original_quantity": reconstructed_state.get('original_quantity', quantity)
                 }
                 
-                # Initialize highest price tracking with entry price
-                self.position_high_prices[ticker] = entry_price
+                # Set position high from reconstruction
+                self.position_high_prices[ticker] = reconstructed_state['position_high']
+                
+                # Store ATR data with reconstructed stop loss
+                self.atr_data[ticker] = reconstructed_state['atr_data']
+                self.atr_data[ticker]['position_high'] = reconstructed_state['position_high']
+                self.atr_data[ticker]['stop_loss'] = reconstructed_state['current_stop_loss']
+                
+                # Log the reconstruction summary
+                self.logger.info(f"✅ {ticker} State Reconstructed:")
+                self.logger.info(f"  Entry: {reconstructed_state['quantity']} shares @ ₹{reconstructed_state['entry_price']:.2f} on {reconstructed_state['entry_timestamp'][:10]}")
+                self.logger.info(f"  Position High: ₹{reconstructed_state['position_high']:.2f}")
+                self.logger.info(f"  Current Stop Loss: ₹{reconstructed_state['current_stop_loss']:.2f}")
+                self.logger.info(f"  ATR: ₹{reconstructed_state['atr_data']['atr']:.2f} ({reconstructed_state['atr_data']['atr_percentage']:.2f}%)")
+                self.logger.info(f"  Volatility: {reconstructed_state['atr_data']['volatility_category']} ({reconstructed_state['atr_data']['multiplier']}x)")
+                self.logger.info(f"  Source: {reconstructed_state['source']}")
+                self.logger.info(f"  Current P&L: ₹{float(position.get('pnl', 0)):,.2f}")
 
-                self.logger.info(f"Tracking CNC position - {ticker}: {quantity} shares @ ₹{entry_price:.2f}")
-                self.logger.info(f"  Investment: ₹{investment_amount:.2f}, Current P&L: ₹{float(position.get('pnl', 0)):.2f}")
-
+            self.logger.info(f"\n{'='*60}")
+            self.logger.info(f"Stateless reconstruction complete. Tracking {len(self.tracked_positions)} positions.")
+            
+            # IMPORTANT: Check for breaches immediately after reconstruction
+            # This handles gap-down scenarios where price breached stop during market close
+            self.logger.info("Checking for stop loss breaches after reconstruction...")
+            for ticker in list(self.tracked_positions.keys()):
+                # Use the tracked position which has been corrected for partial sells
+                tracked_pos = self.tracked_positions.get(ticker)
+                if tracked_pos and tracked_pos.get('quantity', 0) > 0:
+                    # Find the position for current price
+                    position = cnc_positions_by_ticker.get(ticker)
+                    if position:
+                        current_price = float(position.get('last_price', 0))
+                    else:
+                        # If not in positions, check holdings
+                        current_price = 0
+                        for holding in holdings:
+                            if holding.get('tradingsymbol') == ticker:
+                                current_price = float(holding.get('last_price', 0))
+                                break
+                    
+                    if current_price > 0:
+                        # Store the current price
+                        self.current_prices[ticker] = current_price
+                        
+                        # Check for stop loss breach
+                        if ticker in self.atr_data:
+                            stop_loss = self.atr_data[ticker].get('stop_loss', 0)
+                            if stop_loss > 0 and current_price <= stop_loss:
+                                gap_percent = ((stop_loss - current_price) / stop_loss) * 100
+                                self.logger.warning(f"🚨 {ticker}: Gap breach detected! Current: ₹{current_price:.2f} < Stop: ₹{stop_loss:.2f} (gap: {gap_percent:.1f}%)")
+                                # The check_atr_stop_loss will handle the order placement
+                                self.check_atr_stop_loss(ticker, current_price)
+            
             return len(self.tracked_positions)
 
         except Exception as e:
@@ -855,6 +957,217 @@ class SLWatchdog:
 
         except Exception as e:
             self.logger.error(f"Error calculating ATR for {ticker}: {e}")
+            return None
+    
+    def load_all_order_files(self) -> List[Dict]:
+        """Load all order files for the user to find position entries"""
+        order_files = []
+        order_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Current_Orders', self.user_name)
+        
+        if not os.path.exists(order_dir):
+            self.logger.warning(f"Order directory not found: {order_dir}")
+            return order_files
+        
+        # Get all order files sorted by date (most recent first)
+        pattern = f"orders_{self.user_name}_*.json"
+        files = glob.glob(os.path.join(order_dir, pattern))
+        
+        for file_path in sorted(files, reverse=True):
+            try:
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                    data['_filename'] = os.path.basename(file_path)
+                    order_files.append(data)
+                    self.logger.debug(f"Loaded order file: {os.path.basename(file_path)}")
+            except Exception as e:
+                self.logger.warning(f"Failed to load {file_path}: {e}")
+        
+        self.logger.info(f"Loaded {len(order_files)} order files for user {self.user_name}")
+        return order_files
+    
+    def find_position_entry(self, ticker: str, order_files: List[Dict]) -> Optional[Dict]:
+        """Find when we entered a position by searching through order files"""
+        entries = []
+        
+        for order_file in order_files:
+            for order in order_file.get('orders', []):
+                # Match ticker in different formats
+                order_ticker = order.get('ticker') or order.get('tradingsymbol')
+                if order_ticker == ticker:
+                    # Check if it's a BUY order
+                    if order.get('transaction_type', 'BUY') == 'BUY':
+                        entry_data = {
+                            'order_timestamp': order.get('order_timestamp'),
+                            'average_price': float(order.get('average_price', order.get('current_price', 0))),
+                            'quantity': int(order.get('quantity', order.get('position_size', 0))),
+                            'stop_loss': float(order.get('stop_loss', 0)),
+                            'target_price': float(order.get('target_price', 0)),
+                            'source_file': order_file.get('_filename', 'unknown')
+                        }
+                        # Only add if we have valid timestamp
+                        if entry_data['order_timestamp']:
+                            entries.append(entry_data)
+                            self.logger.debug(f"Found entry for {ticker} in {entry_data['source_file']}: "
+                                            f"{entry_data['quantity']} @ ₹{entry_data['average_price']:.2f}")
+        
+        if not entries:
+            self.logger.warning(f"No entry found for {ticker} in order files")
+            return None
+        
+        # Return the earliest entry
+        earliest = min(entries, key=lambda x: x['order_timestamp'])
+        self.logger.info(f"{ticker}: Using entry from {earliest['source_file']} - "
+                        f"{earliest['quantity']} shares @ ₹{earliest['average_price']:.2f} "
+                        f"on {earliest['order_timestamp']}")
+        return earliest
+    
+    def calculate_position_high_since_entry(self, ticker: str, entry_timestamp: str) -> float:
+        """Calculate the highest price since position entry using historical data"""
+        try:
+            # Check cache first
+            cache_key = f"{ticker}_high_{entry_timestamp}"
+            if cache_key in self.historical_cache:
+                cached_data, cache_time = self.historical_cache[cache_key]
+                if time.time() - cache_time < self.cache_ttl:
+                    return cached_data
+            
+            token = self.get_instrument_token(ticker)
+            if token is None:
+                self.logger.error(f"Token not found for {ticker}")
+                return 0
+            
+            # Parse entry timestamp with flexibility for different formats
+            if isinstance(entry_timestamp, str):
+                # Remove 'Z' suffix if present and handle ISO format
+                entry_timestamp = entry_timestamp.replace('Z', '+00:00')
+                # Try parsing with fromisoformat first (Python 3.7+)
+                try:
+                    entry_date = datetime.fromisoformat(entry_timestamp)
+                except:
+                    # Fallback to strptime for other formats
+                    try:
+                        entry_date = datetime.strptime(entry_timestamp[:19], '%Y-%m-%dT%H:%M:%S')
+                    except:
+                        entry_date = datetime.strptime(entry_timestamp[:10], '%Y-%m-%d')
+            else:
+                entry_date = entry_timestamp
+            today = datetime.now()
+            days_held = (today - entry_date).days
+            
+            position_high = 0
+            
+            # For positions held less than 60 days, we can use minute data for precision
+            if days_held <= 60:
+                # Fetch daily data first to get overall highs
+                daily_data = self.kite.historical_data(
+                    token,
+                    entry_date.date(),
+                    today.date(),
+                    "day"
+                )
+                
+                if daily_data:
+                    position_high = max([candle['high'] for candle in daily_data])
+                    self.logger.debug(f"{ticker}: Daily high since entry: ₹{position_high:.2f}")
+                
+                # For today, also check intraday high for more precision
+                if today.date() == datetime.now().date():
+                    try:
+                        intraday_start = today.replace(hour=9, minute=15, second=0, microsecond=0)
+                        intraday_data = self.kite.historical_data(
+                            token,
+                            intraday_start,
+                            today,
+                            "minute"
+                        )
+                        if intraday_data:
+                            intraday_high = max([candle['high'] for candle in intraday_data])
+                            position_high = max(position_high, intraday_high)
+                            self.logger.debug(f"{ticker}: Including today's intraday high: ₹{intraday_high:.2f}")
+                    except Exception as e:
+                        self.logger.warning(f"Could not fetch intraday data for {ticker}: {e}")
+            
+            else:
+                # For older positions, use daily data only
+                daily_data = self.kite.historical_data(
+                    token,
+                    entry_date.date(),
+                    today.date(),
+                    "day"
+                )
+                
+                if daily_data:
+                    position_high = max([candle['high'] for candle in daily_data])
+                    self.logger.debug(f"{ticker}: Daily high since entry (long-term position): ₹{position_high:.2f}")
+            
+            # Cache the result
+            self.historical_cache[cache_key] = (position_high, time.time())
+            
+            return position_high
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating position high for {ticker}: {e}")
+            return 0
+    
+    def reconstruct_position_state(self, ticker: str, broker_position: Dict, order_files: List[Dict]) -> Dict:
+        """Reconstruct complete position state from broker data and order history"""
+        try:
+            # Find entry data from order files
+            entry_data = self.find_position_entry(ticker, order_files)
+            
+            if not entry_data:
+                # Handle positions with no order history (transferred in, etc.)
+                self.logger.warning(f"{ticker}: No order history found, using conservative approach")
+                # Use 30-day lookback as conservative approach
+                lookback_date = datetime.now() - timedelta(days=30)
+                entry_data = {
+                    'order_timestamp': lookback_date.isoformat(),
+                    'average_price': broker_position.get('average_price', broker_position.get('last_price', 0)),
+                    'quantity': broker_position.get('quantity', 0),
+                    'stop_loss': 0,
+                    'target_price': 0,
+                    'source_file': 'reconstructed'
+                }
+            
+            # Calculate position high since entry
+            position_high = self.calculate_position_high_since_entry(ticker, entry_data['order_timestamp'])
+            
+            # If position high calculation failed, use current price
+            if position_high <= 0:
+                current_price = broker_position.get('last_price', entry_data['average_price'])
+                position_high = max(current_price, entry_data['average_price'])
+                self.logger.warning(f"{ticker}: Using current/entry price as position high: ₹{position_high:.2f}")
+            
+            # Calculate current ATR and stop loss
+            atr_data = self.calculate_atr_and_stop_loss(ticker)
+            if not atr_data:
+                self.logger.error(f"{ticker}: Could not calculate ATR")
+                return None
+            
+            # Calculate trailing stop from position high
+            stop_distance = atr_data['stop_loss_distance']
+            trailing_stop = position_high - stop_distance
+            
+            # Never let stop go below initial stop (if provided)
+            if entry_data.get('stop_loss', 0) > 0:
+                trailing_stop = max(trailing_stop, entry_data['stop_loss'])
+            
+            return {
+                'ticker': ticker,
+                'entry_timestamp': entry_data['order_timestamp'],
+                'entry_price': entry_data['average_price'],
+                'quantity': broker_position.get('quantity', 0),
+                'original_quantity': entry_data.get('quantity', broker_position.get('quantity', 0)),
+                'position_high': position_high,
+                'current_stop_loss': trailing_stop,
+                'atr_data': atr_data,
+                'initial_stop_loss': entry_data.get('stop_loss', 0),
+                'target_price': entry_data.get('target_price', 0),
+                'source': entry_data['source_file']
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error reconstructing state for {ticker}: {e}")
             return None
     
     def update_atr_stop_losses(self):
@@ -1311,7 +1624,28 @@ class SLWatchdog:
                                         old_high = self.position_high_prices[ticker]
                                         self.position_high_prices[ticker] = price
                                         self.peak_warning_issued[ticker] = False  # Reset warning when new peak is reached
-                                        self.logger.debug(f"{ticker}: Updated position high: ₹{price:.2f} (was: ₹{old_high:.2f})")
+                                        
+                                        # Recalculate trailing stop with new position high
+                                        if ticker in self.atr_data:
+                                            atr_data = self.atr_data[ticker]
+                                            stop_distance = atr_data.get('stop_loss_distance', 0)
+                                            
+                                            if stop_distance > 0:
+                                                new_trailing_stop = price - stop_distance
+                                                old_stop = atr_data.get('stop_loss', 0)
+                                                
+                                                # Only update if new stop is higher (trailing stop only moves up)
+                                                if new_trailing_stop > old_stop:
+                                                    atr_data['stop_loss'] = new_trailing_stop
+                                                    atr_data['position_high'] = price
+                                                    
+                                                    self.logger.info(f"{ticker}: POSITION HIGH TRAILING STOP UPDATED - New: ₹{new_trailing_stop:.2f} "
+                                                                   f"(from: ₹{old_stop:.2f}), Based on position high: ₹{price:.2f}, "
+                                                                   f"ATR: ₹{atr_data['atr']:.2f} ({atr_data['volatility_category']} volatility)")
+                                                else:
+                                                    self.logger.debug(f"{ticker}: New position high ₹{price:.2f} but stop remains at ₹{old_stop:.2f}")
+                                        else:
+                                            self.logger.debug(f"{ticker}: Updated position high: ₹{price:.2f} (was: ₹{old_high:.2f}) - No ATR data yet")
                                     
                                     # Check for 2% drop from peak
                                     position_high = self.position_high_prices.get(ticker, price)
@@ -1567,6 +1901,14 @@ class SLWatchdog:
         if self.tracked_positions[ticker].get("has_pending_order", False):
             self.logger.debug(f"Skipping ATR stop loss check for {ticker} as it already has a pending order")
             return
+            
+        # Also check if any order was placed recently (within last 5 minutes)
+        last_order_time = self.tracked_positions[ticker].get("last_order_time")
+        if last_order_time:
+            time_since_order = datetime.now() - last_order_time
+            if time_since_order.total_seconds() < 300:  # 5 minutes
+                self.logger.info(f"{ticker}: Skipping ATR check - recent order placed {time_since_order.total_seconds():.0f}s ago")
+                return
         
         # Pre-order validation: Verify position exists with broker
         position_data = self.tracked_positions.get(ticker, {})
@@ -1844,8 +2186,9 @@ class SLWatchdog:
         # Update the position quantity
         self.tracked_positions[ticker]["quantity"] = remaining_quantity
 
-        # Flag position as having a pending order
+        # Flag position as having a pending order and record timestamp
         self.tracked_positions[ticker]["has_pending_order"] = True
+        self.tracked_positions[ticker]["last_order_time"] = datetime.now()
         self.logger.info(f"Marked {ticker} as having a pending order to prevent duplicates")
 
         return True
@@ -1883,6 +2226,7 @@ class SLWatchdog:
 
         # Flag position as having a pending order to prevent duplicate orders
         self.tracked_positions[ticker]["has_pending_order"] = True
+        self.tracked_positions[ticker]["last_order_time"] = datetime.now()
         self.logger.info(f"Marked {ticker} as having a pending order to prevent duplicates")
 
         return True
@@ -1954,8 +2298,9 @@ class SLWatchdog:
 
                                 # Handle partial position update
                                 if ticker in self.tracked_positions:
-                                    # Reset the pending order flag so we can place more orders
-                                    self.tracked_positions[ticker]["has_pending_order"] = False
+                                    # Don't reset the pending order flag immediately - let it expire via timestamp check
+                                    # This prevents rapid duplicate orders
+                                    pass
 
                                     # Check if this was the last part of the position
                                     if remaining_qty <= 0:
@@ -2349,6 +2694,67 @@ class SLWatchdog:
         except Exception as e:
             self.logger.error(f"Error in 2:30 PM SMA20 exit check: {e}")
 
+    def check_gap_breaches(self):
+        """Check if any positions gapped through their stop losses on restart"""
+        try:
+            self.logger.info("\n" + "="*60)
+            self.logger.info("Checking for gap breaches through stop losses...")
+            
+            gap_breaches = []
+            
+            for ticker, position in self.tracked_positions.items():
+                if ticker not in self.atr_data:
+                    continue
+                    
+                stop_loss = self.atr_data[ticker].get('stop_loss', 0)
+                if stop_loss <= 0:
+                    continue
+                
+                # Get current price
+                try:
+                    ltp_data = self.kite.ltp(f"{position['exchange']}:{ticker}")
+                    current_price = ltp_data[f"{position['exchange']}:{ticker}"]["last_price"]
+                    
+                    # Check if current price is below stop loss
+                    if current_price < stop_loss:
+                        gap_percent = ((stop_loss - current_price) / stop_loss) * 100
+                        gap_breaches.append({
+                            'ticker': ticker,
+                            'stop_loss': stop_loss,
+                            'current_price': current_price,
+                            'gap_percent': gap_percent,
+                            'quantity': position['quantity']
+                        })
+                        
+                        self.logger.critical(f"🚨 {ticker}: GAPPED THROUGH STOP LOSS! "
+                                           f"Stop: ₹{stop_loss:.2f}, Current: ₹{current_price:.2f}, "
+                                           f"Gap: {gap_percent:.2f}%")
+                        
+                        # Queue immediate exit order
+                        self.queue_order(
+                            ticker,
+                            position['quantity'],
+                            "SELL",
+                            f"GAP_BREACH: Price gapped {gap_percent:.1f}% below stop loss",
+                            current_price * 0.995  # Slightly below current price for market-like execution
+                        )
+                
+                except Exception as e:
+                    self.logger.error(f"Error checking gap breach for {ticker}: {e}")
+            
+            if gap_breaches:
+                self.logger.critical(f"\n⚠️  FOUND {len(gap_breaches)} POSITIONS THAT GAPPED THROUGH STOP LOSSES!")
+                for breach in gap_breaches:
+                    self.logger.critical(f"   - {breach['ticker']}: {breach['quantity']} shares, "
+                                       f"Gap: {breach['gap_percent']:.2f}% below stop")
+            else:
+                self.logger.info("✅ No gap breaches detected. All positions within stop loss levels.")
+            
+            self.logger.info("="*60 + "\n")
+            
+        except Exception as e:
+            self.logger.error(f"Error in gap breach check: {e}")
+    
     def stop(self):
         """Stop the watchdog monitoring system"""
         self.logger.info("Stopping ATR-based stop loss watchdog...")
@@ -2568,6 +2974,9 @@ def main():
         success = watchdog.start()
         if not success:
             return 1
+        
+        # Check for gaps through stop losses after restart
+        watchdog.check_gap_breaches()
         
         # Keep the main thread alive
         while True:

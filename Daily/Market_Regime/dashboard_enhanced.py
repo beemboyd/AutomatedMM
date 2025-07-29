@@ -595,7 +595,7 @@ ENHANCED_DASHBOARD_HTML = '''
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title">📊 SMA Breadth Historical Analysis <small class="text-success">[176 stocks tracked]</small></h5>
+                        <h5 class="card-title">📊 SMA Breadth Historical Analysis <small class="text-success" id="stocks-tracked">[Loading...]</small></h5>
                         
                         <!-- Separate Charts for SMA20 and SMA50 -->
                         <div class="row">
@@ -1228,6 +1228,11 @@ ENHANCED_DASHBOARD_HTML = '''
                         return;
                     }
                     updateSMABreadthChart(data);
+                    
+                    // Update stock count from data
+                    if (data.total_stocks) {
+                        document.getElementById('stocks-tracked').textContent = `[${data.total_stocks} stocks tracked]`;
+                    }
                 })
                 .catch(error => {
                     console.error('Error fetching SMA breadth data:', error);

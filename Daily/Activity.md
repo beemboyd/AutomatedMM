@@ -19,6 +19,35 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-07-29 15:15 IST - [Claude]
+**Changes:**
+- Verified market regime dashboards (ports 5001 and 8080) are correctly configured to use sma_breadth_historical_latest.json
+- Created append_historical_breadth.py script to append incremental daily breadth data to historical file
+- Script runs after market hours to update the 7-month historical data with latest day's data
+- Maintains rolling 210-day window and creates timestamped backups
+
+**Impact:**
+- Market breadth charts on both dashboards now display 7 months of historical data
+- Daily updates can be automated via scheduler after market close
+- File paths: /Daily/Market_Regime/append_historical_breadth.py
+- No changes needed to existing dashboard code
+
+---
+
+### 2025-07-29 15:30 IST - [Claude]
+**Changes:**
+- Updated market regime dashboards to dynamically display correct stock count instead of hardcoded "176 stocks tracked"
+- Modified dashboard_enhanced.py (port 8080) to show dynamic stock count from data
+- Modified sma_breadth_dashboard_integration.py template to show dynamic stock count
+- Stock count now updates from sma_breadth_historical_latest.json (currently showing 564 stocks)
+
+**Impact:**
+- Both dashboards now display accurate stock count from actual data
+- No dashboard restart required - changes are in JavaScript that loads dynamically
+- Files updated: /Daily/Market_Regime/dashboard_enhanced.py, /Daily/Market_Regime/sma_breadth_dashboard_integration.py
+
+---
+
 ### 2025-07-23 14:50 IST - [System]
 **Changes:**
 - Implemented Git-based plist management system

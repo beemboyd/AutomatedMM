@@ -17,7 +17,7 @@ def generate_sma_breadth_html():
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title">📊 SMA Breadth Historical Analysis <small class="text-success">[176 stocks tracked]</small></h5>
+                        <h5 class="card-title">📊 SMA Breadth Historical Analysis <small class="text-success" id="stocks-tracked-sma">[Loading...]</small></h5>
                         
                         <!-- Combined Line Chart -->
                         <div class="chart-container" style="height: 400px; position: relative;">
@@ -296,6 +296,14 @@ def generate_sma_breadth_javascript():
                 document.getElementById('sma-date-range').textContent = data.date_range;
                 document.getElementById('sma-stocks-tracked').textContent = data.total_stocks;
                 document.getElementById('sma-last-update').textContent = new Date().toLocaleTimeString();
+                
+                // Update the title stock count
+                if (data.total_stocks) {
+                    const titleElement = document.getElementById('stocks-tracked-sma');
+                    if (titleElement) {
+                        titleElement.textContent = `[${data.total_stocks} stocks tracked]`;
+                    }
+                }
                 
                 // Color code regime
                 const regimeElement = document.getElementById('current-market-regime');
