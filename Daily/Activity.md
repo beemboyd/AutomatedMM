@@ -73,6 +73,102 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-29 16:30 IST - [Claude]
+**Changes:**
+- Created Telegram integration for VSR service to send high momentum alerts
+- Added Telegram configuration section to config.ini with ZTTrending bot token
+- Created telegram_notifier.py with rate limiting and cooldown features
+- Extended VSR service with vsr_telegram_service.py for momentum alerts
+- Added helper scripts for setup and chat ID retrieval
+- Integrated config.ini reading for all Telegram settings
+
+**Impact:**
+- VSR service can now send real-time alerts via Telegram for high momentum tickers
+- Configurable thresholds: momentum >= 10%, score >= 60
+- Rate limiting: max 20 alerts/hour, 100 alerts/day
+- Cooldown: 1 hour per ticker to prevent spam
+- Files created:
+  - /Daily/Alerts/telegram_notifier.py
+  - /Daily/Alerts/vsr_telegram_service.py
+  - /Daily/Alerts/telegram_config.py
+  - /Daily/Alerts/get_telegram_chat_id.py
+  - /Daily/Alerts/start_vsr_telegram_alerts.sh
+  - /Daily/Alerts/TELEGRAM_SETUP_GUIDE.md
+- Updated config.ini with TELEGRAM section
+
+---
+
+### 2025-07-29 17:00 IST - [Claude]
+**Changes:**
+- Updated start_vsr_telegram_alerts.sh to read chat_id from config.ini instead of environment variables
+- Confirmed Telegram bot is properly configured and responding to API calls
+- Bot token verified working: receiving empty updates array indicates successful connection
+
+**Impact:**
+- VSR Telegram service now fully integrated with config.ini
+- No need for environment variables - all configuration in one place
+- Ready to receive chat_id and begin sending alerts
+- User needs to message the bot and run get_telegram_chat_id.py to obtain chat_id
+
+---
+
+### 2025-07-29 20:53 IST - [Claude]
+**Changes:**
+- Updated job_manager_dashboard.py to run from 8 AM to 8 PM IST (previously 9 AM to 4 PM)
+- Started all 6 dashboards successfully
+- Fixed dashboard startup issues by directly launching each dashboard
+- Enabled refresh control for all dashboards
+
+**Impact:**
+- All dashboards now operational on extended hours (8 AM - 8 PM IST)
+- Dashboard ports confirmed running:
+  - 3001: VSR Tracker Dashboard
+  - 3003: Short Momentum Dashboard
+  - 5001: Market Breadth Dashboard
+  - 7080: Health Check Dashboard
+  - 8080: Market Regime Enhanced Dashboard
+  - 9090: Job Manager Dashboard
+- Refresh control system activated for post-market hours management
+- Market-hours dashboards (3001, 5001, 3003) will stop refreshing after 3:30 PM IST
+
+---
+
+### 2025-07-29 22:30 IST - [Claude]
+**Changes:**
+- Added volume breadth charts to Market Regime Enhanced Dashboard (port 8080)
+- Created two new visual components: Volume Breadth History and Volume Participation Rate charts
+- Updated API endpoint to serve volume breadth data from historical JSON
+- Verified scheduled job for daily historical breadth updates (runs at 6:30 PM IST)
+- Created comprehensive update script for historical breadth data
+
+**Impact:**
+- Dashboard now displays complete market internals: price breadth (SMA20/50) and volume breadth
+- Volume charts show percentage of stocks above average volume and participation rate
+- Automated daily updates via com.india-ts.sma_breadth_historical_update.plist
+- One-time calculation with incremental daily updates after market hours
+- Files created/updated:
+  - /Daily/Market_Regime/dashboard_enhanced.py (added volume charts)
+  - /Daily/Market_Regime/update_historical_breadth_comprehensive.py (new script)
+  - /Daily/scheduler/plists/com.india-ts.sma_breadth_historical_update.plist (updated path)
+
+---
+
+### 2025-07-29 23:00 IST - [Claude]
+**Changes:**
+- Fixed Volume Participation Rate chart display issue on Market Regime Enhanced Dashboard (port 8080)
+- Changed data processing to multiply volume_participation values by 100 for proper percentage display
+- Updated Y-axis scale from 0-1 to 0-100 with percentage labels
+- Updated tooltip to show participation rate as percentage
+- Identified that sma_breadth_incremental_collector.py handles daily updates to sma_breadth_historical_latest.json
+
+**Impact:**
+- Volume Participation Rate chart now properly displays data (was showing blank due to tiny decimal values)
+- Chart now shows meaningful percentage values (e.g., 24% instead of 0.24)
+- No dashboard restart required - changes apply on next page refresh
+- Confirmed data flow: incremental collector updates → JSON file → dashboards read and display
+
+---
+
 ### 2025-07-23 14:50 IST - [System]
 **Changes:**
 - Implemented Git-based plist management system
@@ -154,6 +250,24 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-30 00:15 IST - [Claude]
+**Changes:**
+- Created plists for VSR Telegram Alert Service
+- com.india-ts.vsr-telegram-alerts.plist - starts service at 9:07 AM
+- com.india-ts.vsr-telegram-shutdown.plist - stops service at 3:30 PM
+- Updated Jobs dashboard to include VSR Telegram service entries
+- Updated PLIST_MASTER_SCHEDULE.md documentation
+
+**Impact:**
+- VSR Telegram alerts now automatically start at 9:07 AM on weekdays
+- Service checks every 60 seconds for high-scoring VSR tickers
+- Sends alerts when: score >= 60 and momentum >= 1.0%
+- Service automatically stops at 3:30 PM after market close
+- Logs stored in: /Daily/logs/vsr_telegram/
+- Total India-TS scheduled jobs increased from 30 to 32
+
+---
+
 ### 2025-07-25 10:12 IST - [Claude/System]
 **Changes:**
 - Created new Short Momentum Tracker service and dashboard
@@ -166,5 +280,21 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - Short Momentum Dashboard: accessible at http://localhost:3003
 - Both services scheduled to start at 9:15 AM daily
 - Plists backed up to Daily/scheduler/plists/
+
+---
+
+### 2025-07-30 03:13 IST - [Claude]
+**Changes:**
+- Restarted VSR Tracker Dashboard on port 3001 with network access
+- Restarted Short Momentum Dashboard on port 3003 with network access
+- Launched SL Watchdog Log Viewer Dashboard on port 2001 with network access
+- All dashboards configured with host='0.0.0.0' for network accessibility
+
+**Impact:**
+- VSR Dashboard running on http://0.0.0.0:3001 (accessible from network)
+- Short Momentum Dashboard running on http://0.0.0.0:3003 (accessible from network)
+- SL Watchdog Dashboard running on http://0.0.0.0:2001 (accessible from network)
+- All dashboards accessible from any device on the same network
+- Process IDs: VSR (32732), Short Momentum (32728), SL Watchdog (33883)
 
 ---
