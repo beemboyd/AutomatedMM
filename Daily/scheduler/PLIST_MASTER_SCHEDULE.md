@@ -26,7 +26,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 34
+**Total Jobs:** 35
 
 **Timezone:** Asia/Kolkata
 
@@ -67,6 +67,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | short_reversal_hourly | Every 30 min (9:30-15:30, Mon-Fri) | Short_Reversal_Hourly.py | ⏸️ On Schedule |
 | weekly_backup | 03:00 (Sun) | weekly_backup.sh | ⏸️ On Schedule |
 | regime_data_updater_10min | Every 10 min (9:10-15:30 Mon-Fri) | update_regime_data.py | ⏸️ On Schedule |
+| sma_breadth_historical_update | 18:30 (Mon-Fri) | append_historical_breadth.py | ⏸️ On Schedule |
 
 ---
 

@@ -48,6 +48,24 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-29 21:16 IST - [Claude]
+**Changes:**
+- Fixed SMA breadth historical update job that was not running correctly after market hours
+- Issue: Wrong script (sma_breadth_historical_collector.py) was running instead of append_historical_breadth.py
+- Enhanced append_historical_breadth.py to trigger dashboard refresh after data update
+- Added refresh calls to dashboards on ports 8080 and 5001
+- Added automatic run of incremental collector after historical update
+- Updated PLIST_MASTER_SCHEDULE.md to include sma_breadth_historical_update job
+
+**Impact:**
+- Daily breadth data will now update correctly at 6:30 PM
+- Dashboards will automatically refresh to show latest data
+- Plist correctly configured to run append_historical_breadth.py
+- No manual intervention needed for daily updates
+- Files updated: /Daily/Market_Regime/append_historical_breadth.py, /Daily/scheduler/PLIST_MASTER_SCHEDULE.md
+
+---
+
 ### 2025-07-29 16:00 IST - [Claude]
 **Changes:**
 - Created comprehensive dashboard management system for all 6 dashboards

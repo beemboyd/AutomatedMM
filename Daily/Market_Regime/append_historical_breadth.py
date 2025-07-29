@@ -9,6 +9,8 @@ import os
 from datetime import datetime, timedelta
 import logging
 from pathlib import Path
+import requests
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -152,5 +154,39 @@ def main():
     else:
         logger.error("Failed to update historical breadth data")
 
+def trigger_dashboard_refresh():
+    """Trigger refresh on both dashboards after data update"""
+    dashboards = [
+        {"port": 8080, "name": "Market Regime Dashboard"},
+        {"port": 5001, "name": "Market Breadth Dashboard"}
+    ]
+    
+    for dashboard in dashboards:
+        try:
+            # Try to trigger refresh via API endpoint
+            response = requests.get(f"http://localhost:{dashboard['port']}/api/refresh", timeout=5)
+            if response.status_code == 200:
+                logger.info(f"Successfully triggered refresh on {dashboard['name']} (port {dashboard['port']})")
+            else:
+                logger.warning(f"Failed to refresh {dashboard['name']}: Status {response.status_code}")
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"{dashboard['name']} (port {dashboard['port']}) is not running")
+        except Exception as e:
+            logger.error(f"Error refreshing {dashboard['name']}: {e}")
+    
+    # Also run the incremental collector to ensure latest data
+    try:
+        logger.info("Running incremental collector for latest data...")
+        os.system(f"cd {SCRIPT_DIR} && python3 sma_breadth_incremental_collector.py")
+        logger.info("Incremental collector completed")
+    except Exception as e:
+        logger.error(f"Error running incremental collector: {e}")
+
 if __name__ == "__main__":
     main()
+    
+    # Trigger dashboard refresh after successful update
+    logger.info("Triggering dashboard refresh...")
+    trigger_dashboard_refresh()
+    
+    logger.info("Historical breadth update process completed")
