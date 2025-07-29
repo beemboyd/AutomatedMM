@@ -48,6 +48,31 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-29 16:00 IST - [Claude]
+**Changes:**
+- Created comprehensive dashboard management system for all 6 dashboards
+- Created dashboard_manager.py to control all dashboards centrally
+- Added plists to start dashboards at 8 AM IST and stop at 8 PM IST
+- Implemented refresh control mechanism for market-hours dashboards (3001, 5001, 3003) to stop refreshing after 3:30 PM
+- Created manage_all_dashboards.sh utility script for manual control
+- Added dashboard_refresh_controller.py and wrapper for refresh control
+
+**Impact:**
+- All dashboards now run on schedule: 8 AM - 8 PM IST daily
+- Dashboards on ports 3001 (VSR), 3003 (Short Momentum), 5001 (Market Breadth) stop data refresh after 3:30 PM
+- Dashboards on ports 7080 (Health), 8080 (Market Regime), 9090 (Job Manager) continue refreshing till 8 PM
+- Files created:
+  - /Daily/scheduler/dashboard_manager.py
+  - /Daily/scheduler/plists/com.india-ts.dashboard_manager_start.plist
+  - /Daily/scheduler/plists/com.india-ts.dashboard_manager_stop.plist
+  - /Daily/scheduler/plists/com.india-ts.dashboard_refresh_control.plist
+  - /Daily/scheduler/plists/com.india-ts.job_manager_dashboard.plist
+  - /Daily/utils/manage_all_dashboards.sh
+  - /Daily/utils/dashboard_refresh_controller.py
+  - /Daily/utils/dashboard_refresh_wrapper.py
+
+---
+
 ### 2025-07-23 14:50 IST - [System]
 **Changes:**
 - Implemented Git-based plist management system
