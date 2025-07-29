@@ -2832,34 +2832,42 @@ def get_sma_breadth_historical():
         if not data:
             return jsonify({'error': 'No data available'})
         
-        # Calculate trend metrics
+        # Calculate trend metrics with safe access
         current = data[-1]
         five_days_ago = data[-6] if len(data) >= 6 else data[0]
         twenty_days_ago = data[-21] if len(data) >= 21 else data[0]
         
-        sma20_5d_change = current['sma_breadth']['sma20_percent'] - five_days_ago['sma_breadth']['sma20_percent']
-        sma50_5d_change = current['sma_breadth']['sma50_percent'] - five_days_ago['sma_breadth']['sma50_percent']
-        sma20_20d_change = current['sma_breadth']['sma20_percent'] - twenty_days_ago['sma_breadth']['sma20_percent']
-        sma50_20d_change = current['sma_breadth']['sma50_percent'] - twenty_days_ago['sma_breadth']['sma50_percent']
+        # Safe access to breadth values
+        current_sma20 = current.get('sma_breadth', {}).get('sma20_percent', 0)
+        current_sma50 = current.get('sma_breadth', {}).get('sma50_percent', 0)
+        five_ago_sma20 = five_days_ago.get('sma_breadth', {}).get('sma20_percent', 0)
+        five_ago_sma50 = five_days_ago.get('sma_breadth', {}).get('sma50_percent', 0)
+        twenty_ago_sma20 = twenty_days_ago.get('sma_breadth', {}).get('sma20_percent', 0)
+        twenty_ago_sma50 = twenty_days_ago.get('sma_breadth', {}).get('sma50_percent', 0)
         
-        # Prepare response
+        sma20_5d_change = current_sma20 - five_ago_sma20
+        sma50_5d_change = current_sma50 - five_ago_sma50
+        sma20_20d_change = current_sma20 - twenty_ago_sma20
+        sma50_20d_change = current_sma50 - twenty_ago_sma50
+        
+        # Prepare response with safe access to potentially missing fields
         response_data = {
             'labels': [d['date'] for d in data],
-            'sma20_values': [d['sma_breadth']['sma20_percent'] for d in data],
-            'sma50_values': [d['sma_breadth']['sma50_percent'] for d in data],
-            'market_scores': [d['market_score'] for d in data],
+            'sma20_values': [d.get('sma_breadth', {}).get('sma20_percent', 0) for d in data],
+            'sma50_values': [d.get('sma_breadth', {}).get('sma50_percent', 0) for d in data],
+            'market_scores': [d.get('market_score', 0.5) for d in data],
             'data_points': len(data),
-            'current_sma20': current['sma_breadth']['sma20_percent'],
-            'current_sma50': current['sma_breadth']['sma50_percent'],
-            'market_regime': current['market_regime'],
-            'market_score': current['market_score'],
-            'total_stocks': current['total_stocks'],
+            'current_sma20': current.get('sma_breadth', {}).get('sma20_percent', 0),
+            'current_sma50': current.get('sma_breadth', {}).get('sma50_percent', 0),
+            'market_regime': current.get('market_regime', 'Unknown'),
+            'market_score': current.get('market_score', 0.5),
+            'total_stocks': current.get('total_stocks', 500),  # Default to 500 if not present
             'date_range': f"{data[0]['date']} to {data[-1]['date']}",
             'sma20_5d_change': sma20_5d_change,
             'sma50_5d_change': sma50_5d_change,
             'sma20_20d_change': sma20_20d_change,
             'sma50_20d_change': sma50_20d_change,
-            # Add volume breadth data
+            # Add volume breadth data with safe defaults
             'volume_breadth_values': [d.get('volume_breadth', {}).get('volume_breadth_percent', 0) for d in data],
             'volume_participation_values': [d.get('volume_breadth', {}).get('volume_participation', 0) * 100 for d in data],  # Convert to percentage
             'current_volume_breadth': current.get('volume_breadth', {}).get('volume_breadth_percent', 0)

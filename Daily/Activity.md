@@ -66,6 +66,23 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-29 21:25 IST - [Claude]
+**Changes:**
+- Fixed dashboard at port 8080 not loading chart content due to data format inconsistency
+- Issue: Incremental collector was adding data without `total_stocks` and `volume_breadth` fields
+- Modified dashboard_enhanced.py to handle missing fields gracefully with safe defaults
+- Updated append_historical_breadth.py to ensure proper data format with all required fields
+- Added default values: total_stocks=500, empty volume_breadth object if missing
+
+**Impact:**
+- Dashboard charts now load correctly with historical data
+- API endpoints return data without errors
+- Future data updates will include all required fields
+- No data loss - existing data still works with safe defaults
+- Files updated: /Daily/Market_Regime/dashboard_enhanced.py, /Daily/Market_Regime/append_historical_breadth.py
+
+---
+
 ### 2025-07-29 16:00 IST - [Claude]
 **Changes:**
 - Created comprehensive dashboard management system for all 6 dashboards

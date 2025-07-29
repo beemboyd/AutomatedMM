@@ -65,16 +65,24 @@ def format_breadth_for_historical(breadth_data):
         else:
             date_str = datetime.now().strftime('%Y-%m-%d')
         
-        # Format the data
+        # Format the data with safe defaults for missing fields
         formatted_data = {
             "date": date_str,
             "timestamp": timestamp.strftime('%Y-%m-%dT%H:%M:%S') if timestamp_str else datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-            "total_stocks": breadth_data.get('total_stocks', 0),
+            "total_stocks": breadth_data.get('total_stocks', 500),  # Default to 500
             "sma_breadth": breadth_data.get('sma_breadth', {}),
-            "volume_breadth": breadth_data.get('volume_breadth', {}),
             "market_regime": breadth_data.get('market_regime', 'Unknown'),
             "market_score": breadth_data.get('market_score', 0.5)
         }
+        
+        # Add empty volume_breadth if not present
+        if 'volume_breadth' not in breadth_data:
+            formatted_data["volume_breadth"] = {
+                "volume_breadth_percent": 0,
+                "volume_participation": 0
+            }
+        else:
+            formatted_data["volume_breadth"] = breadth_data.get('volume_breadth', {})
         
         return formatted_data
         
