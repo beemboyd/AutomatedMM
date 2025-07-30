@@ -69,6 +69,23 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-30 16:30 IST - [Claude]
+**Changes:**
+- Fixed July 30 volume data showing as 0 in dashboard
+- Corrected volume participation values for July 28-30 in historical data
+- July 28: Volume breadth=9.26%, Volume participation=0.0926
+- July 29: Volume breadth=11.79%, Volume participation=0.1179  
+- July 30: Volume breadth=14.17%, Volume participation=0.1417
+- Discovered that volume_participation in old format (ratio) differs from avg_volume_ratio (0.94-0.99 range)
+
+**Impact:**
+- Dashboard now shows correct volume data for July 28-30
+- Volume participation correctly calculated as high_volume/total_stocks ratio
+- Historical data consistency improved for recent dates
+- File updated: /Daily/Market_Regime/historical_breadth_data/sma_breadth_historical_latest.json
+
+---
+
 ### 2025-07-30 12:55 IST - [Claude]
 **Changes:**
 - Fixed hourly tracker service (port 3002) initialization issues with Kite API
