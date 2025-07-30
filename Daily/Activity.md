@@ -374,3 +374,19 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
   - /Daily/scheduler/plists/com.india-ts.short-reversal-hourly.plist
 
 ---
+
+## 2025-07-30 15:11 IST - Claude - Fix Volume Breadth Display on Dashboard
+
+**Changes:**
+- Fixed market_breadth_latest.json symlink to point to today's data (market_breadth_20250730_144316.json)
+- Updated dashboard_enhanced.py to use correct field names from actual data structure
+- Changed volume_breadth calculation to use volume_analysis.high_volume / total_stocks * 100
+- Changed volume_participation to use volume_analysis.avg_volume_ratio * 100
+
+**Impact:**
+- Volume Breadth Analysis section on dashboard (http://localhost:8080/) now displays correct data
+- Dashboard properly calculates volume breadth percentage from high_volume stocks
+- Volume participation chart shows average volume ratio as percentage
+- Fixed issue where volume breadth was showing zeros due to incorrect field mapping
+
+---

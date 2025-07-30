@@ -2868,9 +2868,21 @@ def get_sma_breadth_historical():
             'sma20_20d_change': sma20_20d_change,
             'sma50_20d_change': sma50_20d_change,
             # Add volume breadth data with safe defaults
-            'volume_breadth_values': [d.get('volume_breadth', {}).get('volume_breadth_percent', 0) for d in data],
-            'volume_participation_values': [d.get('volume_breadth', {}).get('volume_participation', 0) * 100 for d in data],  # Convert to percentage
-            'current_volume_breadth': current.get('volume_breadth', {}).get('volume_breadth_percent', 0)
+            # Calculate volume breadth percentage as (high_volume / total_stocks) * 100
+            'volume_breadth_values': [
+                (d.get('volume_analysis', {}).get('high_volume', 0) / d.get('total_stocks', 1)) * 100 
+                if d.get('total_stocks', 0) > 0 else 0 
+                for d in data
+            ],
+            # Use average volume ratio as participation metric
+            'volume_participation_values': [
+                d.get('volume_analysis', {}).get('avg_volume_ratio', 0) * 100 
+                for d in data
+            ],
+            'current_volume_breadth': (
+                (current.get('volume_analysis', {}).get('high_volume', 0) / current.get('total_stocks', 1)) * 100
+                if current.get('total_stocks', 0) > 0 else 0
+            )
         }
         
         # Debug log
