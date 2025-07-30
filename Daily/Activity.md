@@ -392,3 +392,18 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - Dashboard handles both old format (volume_breadth) and new format (volume_analysis) data
 
 ---
+
+## 2025-07-30 15:19 IST - Claude - Fix Volume Breadth Chart Display
+
+**Changes:**
+- Updated append_historical_breadth.py to convert volume_analysis to volume_breadth format
+- Manually updated today's historical entry with volume breadth data (12.94%)
+- Volume breadth now correctly displays on dashboard charts
+
+**Impact:**
+- Volume Breadth charts now show actual data instead of zeros
+- July 29th still shows 0 as it lacks volume data in historical file
+- Dashboard properly displays volume trends over time
+- append_historical_breadth.py now handles both old and new data formats
+
+---

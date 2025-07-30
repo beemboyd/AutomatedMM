@@ -75,14 +75,24 @@ def format_breadth_for_historical(breadth_data):
             "market_score": breadth_data.get('market_score', 0.5)
         }
         
-        # Add empty volume_breadth if not present
-        if 'volume_breadth' not in breadth_data:
+        # Handle volume data - convert from new format (volume_analysis) to old format (volume_breadth)
+        if 'volume_analysis' in breadth_data and breadth_data['volume_analysis']:
+            # Convert from new format
+            volume_analysis = breadth_data['volume_analysis']
+            total_stocks = breadth_data.get('total_stocks', 500)
+            formatted_data["volume_breadth"] = {
+                "volume_breadth_percent": (volume_analysis.get('high_volume', 0) / total_stocks) * 100 if total_stocks > 0 else 0,
+                "volume_participation": volume_analysis.get('avg_volume_ratio', 0)
+            }
+        elif 'volume_breadth' in breadth_data:
+            # Use existing old format
+            formatted_data["volume_breadth"] = breadth_data['volume_breadth']
+        else:
+            # Default empty values
             formatted_data["volume_breadth"] = {
                 "volume_breadth_percent": 0,
                 "volume_participation": 0
             }
-        else:
-            formatted_data["volume_breadth"] = breadth_data.get('volume_breadth', {})
         
         return formatted_data
         
