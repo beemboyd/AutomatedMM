@@ -413,8 +413,8 @@ def calculate_indicators(daily_data):
     df['SwingLow'] = df['Low'][(df['Low'].shift(1) > df['Low']) & (df['Low'].shift(-1) > df['Low'])]
     
     # Forward fill swing highs and lows for resistance/support levels
-    df['LastSwingHigh'] = df['SwingHigh'].fillna(method='ffill')
-    df['LastSwingLow'] = df['SwingLow'].fillna(method='ffill')
+    df['LastSwingHigh'] = df['SwingHigh'].ffill()
+    df['LastSwingLow'] = df['SwingLow'].ffill()
     
     # Calculate trend direction based on SMA alignment
     df['TrendUp'] = (df['SMA20'] > df['SMA50']) & (df['SMA50'] > df['SMA200'])
@@ -789,16 +789,16 @@ def main():
             results_df.to_excel(excel_file, index=False)
             logger.info(f"Successfully wrote {len(results_df)} filtered tickers to {excel_file}")
             
-            # Generate HTML report
-            html_output = generate_html_report(results_df, html_file, "Ticker.xlsx")
-            logger.info(f"Generated HTML report at {html_output}")
+            # Comment out HTML report generation for hourly scanner
+            # html_output = generate_html_report(results_df, html_file, "Ticker.xlsx")
+            # logger.info(f"Generated HTML report at {html_output}")
             
-            # Open the HTML report in the default browser
-            try:
-                webbrowser.open('file://' + os.path.abspath(html_output))
-                logger.info(f"Opened HTML report in browser")
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # Comment out opening HTML report for hourly scanner
+            # try:
+            #     webbrowser.open('file://' + os.path.abspath(html_output))
+            #     #logger.info(f"Opened HTML report in browser")
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
             
             # Print summary to console
             print("\n===== Long Reversal Daily Results with Sector Information =====")
