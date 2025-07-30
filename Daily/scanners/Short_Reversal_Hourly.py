@@ -935,18 +935,4 @@ if __name__ == "__main__":
     print("=====================================\n")
 
     result = main()
-    
-    # Trigger market regime analysis after successful scan
-    if result == 0:
-        try:
-            import subprocess
-            logger.info("Triggering market regime analysis...")
-            subprocess.run([
-                sys.executable, 
-                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                            "Market_Regime", "market_regime_analyzer.py")
-            ], timeout=60)
-        except Exception as e:
-            logger.warning(f"Could not trigger market regime analysis: {e}")
-    
     sys.exit(result)
