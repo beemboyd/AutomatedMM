@@ -407,3 +407,18 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - append_historical_breadth.py now handles both old and new data formats
 
 ---
+
+## 2025-07-30 15:21 IST - Claude - Update July 29th Volume Data
+
+**Changes:**
+- Created and ran one-time script to update July 29th historical data with volume information
+- Used market_breadth_20250729_154253.json to extract volume data
+- Updated historical data: Volume breadth 11.79%, Volume participation 0.9540
+
+**Impact:**
+- July 29th now displays correct volume data on dashboard charts
+- All historical data points now show volume information
+- Volume Breadth Analysis charts show complete trend without gaps
+- Removed temporary update script after successful update
+
+---
