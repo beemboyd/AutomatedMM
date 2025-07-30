@@ -388,5 +388,7 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - Dashboard properly calculates volume breadth percentage from high_volume stocks
 - Volume participation chart shows average volume ratio as percentage
 - Fixed issue where volume breadth was showing zeros due to incorrect field mapping
+- API now returns volume_breadth_values and volume_participation_values correctly
+- Dashboard handles both old format (volume_breadth) and new format (volume_analysis) data
 
 ---
