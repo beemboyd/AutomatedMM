@@ -93,7 +93,7 @@ logger.info(f"Successfully loaded API credentials for user {user_name}")
 # Define paths
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
-RESULTS_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "results")
+RESULTS_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "results-h")
 HTML_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "Detailed_Analysis")
 
 # Ensure directories exist
