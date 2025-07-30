@@ -785,7 +785,7 @@ def main():
         today = datetime.datetime.now()
         formatted_date = today.strftime("%Y%m%d")
         formatted_time = today.strftime("%H%M%S")
-        excel_file = os.path.join(RESULTS_DIR, f"Short_Reversal_Daily_{formatted_date}_{formatted_time}.xlsx")
+        excel_file = os.path.join(RESULTS_DIR, f"Short_Reversal_Hourly_{formatted_date}_{formatted_time}.xlsx")
         # No HTML file for hourly version
         
         if results:
