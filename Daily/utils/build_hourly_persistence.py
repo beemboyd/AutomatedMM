@@ -20,15 +20,19 @@ class HourlyPersistenceBuilder:
     def __init__(self):
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.data_dir = os.path.join(self.base_dir, 'data')
+        self.short_momentum_dir = os.path.join(self.base_dir, 'data', 'short_momentum')
         self.results_h_dir = os.path.join(self.base_dir, 'results-h')
         self.results_s_h_dir = os.path.join(self.base_dir, 'results-s-h')
         
-        # Ensure data directory exists
+        # Ensure directories exist
         os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.short_momentum_dir, exist_ok=True)
         
-        # Output files - matching existing naming convention
+        # Output files - matching existing architecture
+        # Long hourly persistence stays in data/ directory (same as VSR)
         self.long_persistence_file = os.path.join(self.data_dir, 'vsr_ticker_persistence_hourly_long.json')
-        self.short_persistence_file = os.path.join(self.data_dir, 'vsr_ticker_persistence_hourly_short.json')
+        # Short hourly persistence goes to short_momentum/ directory (same as short momentum tracker)
+        self.short_persistence_file = os.path.join(self.short_momentum_dir, 'vsr_ticker_persistence_hourly_short.json')
         
     def get_hourly_files(self, directory, pattern, days=3):
         """Get hourly scan files from the last N days"""
