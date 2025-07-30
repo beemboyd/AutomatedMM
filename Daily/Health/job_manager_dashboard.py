@@ -234,6 +234,25 @@ JOBS = {
         'script': 'Short_Reversal_Hourly.py',
         'schedule': 'Every 30 min (9:30-15:30, Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.hourly-tracker-service': {
+        'name': 'Hourly Tracker Service',
+        'script': 'hourly_tracker_service_fixed.py',
+        'schedule': '8:00 AM (Mon-Fri, Runs continuously)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/services'
+    },
+    'com.india-ts.hourly-tracker-dashboard': {
+        'name': 'Hourly Tracker Dashboard',
+        'script': 'hourly_tracker_dashboard.py',
+        'schedule': '8:00 AM (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 3002
+    },
+    'com.india-ts.hourly-short-tracker-service': {
+        'name': 'Hourly Short Tracker Service',
+        'script': 'hourly_short_tracker_service.py',
+        'schedule': '8:00 AM (Mon-Fri, Runs continuously)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/services'
     }
 }
 
@@ -293,6 +312,22 @@ DASHBOARDS = {
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
         'port': 3003,
         'start_script': None,  # Managed by launchctl
+        'stop_script': None
+    },
+    'hourly_tracker_dashboard': {
+        'name': 'Hourly Tracker Dashboard',
+        'script': 'hourly_tracker_dashboard.py',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 3002,
+        'start_script': None,  # Started with service
+        'stop_script': None
+    },
+    'hourly_short_tracker_dashboard': {
+        'name': 'Hourly Short Tracker Dashboard',
+        'script': 'hourly_short_tracker_dashboard.py',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 3004,
+        'start_script': None,  # Started with service
         'stop_script': None
     }
 }

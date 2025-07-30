@@ -16,6 +16,7 @@ import pytz
 import sys
 import json
 import logging
+import math
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,6 +28,18 @@ PORT = 3003
 SHORT_LOG_DIR = "/Users/maverick/PycharmProjects/India-TS/Daily/logs/short_momentum"
 SHORT_DATA_DIR = "/Users/maverick/PycharmProjects/India-TS/Daily/data/short_momentum"
 IST = pytz.timezone('Asia/Kolkata')
+
+def clean_nan_values(obj):
+    """Replace NaN values with 0 in nested dictionaries/lists"""
+    if isinstance(obj, dict):
+        return {k: clean_nan_values(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_nan_values(item) for item in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0
+        return obj
+    return obj
 
 def parse_short_momentum_logs(hours=2):
     """Parse short momentum tracker logs from the last N hours"""
@@ -83,6 +96,9 @@ def parse_short_momentum_logs(hours=2):
                 ticker = match.group(3).strip()
                 score = int(match.group(4))
                 vsr = float(match.group(5))
+                # Handle NaN/Inf values
+                if math.isnan(vsr) or math.isinf(vsr):
+                    vsr = 0.0
                 price = float(match.group(6).replace(',', ''))
                 volume = int(match.group(7).replace(',', ''))
                 momentum = float(match.group(8))
@@ -230,6 +246,9 @@ def api_short_momentum():
             'tracker_type': 'short_momentum'
         }
         
+        # Clean any NaN values before sending
+        response = clean_nan_values(response)
+        
         return jsonify(response)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -241,7 +260,9 @@ def api_ticker_details(ticker):
         tickers_data = parse_short_momentum_logs(hours=24)
         
         if ticker in tickers_data:
-            return jsonify(tickers_data[ticker])
+            # Clean any NaN values before sending
+            ticker_data = clean_nan_values(tickers_data[ticker])
+            return jsonify(ticker_data)
         else:
             return jsonify({'error': 'Ticker not found'}), 404
     except Exception as e:

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hourly Tracker Dashboard - Long Reversal Hourly</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            color: #4CAF50;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .stat-box {
+            background-color: #1a1a1a;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+        }
+        
+        .category-section {
+            margin-bottom: 30px;
+            background-color: #1a1a1a;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #333;
+        }
+        
+        .category-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .ticker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+        
+        .ticker-card {
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #444;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .ticker-card:hover {
+            border-color: #4CAF50;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+        }
+        
+        .ticker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .ticker-symbol {
+            font-size: 18px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .score-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .score-perfect {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .score-high {
+            background-color: #FF9800;
+            color: white;
+        }
+        
+        .score-medium {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        .ticker-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .metric-label {
+            color: #888;
+        }
+        
+        .metric-value {
+            font-weight: bold;
+        }
+        
+        .positive {
+            color: #4CAF50;
+        }
+        
+        .negative {
+            color: #f44336;
+        }
+        
+        .high-value {
+            color: #FF9800;
+        }
+        
+        .timestamp {
+            color: #888;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: #888;
+        }
+        
+        .error {
+            background-color: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-active {
+            background-color: #4CAF50;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .sector-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background-color: #333;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        
+        .appearances-badge {
+            background-color: #673AB7;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>📊 Hourly Tracker Dashboard</h1>
+                <p style="color: #888; margin-top: 5px;">Long Reversal Hourly Scanner with VSR Analysis</p>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-label">Total Tickers</div>
+                    <div class="stat-value" id="totalTickers">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Perfect Scores</div>
+                    <div class="stat-value" id="perfectScores">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">High Momentum</div>
+                    <div class="stat-value" id="highMomentum">0</div>
+                </div>
+            </div>
+            <div class="controls">
+                <span class="status-indicator status-active"></span>
+                <span id="lastUpdate" style="color: #888;">--:--:--</span>
+                <button class="btn" onclick="refreshData()">🔄 Refresh</button>
+            </div>
+        </div>
+        
+        <div id="errorContainer"></div>
+        
+        <div id="loadingContainer" class="loading">
+            Loading hourly tracker data...
+        </div>
+        
+        <div id="contentContainer" style="display: none;">
+            <!-- Perfect Scores Section -->
+            <div class="category-section" id="perfectScoresSection">
+                <div class="category-header">
+                    <span>🎯 Perfect Scores (100)</span>
+                </div>
+                <div class="ticker-grid" id="perfectScoresGrid"></div>
+            </div>
+            
+            <!-- High VSR Section -->
+            <div class="category-section" id="highVsrSection">
+                <div class="category-header">
+                    <span>📈 High VSR (≥ 10)</span>
+                </div>
+                <div class="ticker-grid" id="highVsrGrid"></div>
+            </div>
+            
+            <!-- High Momentum Section -->
+            <div class="category-section" id="highMomentumSection">
+                <div class="category-header">
+                    <span>🚀 High Momentum (≥ 5%)</span>
+                </div>
+                <div class="ticker-grid" id="highMomentumGrid"></div>
+            </div>
+            
+            <!-- All Tickers Section -->
+            <div class="category-section">
+                <div class="category-header">
+                    <span>📊 All Hourly Tickers</span>
+                </div>
+                <div class="ticker-grid" id="allTickersGrid"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let refreshInterval;
+        
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+        
+        function formatPrice(price) {
+            return '₹' + price.toFixed(2);
+        }
+        
+        function getScoreClass(score) {
+            if (score === 100) return 'score-perfect';
+            if (score >= 85) return 'score-high';
+            return 'score-medium';
+        }
+        
+        function getValueClass(value, threshold) {
+            if (value >= threshold) return 'high-value';
+            if (value > 0) return 'positive';
+            return 'negative';
+        }
+        
+        function createTickerCard(ticker) {
+            const scoreClass = getScoreClass(ticker.score);
+            const momentumClass = ticker.momentum >= 0 ? 'positive' : 'negative';
+            const vsrClass = ticker.vsr >= 10 ? 'high-value' : '';
+            
+            return `
+                <div class="ticker-card" onclick="showTickerDetails('${ticker.ticker}')">
+                    <div class="ticker-header">
+                        <span class="ticker-symbol">${ticker.ticker}</span>
+                        <span class="score-badge ${scoreClass}">${ticker.score}</span>
+                    </div>
+                    <div class="ticker-metrics">
+                        <div class="metric">
+                            <span class="metric-label">Price:</span>
+                            <span class="metric-value">${formatPrice(ticker.price)}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">VSR:</span>
+                            <span class="metric-value ${vsrClass}">${ticker.vsr.toFixed(2)}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Momentum:</span>
+                            <span class="metric-value ${momentumClass}">${ticker.momentum.toFixed(2)}%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Volume:</span>
+                            <span class="metric-value">${formatNumber(ticker.volume)}</span>
+                        </div>
+                    </div>
+                    ${ticker.sector !== 'Unknown' ? `<span class="sector-tag">${ticker.sector}</span>` : ''}
+                    ${ticker.appearances > 1 ? `<span class="appearances-badge" style="margin-left: 5px;">${ticker.appearances}x</span>` : ''}
+                    <div class="timestamp">Last seen: ${ticker.last_seen || ticker.timestamp}</div>
+                </div>
+            `;
+        }
+        
+        function updateDashboard(data) {
+            // Update stats
+            document.getElementById('totalTickers').textContent = data.total_tickers;
+            document.getElementById('perfectScores').textContent = data.categories.perfect_scores.length;
+            document.getElementById('highMomentum').textContent = data.categories.high_momentum.length;
+            
+            // Update timestamp
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            
+            // Update perfect scores
+            const perfectScoresGrid = document.getElementById('perfectScoresGrid');
+            if (data.categories.perfect_scores.length > 0) {
+                perfectScoresGrid.innerHTML = data.categories.perfect_scores
+                    .map(ticker => createTickerCard(ticker))
+                    .join('');
+                document.getElementById('perfectScoresSection').style.display = 'block';
+            } else {
+                document.getElementById('perfectScoresSection').style.display = 'none';
+            }
+            
+            // Update high VSR
+            const highVsrGrid = document.getElementById('highVsrGrid');
+            if (data.categories.high_vsr.length > 0) {
+                highVsrGrid.innerHTML = data.categories.high_vsr
+                    .map(ticker => createTickerCard(ticker))
+                    .join('');
+                document.getElementById('highVsrSection').style.display = 'block';
+            } else {
+                document.getElementById('highVsrSection').style.display = 'none';
+            }
+            
+            // Update high momentum
+            const highMomentumGrid = document.getElementById('highMomentumGrid');
+            if (data.categories.high_momentum.length > 0) {
+                highMomentumGrid.innerHTML = data.categories.high_momentum
+                    .map(ticker => createTickerCard(ticker))
+                    .join('');
+                document.getElementById('highMomentumSection').style.display = 'block';
+            } else {
+                document.getElementById('highMomentumSection').style.display = 'none';
+            }
+            
+            // Update all tickers
+            const allTickersGrid = document.getElementById('allTickersGrid');
+            if (data.categories.all_tickers.length > 0) {
+                allTickersGrid.innerHTML = data.categories.all_tickers
+                    .map(ticker => createTickerCard(ticker))
+                    .join('');
+            } else {
+                allTickersGrid.innerHTML = '<div class="empty-state">No tickers found in the last 2 hours</div>';
+            }
+        }
+        
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/trending-tickers');
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                updateDashboard(data);
+                
+                // Hide loading, show content
+                document.getElementById('loadingContainer').style.display = 'none';
+                document.getElementById('contentContainer').style.display = 'block';
+                document.getElementById('errorContainer').innerHTML = '';
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('errorContainer').innerHTML = 
+                    `<div class="error">Error loading data: ${error.message}</div>`;
+                document.getElementById('loadingContainer').style.display = 'none';
+            }
+        }
+        
+        function refreshData() {
+            fetchData();
+        }
+        
+        function showTickerDetails(ticker) {
+            // For now, just log - can be expanded to show detailed view
+            console.log('Show details for ticker:', ticker);
+            // Could open a modal or navigate to a detail page
+        }
+        
+        // Initial load
+        fetchData();
+        
+        // Auto-refresh every 60 seconds
+        refreshInterval = setInterval(fetchData, 60000);
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

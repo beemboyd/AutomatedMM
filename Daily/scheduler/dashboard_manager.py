@@ -34,9 +34,21 @@ DASHBOARDS = {
         'stop_refresh_after': '15:30',  # Stop refresh after 3:30 PM
         'workdir': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
     },
+    '3002': {
+        'name': 'Hourly Tracker Dashboard',
+        'script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/hourly_tracker_dashboard.py',
+        'stop_refresh_after': '15:30',  # Stop refresh after 3:30 PM
+        'workdir': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
+    },
     '3003': {
         'name': 'Short Momentum Dashboard',
         'script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/short_momentum_dashboard.py',
+        'stop_refresh_after': '15:30',  # Stop refresh after 3:30 PM
+        'workdir': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
+    },
+    '3004': {
+        'name': 'Hourly Short Tracker Dashboard',
+        'script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/hourly_short_tracker_dashboard.py',
         'stop_refresh_after': '15:30',  # Stop refresh after 3:30 PM
         'workdir': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
     },

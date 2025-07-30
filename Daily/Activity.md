@@ -48,6 +48,25 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-30 12:55 IST - [Claude]
+**Changes:**
+- Fixed hourly tracker service (port 3002) initialization issues with Kite API
+- Created hourly_tracker_service_fixed.py with proper config loading and credential handling
+- Updated hourly_tracker_dashboard.py regex pattern to match service log format including Days field
+- Created new hourly short tracker service and dashboard (port 3004) for Short_Reversal_Hourly results
+- Updated dashboard_manager.py to include port 3004 configuration
+- Added both hourly services and dashboards to job_manager_dashboard.py at port 9090
+
+**Impact:**
+- Hourly tracker dashboard (3002) now correctly populates with tickers from Long_Reversal_Hourly scans
+- New hourly short tracker dashboard (3004) provides same functionality for short positions
+- Both services use VSR scoring logic adapted for their respective directions
+- Services: hourly_tracker_service_fixed.py, hourly_short_tracker_service.py
+- Dashboards: hourly_tracker_dashboard.py (3002), hourly_short_tracker_dashboard.py (3004)
+- Job manager dashboard (9090) now shows all hourly tracker services for monitoring
+
+---
+
 ### 2025-07-29 21:16 IST - [Claude]
 **Changes:**
 - Fixed SMA breadth historical update job that was not running correctly after market hours
