@@ -2868,25 +2868,36 @@ def get_sma_breadth_historical():
             'sma20_20d_change': sma20_20d_change,
             'sma50_20d_change': sma50_20d_change,
             # Add volume breadth data with safe defaults
-            # Calculate volume breadth percentage as (high_volume / total_stocks) * 100
+            # Handle both old format (volume_breadth) and new format (volume_analysis)
             'volume_breadth_values': [
-                (d.get('volume_analysis', {}).get('high_volume', 0) / d.get('total_stocks', 1)) * 100 
-                if d.get('total_stocks', 0) > 0 else 0 
+                # Try old format first
+                d.get('volume_breadth', {}).get('volume_breadth_percent') if d.get('volume_breadth', {}).get('volume_breadth_percent') is not None
+                # Fall back to new format calculation
+                else ((d.get('volume_analysis', {}).get('high_volume', 0) / d.get('total_stocks', 1)) * 100 
+                if d.get('total_stocks', 0) > 0 and d.get('volume_analysis') else 0)
                 for d in data
             ],
-            # Use average volume ratio as participation metric
+            # Use volume participation from old format or avg_volume_ratio from new format
             'volume_participation_values': [
-                d.get('volume_analysis', {}).get('avg_volume_ratio', 0) * 100 
+                # Try old format first (already in percentage)
+                (d.get('volume_breadth', {}).get('volume_participation', 0) * 100) if d.get('volume_breadth', {}).get('volume_participation') is not None
+                # Fall back to new format
+                else (d.get('volume_analysis', {}).get('avg_volume_ratio', 0) * 100 if d.get('volume_analysis') else 0)
                 for d in data
             ],
             'current_volume_breadth': (
-                (current.get('volume_analysis', {}).get('high_volume', 0) / current.get('total_stocks', 1)) * 100
-                if current.get('total_stocks', 0) > 0 else 0
+                # Try old format first
+                current.get('volume_breadth', {}).get('volume_breadth_percent', 0) or
+                # Fall back to new format
+                ((current.get('volume_analysis', {}).get('high_volume', 0) / current.get('total_stocks', 1)) * 100
+                if current.get('total_stocks', 0) > 0 else 0)
             )
         }
         
         # Debug log
+        logger.info(f"Volume breadth values sample: {response_data['volume_breadth_values'][:5]}")
         logger.info(f"Volume participation values sample: {response_data['volume_participation_values'][:5]}")
+        logger.info(f"Current volume breadth: {response_data['current_volume_breadth']}")
         
         return jsonify(response_data)
         
