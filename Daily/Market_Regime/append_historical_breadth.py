@@ -80,9 +80,14 @@ def format_breadth_for_historical(breadth_data):
             # Convert from new format
             volume_analysis = breadth_data['volume_analysis']
             total_stocks = breadth_data.get('total_stocks', 500)
+            high_volume = volume_analysis.get('high_volume', 0)
+            volume_breadth_percent = (high_volume / total_stocks) * 100 if total_stocks > 0 else 0
+            # IMPORTANT: volume_participation is the ratio of high_volume/total_stocks, NOT avg_volume_ratio
+            volume_participation = high_volume / total_stocks if total_stocks > 0 else 0
+            
             formatted_data["volume_breadth"] = {
-                "volume_breadth_percent": (volume_analysis.get('high_volume', 0) / total_stocks) * 100 if total_stocks > 0 else 0,
-                "volume_participation": volume_analysis.get('avg_volume_ratio', 0)
+                "volume_breadth_percent": volume_breadth_percent,
+                "volume_participation": volume_participation
             }
         elif 'volume_breadth' in breadth_data:
             # Use existing old format

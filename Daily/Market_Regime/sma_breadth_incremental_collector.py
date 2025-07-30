@@ -234,9 +234,12 @@ class SimplifiedSMABreadthCollector:
                 existing_dates = [d['date'] for d in historical_data]
                 
                 if today_str in existing_dates:
-                    # Update existing entry
+                    # Update existing entry - preserve volume_breadth if it exists
                     for i, data in enumerate(historical_data):
                         if data['date'] == today_str:
+                            # Preserve existing volume_breadth data if present
+                            if 'volume_breadth' in historical_data[i]:
+                                today_breadth['volume_breadth'] = historical_data[i]['volume_breadth']
                             historical_data[i] = today_breadth
                             break
                 else:

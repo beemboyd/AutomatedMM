@@ -86,6 +86,21 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-30 18:42 IST - [Claude]
+**Changes:**
+- Fixed bug in append_historical_breadth.py that was using avg_volume_ratio instead of high_volume/total_stocks for volume_participation
+- Updated sma_breadth_incremental_collector.py to preserve existing volume_breadth data when updating SMA data
+- Re-ran append_historical_breadth.py to restore July 30 volume data after 6:30 PM job overwrote it
+- Volume participation calculation now correctly uses: volume_participation = high_volume / total_stocks
+
+**Impact:**
+- Permanent fix prevents future 6:30 PM jobs from overwriting volume data
+- July 30 volume data restored: Volume breadth=14.17%, Volume participation=0.1417
+- Dashboard will now maintain correct volume data through scheduled updates
+- Files updated: /Daily/Market_Regime/append_historical_breadth.py, /Daily/Market_Regime/sma_breadth_incremental_collector.py
+
+---
+
 ### 2025-07-30 12:55 IST - [Claude]
 **Changes:**
 - Fixed hourly tracker service (port 3002) initialization issues with Kite API
