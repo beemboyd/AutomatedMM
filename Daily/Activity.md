@@ -98,6 +98,23 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-31 09:47 IST - [Claude]
+**Changes:**
+- Fixed dashboards not showing data on ports 3002, 3003, and 3004
+- Identified issue: services were logging to previous day's log files (20250730 instead of 20250731)
+- Restarted short_momentum_tracker_service to force creation of today's log file
+- Restarted hourly_tracker_service and hourly_short_tracker_service
+- Created proper plist for hourly_short_tracker_service
+
+**Impact:**
+- Short Momentum Dashboard (3003) now showing data with 115 tracked tickers
+- Services now logging to correct date-stamped files (20250731)
+- All tracker services properly configured with plists and auto-restart enabled
+- Dashboards should now populate with real-time tracking data
+- Log files: short_momentum_tracker_20250731.log created with VSR-formatted entries
+
+---
+
 ### 2025-07-30 16:20 IST - [Claude]
 **Changes:**
 - Fixed Volume Breadth Analysis showing zeros on dashboard (http://localhost:8080/)
