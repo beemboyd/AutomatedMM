@@ -253,6 +253,18 @@ JOBS = {
         'script': 'hourly_short_tracker_service.py',
         'schedule': '8:00 AM (Mon-Fri, Runs continuously)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/services'
+    },
+    'com.india-ts.hourly-tracker-dashboard': {
+        'name': 'Hourly Tracker Dashboard',
+        'script': 'hourly_tracker_dashboard.py',
+        'schedule': 'Continuous (KeepAlive)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
+    },
+    'com.india-ts.hourly-short-tracker-dashboard': {
+        'name': 'Hourly Short Tracker Dashboard',
+        'script': 'hourly_short_tracker_dashboard.py',
+        'schedule': 'Continuous (KeepAlive)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
     }
 }
 

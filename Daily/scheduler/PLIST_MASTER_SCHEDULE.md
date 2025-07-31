@@ -1,7 +1,7 @@
 # Master Plist Schedule Documentation
 
 Generated on: 2025-07-23 08:11:44  
-Last Updated: 2025-07-30 00:15:00
+Last Updated: 2025-07-31 09:49:00
 
 ## Overview
 
@@ -26,7 +26,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 36
+**Total Jobs:** 39
 
 **Timezone:** Asia/Kolkata
 
@@ -66,6 +66,9 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | long_reversal_hourly | Every 30 min (9:30-15:30, Mon-Fri) | Long_Reversal_Hourly.py | ⏸️ On Schedule |
 | short_reversal_hourly | Every 30 min (9:30-15:30, Mon-Fri) | Short_Reversal_Hourly.py | ⏸️ On Schedule |
 | hourly_tracker_service | Continuous (8:00-16:00, Mon-Fri) | hourly_tracker_service_fixed.py | ✅ Active |
+| hourly_short_tracker_service | Continuous (8:00-16:00, Mon-Fri) | hourly_short_tracker_service.py | ✅ Active |
+| hourly_tracker_dashboard | Continuous (KeepAlive) | hourly_tracker_dashboard.py | ✅ Active |
+| hourly_short_tracker_dashboard | Continuous (KeepAlive) | hourly_short_tracker_dashboard.py | ✅ Active |
 | weekly_backup | 03:00 (Sun) | weekly_backup.sh | ⏸️ On Schedule |
 | regime_data_updater_10min | Every 10 min (9:10-15:30 Mon-Fri) | update_regime_data.py | ⏸️ On Schedule |
 | sma_breadth_historical_update | 18:30 (Mon-Fri) | append_historical_breadth.py | ⏸️ On Schedule |

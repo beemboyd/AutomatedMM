@@ -115,6 +115,23 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-31 09:50 IST - [Claude]
+**Changes:**
+- Updated job_manager_dashboard.py to include new hourly dashboard plist entries
+- Updated PLIST_MASTER_SCHEDULE.md with all new services and dashboards
+- Added hourly_tracker_dashboard and hourly_short_tracker_dashboard to JOBS dictionary
+- Updated total job count from 36 to 39 in documentation
+- Updated last modified timestamp in documentation
+
+**Impact:**
+- Job Manager Dashboard now tracks all 39 India-TS jobs including new dashboards
+- All 43 active plists are properly documented and backed up (45 in backup directory)
+- New services documented: hourly_short_tracker_service, hourly_tracker_dashboard, hourly_short_tracker_dashboard
+- Dashboard entries properly show "Continuous (KeepAlive)" schedule status
+- Complete plist tracking maintained across system
+
+---
+
 ### 2025-07-30 16:20 IST - [Claude]
 **Changes:**
 - Fixed Volume Breadth Analysis showing zeros on dashboard (http://localhost:8080/)
