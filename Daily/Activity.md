@@ -48,6 +48,21 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-31 08:55 IST - [Claude]
+**Changes:**
+- Updated Job Manager Dashboard plist configuration to enable KeepAlive=true and RunAtLoad=true
+- Updated both the active plist in ~/Library/LaunchAgents/ and backup in Daily/scheduler/plists/
+- Reloaded the launchctl service to apply changes
+- Dashboard is now configured to always stay running on port 9090
+
+**Impact:**
+- Job Manager Dashboard (port 9090) will now automatically restart if it crashes
+- Dashboard will start automatically at system boot/login
+- Files updated: ~/Library/LaunchAgents/com.india-ts.job_manager_dashboard.plist, Daily/scheduler/plists/com.india-ts.job_manager_dashboard.plist
+- Service status verified - dashboard is accessible at http://localhost:9090
+
+---
+
 ### 2025-07-30 16:20 IST - [Claude]
 **Changes:**
 - Fixed Volume Breadth Analysis showing zeros on dashboard (http://localhost:8080/)
