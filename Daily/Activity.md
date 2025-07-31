@@ -63,6 +63,23 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-31 09:02 IST - [Claude]
+**Changes:**
+- Created new plist configuration for hourly_tracker_service_fixed.py service
+- Service was not scheduled to run at 8 AM because no plist existed
+- Created com.india-ts.hourly-tracker-service.plist with KeepAlive and RunAtLoad enabled
+- Fixed command arguments (removed unsupported --interval parameter)
+- Loaded and started the service via launchctl
+
+**Impact:**
+- Hourly tracker service now runs continuously from 8 AM to 4 PM IST
+- Service tracks VSR indicators for tickers from Long_Reversal_Hourly scan results
+- Files created: Daily/scheduler/plists/com.india-ts.hourly-tracker-service.plist, ~/Library/LaunchAgents/com.india-ts.hourly-tracker-service.plist
+- Service is now active and will restart automatically if it crashes
+- Logs available at: Daily/logs/hourly_tracker_service.log and hourly_tracker_service_error.log
+
+---
+
 ### 2025-07-30 16:20 IST - [Claude]
 **Changes:**
 - Fixed Volume Breadth Analysis showing zeros on dashboard (http://localhost:8080/)
