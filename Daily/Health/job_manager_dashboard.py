@@ -311,24 +311,24 @@ DASHBOARDS = {
         'script': 'short_momentum_dashboard.py',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
         'port': 3003,
-        'start_script': None,  # Managed by launchctl
-        'stop_script': None
+        'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_short_momentum_dashboard.sh',
+        'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/stop_short_momentum_dashboard.sh'
     },
     'hourly_tracker_dashboard': {
         'name': 'Hourly Tracker Dashboard',
         'script': 'hourly_tracker_dashboard.py',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
         'port': 3002,
-        'start_script': None,  # Started with service
-        'stop_script': None
+        'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_hourly_dashboard.sh',
+        'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/stop_hourly_dashboard.sh'
     },
     'hourly_short_tracker_dashboard': {
         'name': 'Hourly Short Tracker Dashboard',
         'script': 'hourly_short_tracker_dashboard.py',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
         'port': 3004,
-        'start_script': None,  # Started with service
-        'stop_script': None
+        'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_hourly_short_dashboard.sh',
+        'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/stop_hourly_short_dashboard.sh'
     }
 }
 

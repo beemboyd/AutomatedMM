@@ -80,6 +80,24 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-07-31 09:15 IST - [Claude]
+**Changes:**
+- Created start/stop scripts for Short Momentum Dashboard to fix "No Startup Script found" error
+- Created plists for hourly_tracker_dashboard.py and hourly_short_tracker_dashboard.py 
+- Updated job_manager_dashboard.py to include start/stop scripts for all hourly dashboards
+- Started both hourly tracker dashboards via launchctl
+- Updated PLIST_MASTER_SCHEDULE.md to include hourly_tracker_service
+
+**Impact:**
+- Short Momentum Dashboard now has start/stop scripts at Daily/dashboards/
+- Hourly Tracker Dashboard running on port 3002
+- Hourly Short Tracker Dashboard running on port 3004
+- All dashboards can now be started/stopped from Job Manager Dashboard (port 9090)
+- Files created: 4 start/stop scripts, 2 new plists in scheduler/plists/
+- Updated job count in documentation from 35 to 36
+
+---
+
 ### 2025-07-30 16:20 IST - [Claude]
 **Changes:**
 - Fixed Volume Breadth Analysis showing zeros on dashboard (http://localhost:8080/)
