@@ -19,6 +19,70 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-01 12:40 IST - [Claude]
+**Changes:**
+- Created standalone momentum scanner module (`momentum_scanner_standalone.py`) - completely independent from VSR scanner
+- Implemented EMA crossover strategy: Price > EMA_100 AND Slope > 0
+- Created momentum widget for dashboard showing daily/weekly counts and historical trends
+- Successfully ran historical momentum scan for past 14 days with test data (50 tickers)
+- Generated momentum reports for dates from 2025-07-18 to 2025-08-01
+- Updated momentum widget to show formula reference: WM = ((EMA5-EMA8) + (EMA8-EMA13) + (EMA13-EMA21) + (EMA21-EMA50)) / 4
+
+**Impact:**
+- Historical momentum data now available for dashboard trend visualization
+- Dashboard APIs functional: `/api/momentum_data` and `/api/momentum_trend`
+- Daily momentum counts ranging from 9-10 tickers (test mode)
+- Ready for full production scan at 4 PM IST daily
+- All timezone issues resolved for Excel compatibility
+
+---
+
+### 2025-08-01 12:09 IST - [Claude]
+**Changes:**
+- Created momentum scanner module at `/Daily/scanners/momentum_scanner.py`
+- Adapted Yahoo Finance EMA crossover strategy to use Zerodha API
+- Created plist scheduler `com.india-ts.momentum_scanner` for 4 PM IST daily execution
+- Created `/Daily/Momentum/` folder for output reports
+- Added momentum widget endpoints to Market Regime dashboard (port 8080)
+- Updated PLIST_MASTER_SCHEDULE.md with new job entry
+
+**Impact:**
+- New automated daily momentum analysis for Indian stocks
+- Dashboard now displays momentum counts and trends at `/api/momentum_data` and `/api/momentum_trend`
+- Excel reports generated daily with pattern `India-Momentum_Report_{Date}_{Time}.xlsx`
+- Analyzes ~600 tickers for daily and weekly momentum signals
+
+---
+
+### 2025-07-31 14:48 IST - [Claude]
+**Changes:**
+- Unloaded and archived 7 plists that are no longer in use:
+  Phase 1 (14:45):
+  1. com.india-ts.strategyc_filter.plist
+  2. com.india-ts.kc_g_pattern_scanner.plist
+  3. com.india-ts.g_pattern_master_tracker.plist
+  4. com.india-ts.kc_lower_limit_trending.plist
+  5. com.india-ts.kc_upper_limit_trending.plist
+  
+  Phase 2 (14:48):
+  6. com.india-ts.consolidated_score.plist
+  7. com.india-ts.daily_action_plan.plist
+  
+- Archived plists to: /Users/maverick/PycharmProjects/India-TS/Daily/scheduler/plists/archived/20250731/
+- Updated PLIST_MASTER_SCHEDULE.md (reduced job count from 39 to 32)
+- Updated job_manager_dashboard.py (removed 6 entries from JOBS dictionary)
+- Updated INDIA_TS_JOBS_DOCUMENTATION.md (marked 5 jobs as archived)
+
+**Impact:**
+- Reduced system load by removing 7 unused jobs
+- Cleaned up job dashboard display
+- Scanner runs reduced from ~100 to ~65 per day
+- Removed non-essential analysis jobs (consolidated score, daily action plan)
+- Remaining active scanners: reversal scanners (daily/hourly), FNO scanners, market breadth scanner
+- No impact on active trading operations
+
+---
+
 ### 2025-07-29 15:15 IST - [Claude]
 **Changes:**
 - Verified market regime dashboards (ports 5001 and 8080) are correctly configured to use sma_breadth_historical_latest.json
