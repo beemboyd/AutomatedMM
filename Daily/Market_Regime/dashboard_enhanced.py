@@ -14,6 +14,13 @@ from collections import deque
 import pandas as pd
 import re
 import logging
+import sys
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import momentum widget
+from dashboards.momentum_widget import get_momentum_widget_data, get_momentum_trend_data
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -708,6 +715,75 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
+        <!-- Momentum Scanner Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">🚀 Momentum Scanner Analysis</h5>
+                        
+                        <!-- Current Momentum Stats -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Daily Momentum</h6>
+                                        <div class="display-4 text-primary" id="daily-momentum-count">-</div>
+                                        <div class="small">
+                                            <span class="text-muted">Change: </span>
+                                            <span id="daily-momentum-change" class="fw-bold">-</span>
+                                        </div>
+                                        <div class="mt-2">
+                                            <small class="text-muted">Top Movers:</small>
+                                            <div id="daily-top-movers" class="small mt-1">Loading...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Weekly Momentum</h6>
+                                        <div class="display-4 text-success" id="weekly-momentum-count">-</div>
+                                        <div class="small">
+                                            <span class="text-muted">Change: </span>
+                                            <span id="weekly-momentum-change" class="fw-bold">-</span>
+                                        </div>
+                                        <div class="mt-2">
+                                            <small class="text-muted">Top Movers:</small>
+                                            <div id="weekly-top-movers" class="small mt-1">Loading...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Momentum Trend Chart -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <h6 class="text-center mb-3">Momentum Trend (14 Days)</h6>
+                                <div class="chart-container" style="height: 400px; position: relative;">
+                                    <canvas id="momentum-trend-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Formula Reference -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <h6 class="alert-heading">📊 Momentum Formula</h6>
+                                    <p class="mb-2"><strong>Criteria:</strong> Price > EMA_100 AND Slope > 0</p>
+                                    <p class="mb-0"><strong>WM (Weighted Momentum):</strong> ((EMA5-EMA8) + (EMA8-EMA13) + (EMA13-EMA21) + (EMA21-EMA50)) / 4</p>
+                                    <small class="text-muted">Stocks showing positive momentum based on EMA crossover strategy</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Multi-Timeframe Analysis Section -->
         <div class="row mt-4">
             <div class="col-12">
@@ -898,6 +974,68 @@ ENHANCED_DASHBOARD_HTML = '''
             },
             options: chartOptions
         });
+        
+        // Initialize Momentum Trend Chart
+        const momentumCanvas = document.getElementById('momentum-trend-chart');
+        if (momentumCanvas) {
+            window.momentumTrendChart = new Chart(momentumCanvas, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Daily Momentum',
+                        data: [],
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'Weekly Momentum',
+                        data: [],
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y + ' stocks';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Stocks'
+                            }
+                        }
+                    }
+                }
+            });
+        }
         
         // Initialize SMA breadth charts - TEMPORARILY DISABLED
         /*
@@ -2080,6 +2218,65 @@ ENHANCED_DASHBOARD_HTML = '''
                 });
         }
         
+        function updateMomentumData() {
+            fetch('/api/momentum_data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.data) {
+                        const momentum = data.data;
+                        
+                        // Update daily momentum
+                        document.getElementById('daily-momentum-count').textContent = momentum.daily.count;
+                        const dailyChange = momentum.daily.change;
+                        const dailyChangeEl = document.getElementById('daily-momentum-change');
+                        dailyChangeEl.textContent = (dailyChange >= 0 ? '+' : '') + dailyChange;
+                        dailyChangeEl.className = 'fw-bold ' + (dailyChange >= 0 ? 'text-success' : 'text-danger');
+                        
+                        // Update weekly momentum
+                        document.getElementById('weekly-momentum-count').textContent = momentum.weekly.count;
+                        const weeklyChange = momentum.weekly.change;
+                        const weeklyChangeEl = document.getElementById('weekly-momentum-change');
+                        weeklyChangeEl.textContent = (weeklyChange >= 0 ? '+' : '') + weeklyChange;
+                        weeklyChangeEl.className = 'fw-bold ' + (weeklyChange >= 0 ? 'text-success' : 'text-danger');
+                        
+                        // Update top movers
+                        const dailyMovers = momentum.daily.top_movers.slice(0, 3).map(m => 
+                            `${m.Ticker} (WM:${m.WM.toFixed(1)})`
+                        ).join(', ') || 'None';
+                        document.getElementById('daily-top-movers').textContent = dailyMovers;
+                        
+                        const weeklyMovers = momentum.weekly.top_movers.slice(0, 3).map(m => 
+                            `${m.Ticker} (WM:${m.WM.toFixed(1)})`
+                        ).join(', ') || 'None';
+                        document.getElementById('weekly-top-movers').textContent = weeklyMovers;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching momentum data:', error);
+                });
+        }
+        
+        function updateMomentumTrend() {
+            fetch('/api/momentum_trend')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.data) {
+                        const trendData = data.data;
+                        
+                        // Update momentum trend chart
+                        if (window.momentumTrendChart) {
+                            window.momentumTrendChart.data.labels = trendData.dates;
+                            window.momentumTrendChart.data.datasets[0].data = trendData.daily_counts;
+                            window.momentumTrendChart.data.datasets[1].data = trendData.weekly_counts;
+                            window.momentumTrendChart.update();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching momentum trend:', error);
+                });
+        }
+        
         function updateMetric(elementId, value, previousValue) {
             const element = document.getElementById(elementId);
             element.textContent = value.toFixed(2);
@@ -2254,6 +2451,8 @@ ENHANCED_DASHBOARD_HTML = '''
             // Initial update with error handling
             try {
                 updateDashboard();
+                updateMomentumData();
+                updateMomentumTrend();
                 console.log('Initial update triggered');
             } catch (error) {
                 console.error('Error in updateDashboard:', error);
@@ -2279,6 +2478,16 @@ ENHANCED_DASHBOARD_HTML = '''
                     console.error('Error updating SMA breadth data:', error);
                 }
             }, 60000);
+            
+            // Update momentum data every 5 minutes
+            setInterval(function() {
+                try {
+                    updateMomentumData();
+                    updateMomentumTrend();
+                } catch (error) {
+                    console.error('Error updating momentum data:', error);
+                }
+            }, 300000);
         }
         
         // Try multiple initialization methods
@@ -2904,6 +3113,16 @@ def get_sma_breadth_historical():
     except Exception as e:
         app.logger.error(f"Error in get_sma_breadth_historical: {e}")
         return jsonify({'error': str(e)})
+
+@app.route('/api/momentum_data')
+def get_momentum_data():
+    """Get momentum scanner data"""
+    return get_momentum_widget_data()
+
+@app.route('/api/momentum_trend')
+def get_momentum_trend():
+    """Get momentum historical trend data"""
+    return get_momentum_trend_data()
 
 if __name__ == '__main__':
     print("\n" + "="*60)
