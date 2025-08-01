@@ -19,6 +19,28 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-01 15:30 IST - [Claude]
+**Changes:**
+- Updated Job Manager Dashboard (job_manager_dashboard.py) to include ALL 46 services
+- Added 19 missing services to the JOBS dictionary including:
+  - consolidated_score, daily_action_plan
+  - dashboard_manager_start/stop, dashboard_refresh_control  
+  - g_pattern_master_tracker, kc_g_pattern_scanner
+  - kc_lower_limit_trending, kc_upper_limit_trending
+  - momentum_scanner, outcome_resolver
+  - regime_data_updater, regime_data_updater_10min
+  - sl_watchdog_start, sma_breadth_historical_update
+  - strategyc_filter, fix_plists_on_startup
+  - job_manager_dashboard (self), market_breadth_dashboard (service)
+
+**Impact:**
+- Job Manager Dashboard on port 9090 now shows complete visibility of all services
+- Users can now restart ALL services after token refresh using the dashboard
+- No need to use command line to find missing services
+- Better monitoring and control of the entire India-TS ecosystem
+
+---
+
 ### 2025-08-01 12:40 IST - [Claude]
 **Changes:**
 - Created standalone momentum scanner module (`momentum_scanner_standalone.py`) - completely independent from VSR scanner

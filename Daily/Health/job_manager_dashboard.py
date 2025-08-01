@@ -53,18 +53,6 @@ JOBS = {
         'schedule': 'Every 30 minutes (RunAtLoad)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/analysis'
     },
-    'com.india-ts.consolidated_score': {
-        'name': 'Consolidated Score',
-        'script': 'Action_Plan_Score.py',
-        'schedule': '9:00 AM daily (Mon-Fri)',
-        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/analysis'
-    },
-    'com.india-ts.daily_action_plan': {
-        'name': 'Daily Action Plan',
-        'script': 'Action_plan.py',
-        'schedule': '8:30 AM daily (Mon-Fri, RunAtLoad)',
-        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/analysis'
-    },
     'com.india-ts.long_reversal_daily': {
         'name': 'Long Reversal Daily',
         'script': 'Long_Reversal_Daily.py',
@@ -115,12 +103,6 @@ JOBS = {
         'schedule': '3:30 PM daily (Mon-Fri)',
         'path': 'N/A'
     },
-    'com.india-ts.strategyc_filter': {
-        'name': 'Strategy C Filter',
-        'script': 'StrategyC_Auto.py',
-        'schedule': '9:45, 11:45, 13:45, 16:15 (Mon-Fri)',
-        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/trading'
-    },
     'com.india-ts.synch_zerodha_local': {
         'name': 'Sync Zerodha Local',
         'script': 'synch_zerodha_cnc_positions.py --force',
@@ -133,18 +115,6 @@ JOBS = {
         'schedule': 'Sundays 3:00 AM',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/utils'
     },
-    'com.india-ts.kc_upper_limit_trending': {
-        'name': 'KC Upper Limit Trending',
-        'script': 'KC_Upper_Limit_Trending.py',
-        'schedule': 'Every 30 min (9:00-15:30, Mon-Fri)',
-        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
-    },
-    'com.india-ts.kc_lower_limit_trending': {
-        'name': 'KC Lower Limit Trending',
-        'script': 'KC_Lower_Limit_Trending.py',
-        'schedule': 'Every 30 min (9:00-15:30, Mon-Fri)',
-        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
-    },
     'com.india-ts.kc_upper_limit_trending_fno': {
         'name': 'KC Upper Limit Trending FNO',
         'script': 'KC_Upper_Limit_Trending_FNO.py',
@@ -156,12 +126,6 @@ JOBS = {
         'script': 'KC_Lower_Limit_Trending_FNO.py',
         'schedule': 'Every 30 min (9:00-15:30, Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
-    },
-    'com.india-ts.g_pattern_master_tracker': {
-        'name': 'G Pattern Master Tracker',
-        'script': 'g_pattern_master_tracker.py',
-        'schedule': 'Every 30 min (9:00-15:30, Mon-Fri)',
-        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/G_Pattern_Master'
     },
     'com.tradingsystem.momentum.analyzer': {
         'name': 'Strong Momentum Candidates',
@@ -265,6 +229,122 @@ JOBS = {
         'script': 'hourly_short_tracker_dashboard.py',
         'schedule': 'Continuous (KeepAlive)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards'
+    },
+    'com.india-ts.consolidated_score': {
+        'name': 'Consolidated Action Plan Score',
+        'script': 'Action_Plan_Score.py',
+        'schedule': 'Every hour (9:30-15:30, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/analysis'
+    },
+    'com.india-ts.daily_action_plan': {
+        'name': 'Daily Action Plan',
+        'script': 'Action_plan.py',
+        'schedule': '4:00 PM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/analysis'
+    },
+    'com.india-ts.dashboard_manager_start': {
+        'name': 'Dashboard Manager Start',
+        'script': 'dashboard_manager.py start',
+        'schedule': '8:00 AM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/utils'
+    },
+    'com.india-ts.dashboard_manager_stop': {
+        'name': 'Dashboard Manager Stop',
+        'script': 'dashboard_manager.py stop',
+        'schedule': '8:00 PM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/utils'
+    },
+    'com.india-ts.dashboard_refresh_control': {
+        'name': 'Dashboard Refresh Control',
+        'script': 'dashboard_manager.py check_refresh',
+        'schedule': 'Every minute (8:00-20:00, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/utils'
+    },
+    'com.india-ts.g_pattern_master_tracker': {
+        'name': 'G Pattern Master Tracker',
+        'script': 'G_Pattern_Master_Tracker.py',
+        'schedule': 'Every 30 min (9:15-15:45, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.job_manager_dashboard': {
+        'name': 'Job Manager Dashboard (Self)',
+        'script': 'job_manager_dashboard.py',
+        'schedule': '24/7 (KeepAlive, RunAtLoad)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Health',
+        'port': 9090
+    },
+    'com.india-ts.kc_g_pattern_scanner': {
+        'name': 'KC G Pattern Scanner',
+        'script': 'KC_Upper_Limit_Trending.py',
+        'schedule': 'Every hour (9:00-15:00, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.kc_lower_limit_trending': {
+        'name': 'KC Lower Limit Trending',
+        'script': 'KC_Lower_Limit_Trending.py',
+        'schedule': 'Every hour (9:00-15:00, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.kc_upper_limit_trending': {
+        'name': 'KC Upper Limit Trending',
+        'script': 'KC_Upper_Limit_Trending.py',
+        'schedule': 'Every hour (9:00-15:00, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.market_breadth_dashboard': {
+        'name': 'Market Breadth Dashboard (Service)',
+        'script': 'market_breadth_dashboard.py',
+        'schedule': '24/7 (KeepAlive, RunAtLoad)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime',
+        'port': 5001
+    },
+    'com.india-ts.momentum_scanner': {
+        'name': 'Momentum Scanner (Standalone)',
+        'script': 'momentum_scanner_standalone.py',
+        'schedule': '4:00 PM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.outcome_resolver': {
+        'name': 'Outcome Resolver',
+        'script': 'outcome_resolver.py',
+        'schedule': '3:45 PM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Market_Regime'
+    },
+    'com.india-ts.regime_data_updater': {
+        'name': 'Regime Data Updater',
+        'script': 'update_regime_data.py',
+        'schedule': '9:00 AM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime'
+    },
+    'com.india-ts.regime_data_updater_10min': {
+        'name': 'Regime Data Updater (10-min)',
+        'script': 'update_regime_data.py',
+        'schedule': 'Every 10 min (9:10-15:30, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime'
+    },
+    'com.india-ts.sl_watchdog_start': {
+        'name': 'SL Watchdog Start',
+        'script': 'start_all_sl_watchdogs.py',
+        'schedule': '9:15 AM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/portfolio'
+    },
+    'com.india-ts.sma_breadth_historical_update': {
+        'name': 'SMA Breadth Historical Update',
+        'script': 'append_historical_breadth.py',
+        'schedule': '6:35 PM daily (Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime'
+    },
+    'com.india-ts.strategyc_filter': {
+        'name': 'Strategy C Filter',
+        'script': 'StrategyC_Auto.py',
+        'schedule': 'Every 30 min (9:00-15:30, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scanners'
+    },
+    'com.india-ts.fix_plists_on_startup': {
+        'name': 'Fix Plists on Startup',
+        'script': 'fix_brooks_plist.sh',
+        'schedule': 'RunAtLoad (Once daily)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scripts'
     }
 }
 
