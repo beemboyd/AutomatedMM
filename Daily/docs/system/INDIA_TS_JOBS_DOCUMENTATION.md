@@ -59,21 +59,21 @@ This document provides a comprehensive overview of all India-TS system jobs, the
 - **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.market_regime_analysis.plist`
 - **Status**: ❌ Deprecated - Replaced by 5-minute version
 
-#### 6. **com.india-ts.kc_lower_limit_trending**
+#### 6. **com.india-ts.kc_lower_limit_trending** *(ARCHIVED 2025-07-31)*
 - **Purpose**: Scans for stocks trending at Keltner Channel lower limit
 - **Schedule**: Every hour from 9:15 AM to 3:15 PM IST (weekdays)
 - **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/KC_Lower_Limit_Trending.py`
-- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.kc_lower_limit_trending.plist`
-- **Status**: ✅ Active
-- **Added**: 2025-07-14 - PDF output now saves to `/Daily/results-s/PDF/`
+- **Plist**: ARCHIVED to `/Users/maverick/PycharmProjects/India-TS/Daily/scheduler/plists/archived/20250731/`
+- **Status**: ❌ Archived (Not in use)
+- **Archived**: 2025-07-31 - Scanner not being used
 
-#### 7. **com.india-ts.kc_upper_limit_trending**
+#### 7. **com.india-ts.kc_upper_limit_trending** *(ARCHIVED 2025-07-31)*
 - **Purpose**: Scans for stocks trending at Keltner Channel upper limit
 - **Schedule**: Every hour from 9:10 AM to 3:10 PM IST (weekdays)
 - **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/KC_Upper_Limit_Trending.py`
-- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.kc_upper_limit_trending.plist`
-- **Status**: ✅ Active
-- **Added**: 2025-07-14 - Scheduled to run hourly during market hours
+- **Plist**: ARCHIVED to `/Users/maverick/PycharmProjects/India-TS/Daily/scheduler/plists/archived/20250731/`
+- **Status**: ❌ Archived (Not in use)
+- **Archived**: 2025-07-31 - Scanner not being used
 
 #### 8. **com.india-ts.market_regime_dashboard**
 - **Purpose**: Generates market regime dashboard
@@ -84,19 +84,21 @@ This document provides a comprehensive overview of all India-TS system jobs, the
 
 ### Utility Jobs
 
-#### 9. **com.india-ts.daily_action_plan**
+#### 9. **com.india-ts.daily_action_plan** *(ARCHIVED 2025-07-31)*
 - **Purpose**: Generates daily trading action plan
 - **Schedule**: 8:30 AM IST (weekdays)
 - **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/analysis/Action_plan.py`
-- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.daily_action_plan.plist`
-- **Status**: ✅ Active
+- **Plist**: ARCHIVED to `/Users/maverick/PycharmProjects/India-TS/Daily/scheduler/plists/archived/20250731/`
+- **Status**: ❌ Archived (Not in use)
+- **Archived**: 2025-07-31 - No longer required
 
-#### 10. **com.india-ts.consolidated_score**
+#### 10. **com.india-ts.consolidated_score** *(ARCHIVED 2025-07-31)*
 - **Purpose**: Generates consolidated scoring report
 - **Schedule**: 9:00 AM IST (weekdays)
 - **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Consolidated_Score.py`
-- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.consolidated_score.plist`
-- **Status**: ✅ Active
+- **Plist**: ARCHIVED to `/Users/maverick/PycharmProjects/India-TS/Daily/scheduler/plists/archived/20250731/`
+- **Status**: ❌ Archived (Not in use)
+- **Archived**: 2025-07-31 - No longer required
 
 #### 11. **com.india-ts.synch_zerodha_local**
 - **Purpose**: Synchronizes Zerodha CNC positions with local state
@@ -119,12 +121,13 @@ This document provides a comprehensive overview of all India-TS system jobs, the
 - **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.health_dashboard.plist`
 - **Status**: ✅ Running (PID: 758)
 
-#### 14. **com.india-ts.strategyc_filter**
+#### 14. **com.india-ts.strategyc_filter** *(ARCHIVED 2025-07-31)*
 - **Purpose**: Strategy C filter processing
 - **Schedule**: 3:45 PM IST (weekdays)
 - **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/analysis/Strategy_C_Filter.py`
-- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.strategyc_filter.plist`
-- **Status**: ✅ Active
+- **Plist**: ARCHIVED to `/Users/maverick/PycharmProjects/India-TS/Daily/scheduler/plists/archived/20250731/`
+- **Status**: ❌ Archived (Not in use)
+- **Archived**: 2025-07-31 - Scanner not being used
 
 #### 15. **com.india-ts.sl_watchdog_stop**
 - **Purpose**: Stops the SL watchdog service
@@ -165,17 +168,12 @@ echo "Loading all India-TS LaunchAgent jobs..."
 PLIST_FILES=(
     "com.india-ts.brooks_reversal_4times.plist"
     "com.india-ts.brooks_reversal_simple.plist"
-    "com.india-ts.consolidated_score.plist"
-    "com.india-ts.daily_action_plan.plist"
     "com.india-ts.health_dashboard.plist"
-    "com.india-ts.kc_lower_limit_trending.plist"
-    "com.india-ts.kc_upper_limit_trending.plist"
     "com.india-ts.long_reversal_daily.plist"
     "com.india-ts.market_regime_analysis.plist"
     "com.india-ts.market_regime_dashboard.plist"
     "com.india-ts.short_reversal_daily.plist"
     "com.india-ts.sl_watchdog_stop.plist"
-    "com.india-ts.strategyc_filter.plist"
     "com.india-ts.synch_zerodha_local.plist"
     "com.india-ts.weekly_backup.plist"
 )

@@ -1,7 +1,7 @@
 # Master Plist Schedule Documentation
 
 Generated on: 2025-07-23 08:11:44  
-Last Updated: 2025-07-31 09:49:00
+Last Updated: 2025-07-31 14:42:00
 
 ## Overview
 
@@ -22,26 +22,22 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 **Important:** Always update the backup copy in `Daily/scheduler/plists/` when modifying any plist file
 
+**Archived Plists:** `Daily/scheduler/plists/archived/`
+
 ---
 
 ## India-TS Jobs
 
-**Total Jobs:** 39
+**Total Jobs:** 32
 
 **Timezone:** Asia/Kolkata
 
 
 | Job Name | Schedule | Script/Program | Status |
 |----------|----------|----------------|--------|
-| consolidated_score | 09:00 (Mon-Fri) | Action_Plan_Score.py | ⏸️ On Schedule |
-| daily_action_plan | 08:30 (Mon-Fri) | Action_plan.py | ✅ Active |
 | fix_plists_on_startup | Every 86400 seconds | fix_brooks_plist.sh | ✅ Active |
-| g_pattern_master_tracker | 09:15 (Mon-Fri), 10:15 (Mon-Fri), 11:15 (Mon-Fri), 12:15 (Mon-Fri), 13:15 (Mon-Fri), 14:15 (Mon-Fri), 15:15 (Mon-Fri) | G_Pattern_Master_Tracker.py | ⏸️ On Schedule |
 | health_dashboard | Unknown | dashboard_health_check.py | ✅ Active |
-| kc_g_pattern_scanner |  | KC_Upper_Limit_Trending.py | ⏸️ On Schedule |
-| kc_lower_limit_trending | 09:15 (Mon-Fri), 10:15 (Mon-Fri), 11:15 (Mon-Fri), 12:15 (Mon-Fri), 13:15 (Mon-Fri), 14:15 (Mon-Fri), 15:15 (Mon-Fri) | KC_Lower_Limit_Trending.py | ⏸️ On Schedule |
 | kc_lower_limit_trending_fno | 09:00 (Mon-Fri), 10:00 (Mon-Fri), 11:00 (Mon-Fri), 12:00 (Mon-Fri), 13:00 (Mon-Fri), 14:00 (Mon-Fri), 15:00 (Mon-Fri) | Sai | ⏸️ On Schedule |
-| kc_upper_limit_trending | 09:10 (Mon-Fri), 10:10 (Mon-Fri), 11:10 (Mon-Fri), 12:10 (Mon-Fri), 13:10 (Mon-Fri), 14:10 (Mon-Fri), 15:10 (Mon-Fri) | KC_Upper_Limit_Trending.py | ⏸️ On Schedule |
 | kc_upper_limit_trending_fno | 09:00 (Mon-Fri), 10:00 (Mon-Fri), 11:00 (Mon-Fri), 12:00 (Mon-Fri), 13:00 (Mon-Fri), 14:00 (Mon-Fri), 15:00 (Mon-Fri) | Sai | ⏸️ On Schedule |
 | long_reversal_daily | 09:00 (Mon-Fri), 09:30 (Mon-Fri), 10:00 (Mon-Fri), 10:30 (Mon-Fri), 11:00 (Mon-Fri), 11:30 (Mon-Fri), 12:00 (Mon-Fri), 12:30 (Mon-Fri), 13:00 (Mon-Fri), 13:30 (Mon-Fri), 14:00 (Mon-Fri), 14:30 (Mon-Fri), 15:00 (Mon-Fri), 15:30 (Mon-Fri) | Long_Reversal_Daily.py | ⏸️ On Schedule |
 | market_breadth_dashboard | Unknown | market_breadth_dashboard.py | ✅ Active |
@@ -54,7 +50,6 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | short_reversal_daily | 09:00 (Mon-Fri), 09:30 (Mon-Fri), 10:00 (Mon-Fri), 10:30 (Mon-Fri), 11:00 (Mon-Fri), 11:30 (Mon-Fri), 12:00 (Mon-Fri), 12:30 (Mon-Fri), 13:00 (Mon-Fri), 13:30 (Mon-Fri), 14:00 (Mon-Fri), 14:30 (Mon-Fri), 15:00 (Mon-Fri), 15:30 (Mon-Fri) | Short_Reversal_Daily.py | ⏸️ On Schedule |
 | sl_watchdog_start | 09:15 (Mon-Fri) | start_all_sl_watchdogs.py | ⏸️ On Schedule |
 | sl_watchdog_stop | 15:30 (Mon-Fri) | true | ⏸️ On Schedule |
-| strategyc_filter | 09:45 (Mon-Fri), 11:45 (Mon-Fri), 13:45 (Mon-Fri), 16:15 (Mon-Fri) | StrategyC_Auto.py | ⏸️ On Schedule |
 | synch_zerodha_local | 09:15 (Mon-Fri), 09:30 (Mon-Fri), 09:45 (Mon-Fri), 10:00 (Mon-Fri), 10:15 (Mon-Fri), 10:30 (Mon-Fri), 10:45 (Mon-Fri), 11:00 (Mon-Fri), 11:15 (Mon-Fri), 11:30 (Mon-Fri), 11:45 (Mon-Fri), 12:00 (Mon-Fri), 12:15 (Mon-Fri), 12:30 (Mon-Fri), 12:45 (Mon-Fri), 13:00 (Mon-Fri), 13:15 (Mon-Fri), 13:30 (Mon-Fri), 13:45 (Mon-Fri), 14:00 (Mon-Fri), 14:15 (Mon-Fri), 14:30 (Mon-Fri), 14:45 (Mon-Fri), 15:00 (Mon-Fri), 15:15 (Mon-Fri), 15:30 (Mon-Fri) | --force | ⏸️ On Schedule |
 | vsr_tracker_enhanced | 09:15 (Mon-Fri) | vsr_tracker_service_enhanced.py | ⏸️ On Schedule |
 | vsr_dashboard | 09:15 (Mon-Fri) | vsr_tracker_dashboard.py | ⏸️ On Schedule |
@@ -103,24 +98,6 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 ### India-TS Jobs Details
 
 
-#### consolidated_score
-- **Label:** `com.india-ts.consolidated_score`
-- **Schedule:** 09:00 (Mon-Fri)
-- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/analysis/Action_Plan_Score.py`
-- **Timezone:** Not specified
-- **Run at Load:** False
-- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/consolidated_score.log`
-- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/consolidated_score_error.log`
-
-#### daily_action_plan
-- **Label:** `com.india-ts.daily_action_plan`
-- **Schedule:** 08:30 (Mon-Fri)
-- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/analysis/Action_plan.py`
-- **Timezone:** Not specified
-- **Run at Load:** True
-- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/daily_action_plan.log`
-- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/daily_action_plan_error.log`
-
 #### fix_plists_on_startup
 - **Label:** `com.india-ts.fix_plists_on_startup`
 - **Schedule:** Every 86400 seconds
@@ -129,15 +106,6 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Run at Load:** True
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/plist_fix_output.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/plist_fix_error.log`
-
-#### g_pattern_master_tracker
-- **Label:** `com.india-ts.g_pattern_master_tracker`
-- **Schedule:** 09:15 (Mon-Fri), 10:15 (Mon-Fri), 11:15 (Mon-Fri), 12:15 (Mon-Fri), 13:15 (Mon-Fri), 14:15 (Mon-Fri), 15:15 (Mon-Fri)
-- **Program:** `/usr/local/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/G_Pattern_Master_Tracker.py`
-- **Timezone:** Not specified
-- **Run at Load:** False
-- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/g_pattern_master_tracker.log`
-- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/g_pattern_master_tracker_error.log`
 
 #### health_dashboard
 - **Label:** `com.india-ts.health_dashboard`
@@ -148,24 +116,6 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/logs/health_dashboard.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/logs/health_dashboard_error.log`
 
-#### kc_g_pattern_scanner
-- **Label:** `com.india-ts.kc_g_pattern_scanner`
-- **Schedule:** 
-- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/KC_Upper_Limit_Trending.py`
-- **Timezone:** Not specified
-- **Run at Load:** False
-- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_g_pattern_scanner.log`
-- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_g_pattern_scanner_error.log`
-
-#### kc_lower_limit_trending
-- **Label:** `com.india-ts.kc_lower_limit_trending`
-- **Schedule:** 09:15 (Mon-Fri), 10:15 (Mon-Fri), 11:15 (Mon-Fri), 12:15 (Mon-Fri), 13:15 (Mon-Fri), 14:15 (Mon-Fri), 15:15 (Mon-Fri)
-- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/KC_Lower_Limit_Trending.py`
-- **Timezone:** Not specified
-- **Run at Load:** False
-- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_lower_limit.log`
-- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_lower_limit_error.log`
-
 #### kc_lower_limit_trending_fno
 - **Label:** `com.india-ts.kc_lower_limit_trending_fno`
 - **Schedule:** 09:00 (Mon-Fri), 10:00 (Mon-Fri), 11:00 (Mon-Fri), 12:00 (Mon-Fri), 13:00 (Mon-Fri), 14:00 (Mon-Fri), 15:00 (Mon-Fri)
@@ -174,15 +124,6 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Run at Load:** False
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_lower_limit_trending_fno_launchd.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_lower_limit_trending_fno_launchd_error.log`
-
-#### kc_upper_limit_trending
-- **Label:** `com.india-ts.kc_upper_limit_trending`
-- **Schedule:** 09:10 (Mon-Fri), 10:10 (Mon-Fri), 11:10 (Mon-Fri), 12:10 (Mon-Fri), 13:10 (Mon-Fri), 14:10 (Mon-Fri), 15:10 (Mon-Fri)
-- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/KC_Upper_Limit_Trending.py`
-- **Timezone:** Not specified
-- **Run at Load:** False
-- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_upper_limit_trending_scheduler.log`
-- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/kc_upper_limit_trending_scheduler_error.log`
 
 #### kc_upper_limit_trending_fno
 - **Label:** `com.india-ts.kc_upper_limit_trending_fno`
@@ -292,14 +233,6 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/logs/sl_watchdog_stop.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/logs/sl_watchdog_stop_error.log`
 
-#### strategyc_filter
-- **Label:** `com.india-ts.strategyc_filter`
-- **Schedule:** 09:45 (Mon-Fri), 11:45 (Mon-Fri), 13:45 (Mon-Fri), 16:15 (Mon-Fri)
-- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/StrategyC_Auto.py`
-- **Timezone:** Not specified
-- **Run at Load:** False
-- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/strategyc_filter.log`
-- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/strategyc_filter_error.log`
 
 #### synch_zerodha_local
 - **Label:** `com.india-ts.synch_zerodha_local`
@@ -554,3 +487,14 @@ launchctl stop com.india-ts.job_name
 - Jobs marked as '✅ Active' have RunAtLoad=true and start when system boots
 - Always update this documentation when adding/modifying plist files
 - Run `python generate_plist_master.py` to regenerate this documentation
+#### momentum_scanner
+- **Label:** `com.india-ts.momentum_scanner`
+- **Schedule:** 16:00 (Mon-Fri)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/scanners/momentum_scanner.py`
+- **Timezone:** Asia/Kolkata
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/momentum_scanner/momentum_scanner_stdout.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/momentum_scanner/momentum_scanner_stderr.log`
+- **Output Directory:** `/Users/maverick/PycharmProjects/India-TS/Daily/Momentum/`
+- **Purpose:** Analyzes daily and weekly momentum using EMA crossover strategy
+- **Output Format:** Excel reports with naming pattern India-Momentum_Report_{Date}_{Time}.xlsx

@@ -91,6 +91,23 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-08-02 16:30 IST - [Claude]
+**Changes:**
+- Created comprehensive market regime correlation analysis
+- Correlated strategy performance with SMA20/50 breadth and volume participation
+- Generated clear market direction rules based on 4 weeks of data
+- Created MARKET_DIRECTION_RULES_GUIDE.md with actionable weekly/daily rules
+- Established thresholds for market bias determination
+
+**Impact:**
+- Clear rules for weekly direction: SMA20 breadth thresholds (70%/60%/50%/40%/30%/20%)
+- Daily direction rules based on market score and reversal ratios
+- Confirmed correlation: Low SMA20 breadth (48.8% avg) → Poor long performance (24.7% win rate)
+- Confirmed correlation: Bearish regimes → Excellent short performance (80.8% win rate)
+- Current recommendation: 40% Long, 60% Short allocation based on 34.2% SMA20 breadth
+
+---
+
 ### 2025-07-31 14:48 IST - [Claude]
 **Changes:**
 - Unloaded and archived 7 plists that are no longer in use:
