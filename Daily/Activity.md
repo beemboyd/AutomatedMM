@@ -123,6 +123,21 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-08-02 16:40 IST - [Claude]
+**Changes:**
+- Fixed date issue in historical breadth data (August 2 is Saturday, market closed)
+- Corrected data to show August 1, 2025 (Friday) with proper SMA breadth values
+- Created fix_breadth_dates.py script to merge and correct the data
+- Removed incorrect Saturday entry and updated Friday data
+
+**Impact:**
+- Historical breadth data now correctly shows August 1, 2025 as the latest trading day
+- SMA20: 34.24%, SMA50: 39.24% for August 1, 2025
+- Data integrity maintained for accurate weekly/monthly analysis
+- Dashboards will show correct date alignment
+
+---
+
 ### 2025-07-31 14:48 IST - [Claude]
 **Changes:**
 - Unloaded and archived 7 plists that are no longer in use:
