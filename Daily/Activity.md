@@ -108,6 +108,21 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-08-02 16:35 IST - [Claude]
+**Changes:**
+- Updated market regime historical breadth data for August 2, 2025
+- Successfully appended SMA breadth data showing SMA20: 34.24%, SMA50: 39.24%
+- Attempted to update momentum breadth but encountered Excel format issues
+- Market regime remains in "Downtrend" with market score of 0.362
+
+**Impact:**
+- Dashboard should now reflect updated SMA breadth data
+- Current SMA20 breadth (34.2%) confirms continued MILD BEARISH bias
+- Recommendation remains: 40% Long, 60% Short allocation
+- Dashboards running on ports 8080 (Market Regime) and 9090 (Job Manager)
+
+---
+
 ### 2025-07-31 14:48 IST - [Claude]
 **Changes:**
 - Unloaded and archived 7 plists that are no longer in use:
