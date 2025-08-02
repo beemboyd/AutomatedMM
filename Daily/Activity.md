@@ -76,6 +76,21 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-08-02 12:30 IST - [Claude]
+**Changes:**
+- Running weekly profitability analysis for both Long and Short reversal signals
+- Using existing simple analyzers: long_reversal_simple_analyzer.py and short_reversal_simple_analyzer.py
+- Analyzing past 4 weeks of scan data to determine ticker profitability
+- Generating comprehensive reports for both long and short strategies
+
+**Impact:**
+- Weekly performance reports will be generated in Daily/analysis/Weekly_Reports/
+- Analysis includes all unique tickers that appeared in scans
+- Calculates win rate and profitability percentages using current Zerodha prices
+- Provides insights for strategy performance evaluation
+
+---
+
 ### 2025-07-31 14:48 IST - [Claude]
 **Changes:**
 - Unloaded and archived 7 plists that are no longer in use:
