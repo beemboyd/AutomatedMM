@@ -19,6 +19,62 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-03 19:15 IST - [Claude]
+**Changes:**
+- Created enhanced VSR Telegram service with configurable hourly/daily alerts
+- Added new configuration parameters to config.ini TELEGRAM section:
+  - hourly_telegram_on (yes/no) - Enable/disable hourly VSR alerts
+  - daily_telegram_on (yes/no) - Enable/disable daily VSR alerts  
+  - hourly_momentum_threshold (default: 2.0%) - Momentum threshold for hourly alerts
+  - hourly_vsr_threshold (default: 2.0x) - VSR ratio threshold for hourly alerts
+- Created vsr_telegram_service_enhanced.py with dual alert system
+- Created com.india-ts.vsr-telegram-alerts-enhanced.plist for continuous monitoring
+- Added test script test_enhanced_telegram.py for configuration verification
+
+**Impact:**
+- Users can now receive Telegram alerts for both hourly and daily VSR signals
+- Hourly alerts catch early momentum moves (2%+ momentum, 2x+ VSR ratio)
+- Daily alerts for confirmed high momentum moves (10%+ momentum, score 60+)
+- Each alert type can be toggled on/off independently via config.ini
+- Service monitors hourly VSR scan results in real-time during market hours
+- Prevents duplicate alerts with ticker tracking for each timeframe
+
+**Files Modified:**
+- Daily/alerts/vsr_telegram_service_enhanced.py (new)
+- Daily/alerts/test_enhanced_telegram.py (new)
+- Daily/config.ini (updated TELEGRAM section)
+- Daily/scheduler/plists/com.india-ts.vsr-telegram-alerts-enhanced.plist (new)
+
+---
+
+### 2025-08-03 18:20 IST - [Claude]
+**Changes:**
+- Created comprehensive ML training system for strategy prediction
+- Fixed API authentication issues in comprehensive_reversal_trainer.py to use Sai's config
+- Created train_ml_strategy_predictor.py - simplified trainer without Zerodha API dependency
+- Successfully trained ML model with 83.3% test accuracy
+- Created hourly_strategy_predictor service to run predictions every hour during market hours
+- Fixed import issues in ml_dashboard_integration_scheduled.py
+- Created plist for hourly predictions (com.india-ts.hourly_strategy_predictor)
+- Updated PLIST_MASTER_SCHEDULE.md with new hourly predictor service
+
+**Impact:**
+- ML model now trained on actual reversal signal data and market breadth correlations
+- System can predict optimal strategy (LONG/SHORT/NEUTRAL) based on current conditions
+- Hourly predictions during market hours provide real-time strategy guidance
+- Dashboard ML section now shows meaningful predictions with confidence scores
+- Weekend/off-hours use cached Friday data as designed
+- Model Performance: RandomForest 83.3% test accuracy, top features: signal_strength_diff (0.42), signal_ratio (0.22)
+
+**Files Modified:**
+- Daily/ML/training/comprehensive_reversal_trainer.py
+- Daily/ML/training/train_ml_strategy_predictor.py (new)
+- Daily/Market_Regime/ml_dashboard_integration_scheduled.py
+- Daily/scheduler/plists/com.india-ts.hourly_strategy_predictor.plist (new)
+- Daily/scheduler/PLIST_MASTER_SCHEDULE.md
+
+---
+
 ### 2025-08-03 17:45 IST - [Claude]
 **Changes:**
 - Implemented scheduled ML service for weekday/weekend data management

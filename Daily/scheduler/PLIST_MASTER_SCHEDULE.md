@@ -28,7 +28,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 32
+**Total Jobs:** 33
 
 **Timezone:** Asia/Kolkata
 
@@ -288,6 +288,18 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 - **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram_shutdown.log`
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram_shutdown_error.log`
 
+#### vsr_telegram_alerts_enhanced
+- **Label:** `com.india-ts.vsr-telegram-alerts-enhanced`
+- **Schedule:** 08:55 (Mon-Fri)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/alerts/vsr_telegram_market_hours_manager.py --user Sai`
+- **Timezone:** Not specified
+- **Run at Load:** False
+- **Keep Alive:** True
+- **Market Hours:** 9:00 AM - 3:30 PM IST (Service auto-manages start/stop)
+- **Features:** Dual alerts for hourly and daily VSR signals with configurable thresholds
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram/market_hours_manager.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram/vsr_telegram_enhanced_error.log`
+
 #### weekly_backup
 - **Label:** `com.india-ts.weekly_backup`
 - **Schedule:** 03:00 (Sun)
@@ -509,3 +521,14 @@ launchctl stop com.india-ts.job_name
 - **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/logs/friday_breadth_save_error.log`
 - **Purpose:** Saves market breadth data every Friday at 3:30 PM for weekend ML predictions
 - **Output:** Creates sma_breadth_friday_cache.json for use during weekends
+
+#### hourly_strategy_predictor
+- **Label:** `com.india-ts.hourly_strategy_predictor`
+- **Schedule:** Every hour from 9:00 AM to 3:00 PM (Mon-Fri)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/ML/predictors/hourly_strategy_predictor.py`
+- **Timezone:** Asia/Kolkata
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/hourly_strategy_predictor.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/logs/hourly_strategy_predictor_error.log`
+- **Purpose:** Runs ML predictions every hour during market hours to predict optimal trading strategy (LONG/SHORT/NEUTRAL)
+- **Output:** Creates JSON prediction files in Daily/ML/predictions/ directory
