@@ -24,13 +24,17 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - Fixed dashboard restart functionality in Job Manager Dashboard (port 9090)
 - Modified restart_dashboard function to properly handle launchctl-managed dashboards with KeepAlive setting
 - Changed from using launchctl start/stop to launchctl unload/load for proper restart
-- Created documentation at Daily/docs/DASHBOARD_RESTART_FIX.md
+- Fixed logger initialization order in dashboard_enhanced.py to prevent NameError on startup
+- Installed joblib module for system Python (/usr/bin/python3) to resolve import errors
+- Created/updated documentation at Daily/docs/DASHBOARD_RESTART_FIX.md
 
 **Impact:**
 - Market Regime Dashboard (port 8080) can now be properly restarted from Job Manager Dashboard
 - Health Dashboard (port 7080) can now be properly restarted from Job Manager Dashboard
 - Resolves issue where dashboards with KeepAlive=true would immediately restart after being stopped
+- Fixed dashboard startup failures due to missing dependencies and initialization order
 - Job Manager Dashboard updated and restarted with the fix
+- Market Regime Dashboard is now running successfully on port 8080
 - No impact on other services or dashboards
 
 ---
