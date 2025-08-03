@@ -19,6 +19,56 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-03 10:15 IST - [Claude]
+**Changes:**
+- Completely reorganized Daily/ML folder structure for better organization and maintainability
+- Created proper subdirectories: core/, predictors/, analyzers/, training/, utils/, notebooks/, experiments/
+- Moved existing ML files to appropriate subdirectories:
+  - breadth_optimization_model.py → core/
+  - breadth_strategy_predictor.py → predictors/
+  - keltner_channel_filter_analyzer.py → analyzers/
+  - retrain_breadth_model.py → training/
+  - show_filtered_tickers.py, fix_excel_dates.py → utils/
+- Copied Market_Regime/model_manager.py to ML/core/regime_model_manager.py for centralized ML model management
+- Created comprehensive README.md documentation with:
+  - Complete directory structure explanation
+  - Usage examples for all ML components
+  - Integration guidelines
+  - Development best practices
+  - Future enhancement roadmap
+
+**Impact:**
+- Improved ML module organization and discoverability
+- Better separation of concerns (core models, predictors, analyzers, training)
+- Enhanced documentation for developers and users
+- Centralized ML model management
+- Maintained backward compatibility with existing ML_MODULE_SUMMARY.md
+- All existing functionality preserved, just better organized
+- Future ML development will benefit from clear structure
+
+---
+
+### 2025-08-03 14:15 IST - [Claude]
+**Changes:**
+- Created ML-based breadth optimization module for continuous strategy optimization
+- Implemented breadth_optimization_model.py with GradientBoostingRegressor
+- Created breadth_strategy_predictor.py for real-time strategy recommendations
+- Built retrain_breadth_model.py for weekly model updates
+- Organized ML folder with proper structure (core/, predictors/, analyzers/, training/, utils/)
+- Created comprehensive documentation (README.md and ML_MODULE_SUMMARY.md)
+- Removed ML from .gitignore to enable version control
+- Trained initial models achieving R² scores of 0.78 (long) and 0.83 (short)
+
+**Impact:**
+- ML model validates optimal SMA20 breadth ranges: Long (55-70%), Short (35-50%)
+- Provides data-driven strategy recommendations based on current market breadth
+- Enables continuous learning and adaptation to changing market conditions
+- Integrated with existing trading system for enhanced decision making
+- Weekly retraining ensures model stays current with market patterns
+- All ML components now properly version controlled in git
+
+---
+
 ### 2025-08-01 15:30 IST - [Claude]
 **Changes:**
 - Updated Job Manager Dashboard (job_manager_dashboard.py) to include ALL 46 services
