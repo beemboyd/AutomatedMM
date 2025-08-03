@@ -498,3 +498,14 @@ launchctl stop com.india-ts.job_name
 - **Output Directory:** `/Users/maverick/PycharmProjects/India-TS/Daily/Momentum/`
 - **Purpose:** Analyzes daily and weekly momentum using EMA crossover strategy
 - **Output Format:** Excel reports with naming pattern India-Momentum_Report_{Date}_{Time}.xlsx
+
+#### save_friday_breadth_data
+- **Label:** `com.india-ts.save_friday_breadth_data`
+- **Schedule:** 15:30 (Friday only)
+- **Program:** `/usr/bin/python3 /Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/save_friday_breadth_data.py`
+- **Timezone:** Asia/Kolkata
+- **Run at Load:** False
+- **Log Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/logs/friday_breadth_save.log`
+- **Error Path:** `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/logs/friday_breadth_save_error.log`
+- **Purpose:** Saves market breadth data every Friday at 3:30 PM for weekend ML predictions
+- **Output:** Creates sma_breadth_friday_cache.json for use during weekends

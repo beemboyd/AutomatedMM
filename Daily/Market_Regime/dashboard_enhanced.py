@@ -27,13 +27,21 @@ logger = logging.getLogger(__name__)
 # Import momentum widget
 from dashboards.market_breadth_momentum_widget import get_market_breadth_momentum_data, get_market_breadth_momentum_trend
 
-# Import ML integration
+# Import ML integration with scheduling support
 try:
-    from ml_dashboard_integration import get_ml_insights, get_ml_alerts, get_ml_performance
+    # Try to import scheduled version first
+    from ml_dashboard_integration_scheduled import get_ml_insights, get_ml_alerts, get_ml_performance
     ML_AVAILABLE = True
+    logger.info("Using scheduled ML integration")
 except ImportError:
-    ML_AVAILABLE = False
-    logger.warning("ML integration not available - joblib module may be missing")
+    try:
+        # Fallback to regular version
+        from ml_dashboard_integration import get_ml_insights, get_ml_alerts, get_ml_performance
+        ML_AVAILABLE = True
+        logger.info("Using regular ML integration")
+    except ImportError:
+        ML_AVAILABLE = False
+        logger.warning("ML integration not available - joblib module may be missing")
 
 app = Flask(__name__)
 

@@ -19,6 +19,25 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-03 17:45 IST - [Claude]
+**Changes:**
+- Implemented scheduled ML service for weekday/weekend data management
+- Created ml_dashboard_integration_scheduled.py to handle time-based data logic
+- Created save_friday_breadth_data.py script to cache Friday 3:30 PM data
+- Added plist job com.india-ts.save_friday_breadth_data to run every Friday at 3:30 PM
+- Updated dashboard_enhanced.py to use scheduled ML integration
+- Added data source metadata to ML insights API response
+
+**Impact:**
+- ML predictions now use live data during weekdays (9:15 AM - 3:30 PM)
+- On weekends and outside market hours, ML uses Friday 3:30 PM cached data
+- API response includes metadata showing data source (live_data vs friday_cache)
+- Friday data automatically backed up with timestamps (keeps last 4 weeks)
+- No manual intervention needed for weekend operations
+- Dashboard continues to provide ML insights 24/7 with appropriate data
+
+---
+
 ### 2025-08-03 14:00 IST - [Claude]
 **Changes:**
 - Fixed dashboard restart functionality in Job Manager Dashboard (port 9090)
