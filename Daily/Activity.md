@@ -19,6 +19,22 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-03 14:00 IST - [Claude]
+**Changes:**
+- Fixed dashboard restart functionality in Job Manager Dashboard (port 9090)
+- Modified restart_dashboard function to properly handle launchctl-managed dashboards with KeepAlive setting
+- Changed from using launchctl start/stop to launchctl unload/load for proper restart
+- Created documentation at Daily/docs/DASHBOARD_RESTART_FIX.md
+
+**Impact:**
+- Market Regime Dashboard (port 8080) can now be properly restarted from Job Manager Dashboard
+- Health Dashboard (port 7080) can now be properly restarted from Job Manager Dashboard
+- Resolves issue where dashboards with KeepAlive=true would immediately restart after being stopped
+- Job Manager Dashboard updated and restarted with the fix
+- No impact on other services or dashboards
+
+---
+
 ### 2025-08-03 10:15 IST - [Claude]
 **Changes:**
 - Completely reorganized Daily/ML folder structure for better organization and maintainability

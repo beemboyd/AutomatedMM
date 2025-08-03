@@ -657,6 +657,47 @@ def stop_dashboard(dashboard_id):
 def restart_dashboard(dashboard_id):
     """Restart a dashboard"""
     try:
+        dashboard = DASHBOARDS.get(dashboard_id)
+        if not dashboard:
+            return {'success': False, 'message': 'Invalid dashboard ID'}
+        
+        # Special handling for launchctl-managed dashboards with KeepAlive
+        if dashboard_id in ['health_dashboard_manual', 'market_regime_dashboard_manual']:
+            # Map dashboard_id to job_id
+            job_id_map = {
+                'health_dashboard_manual': 'com.india-ts.health_dashboard',
+                'market_regime_dashboard_manual': 'com.india-ts.market_regime_dashboard'
+            }
+            job_id = job_id_map[dashboard_id]
+            
+            # Determine the plist path
+            plist_path = f'/Users/maverick/Library/LaunchAgents/{job_id}.plist'
+            
+            if not os.path.exists(plist_path):
+                return {'success': False, 'message': f'Plist file not found: {plist_path}'}
+            
+            # Unload the service (this stops it and removes from launchctl)
+            logger.info(f"Unloading {job_id} from launchctl...")
+            unload_result = subprocess.run(['launchctl', 'unload', plist_path], 
+                                         capture_output=True, text=True)
+            
+            if unload_result.returncode != 0 and 'Could not find specified service' not in unload_result.stderr:
+                logger.error(f"Failed to unload: {unload_result.stderr}")
+            
+            # Wait a moment for the service to fully stop
+            time.sleep(2)
+            
+            # Load the service again (this starts it fresh)
+            logger.info(f"Loading {job_id} into launchctl...")
+            load_result = subprocess.run(['launchctl', 'load', plist_path], 
+                                       capture_output=True, text=True)
+            
+            if load_result.returncode == 0:
+                return {'success': True, 'message': f'{dashboard["name"]} restarted successfully'}
+            else:
+                return {'success': False, 'message': load_result.stderr or 'Failed to restart'}
+        
+        # For non-launchctl dashboards, use the regular stop/start approach
         # First stop
         stop_result = stop_dashboard(dashboard_id)
         if not stop_result['success']:
