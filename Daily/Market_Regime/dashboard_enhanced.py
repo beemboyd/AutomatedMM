@@ -20,7 +20,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import momentum widget
-from dashboards.momentum_widget import get_momentum_widget_data, get_momentum_trend_data
+from dashboards.market_breadth_momentum_widget import get_market_breadth_momentum_data, get_market_breadth_momentum_trend
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -724,34 +724,41 @@ ENHANCED_DASHBOARD_HTML = '''
                         
                         <!-- Current Momentum Stats -->
                         <div class="row mb-4">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="card bg-light">
                                     <div class="card-body text-center">
-                                        <h6 class="text-muted">Daily Momentum</h6>
-                                        <div class="display-4 text-primary" id="daily-momentum-count">-</div>
+                                        <h6 class="text-muted">Market Momentum (WM)</h6>
+                                        <div class="display-4" id="market-momentum-value">-</div>
                                         <div class="small">
                                             <span class="text-muted">Change: </span>
-                                            <span id="daily-momentum-change" class="fw-bold">-</span>
+                                            <span id="momentum-change" class="fw-bold">-</span>
                                         </div>
                                         <div class="mt-2">
-                                            <small class="text-muted">Top Movers:</small>
-                                            <div id="daily-top-movers" class="small mt-1">Loading...</div>
+                                            <div id="momentum-regime" class="badge bg-secondary">Loading...</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <div class="card bg-light">
                                     <div class="card-body text-center">
-                                        <h6 class="text-muted">Weekly Momentum</h6>
-                                        <div class="display-4 text-success" id="weekly-momentum-count">-</div>
+                                        <h6 class="text-muted">Daily Ticker Count</h6>
+                                        <div class="display-4 text-primary" id="daily-ticker-count">-</div>
                                         <div class="small">
-                                            <span class="text-muted">Change: </span>
-                                            <span id="weekly-momentum-change" class="fw-bold">-</span>
+                                            <span class="text-muted">7-day Avg: </span>
+                                            <span id="daily-ticker-avg" class="fw-bold">-</span>
                                         </div>
-                                        <div class="mt-2">
-                                            <small class="text-muted">Top Movers:</small>
-                                            <div id="weekly-top-movers" class="small mt-1">Loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted">Weekly Ticker Count</h6>
+                                        <div class="display-4 text-success" id="weekly-ticker-count">-</div>
+                                        <div class="small">
+                                            <span class="text-muted">7-day Avg: </span>
+                                            <span id="weekly-ticker-avg" class="fw-bold">-</span>
                                         </div>
                                     </div>
                                 </div>
@@ -773,9 +780,19 @@ ENHANCED_DASHBOARD_HTML = '''
                             <div class="col-12">
                                 <div class="alert alert-info">
                                     <h6 class="alert-heading">📊 Momentum Formula</h6>
-                                    <p class="mb-2"><strong>Criteria:</strong> Price > EMA_100 AND Slope > 0</p>
-                                    <p class="mb-0"><strong>WM (Weighted Momentum):</strong> ((EMA5-EMA8) + (EMA8-EMA13) + (EMA13-EMA21) + (EMA21-EMA50)) / 4</p>
-                                    <small class="text-muted">Stocks showing positive momentum based on EMA crossover strategy</small>
+                                    <p class="mb-2"><strong>Formula:</strong> WM = (SMA20 - SMA50) / 2</p>
+                                    <p class="mb-0"><strong>Current Market Breadth:</strong> SMA20: <span id="current-sma20">-</span>%, SMA50: <span id="current-sma50">-</span>%</p>
+                                    <small class="text-muted">Market momentum based on breadth differential</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Market Interpretation -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="alert alert-secondary">
+                                    <h6 class="alert-heading">📈 Market Analysis</h6>
+                                    <p class="mb-0" id="momentum-interpretation">Loading analysis...</p>
                                 </div>
                             </div>
                         </div>
@@ -983,21 +1000,32 @@ ENHANCED_DASHBOARD_HTML = '''
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Daily Momentum',
+                        label: 'Market Momentum (WM)',
+                        data: [],
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }, {
+                        label: 'Daily Ticker Count',
                         data: [],
                         borderColor: '#007bff',
                         backgroundColor: 'rgba(0, 123, 255, 0.1)',
                         borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y2'
                     }, {
-                        label: 'Weekly Momentum',
+                        label: 'Weekly Ticker Count',
                         data: [],
                         borderColor: '#28a745',
                         backgroundColor: 'rgba(40, 167, 69, 0.1)',
                         borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y2'
                     }]
                 },
                 options: {
@@ -1025,11 +1053,26 @@ ENHANCED_DASHBOARD_HTML = '''
                                 text: 'Date'
                             }
                         },
-                        y: {
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Market Momentum (WM)'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        },
+                        y2: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Number of Stocks'
+                                text: 'Ticker Count'
                             }
                         }
                     }
@@ -2223,32 +2266,52 @@ ENHANCED_DASHBOARD_HTML = '''
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success' && data.data) {
-                        const momentum = data.data;
+                        const current = data.data.current;
+                        const tickerAnalysis = data.data.ticker_analysis;
                         
-                        // Update daily momentum
-                        document.getElementById('daily-momentum-count').textContent = momentum.daily.count;
-                        const dailyChange = momentum.daily.change;
-                        const dailyChangeEl = document.getElementById('daily-momentum-change');
-                        dailyChangeEl.textContent = (dailyChange >= 0 ? '+' : '') + dailyChange;
-                        dailyChangeEl.className = 'fw-bold ' + (dailyChange >= 0 ? 'text-success' : 'text-danger');
+                        // Update market momentum
+                        const momentumValue = current.momentum;
+                        const momentumEl = document.getElementById('market-momentum-value');
+                        momentumEl.textContent = momentumValue.toFixed(2);
                         
-                        // Update weekly momentum
-                        document.getElementById('weekly-momentum-count').textContent = momentum.weekly.count;
-                        const weeklyChange = momentum.weekly.change;
-                        const weeklyChangeEl = document.getElementById('weekly-momentum-change');
-                        weeklyChangeEl.textContent = (weeklyChange >= 0 ? '+' : '') + weeklyChange;
-                        weeklyChangeEl.className = 'fw-bold ' + (weeklyChange >= 0 ? 'text-success' : 'text-danger');
+                        // Set color based on value
+                        if (momentumValue > 5) {
+                            momentumEl.className = 'display-4 text-success';
+                        } else if (momentumValue > 0) {
+                            momentumEl.className = 'display-4 text-info';
+                        } else if (momentumValue > -5) {
+                            momentumEl.className = 'display-4 text-warning';
+                        } else {
+                            momentumEl.className = 'display-4 text-danger';
+                        }
                         
-                        // Update top movers
-                        const dailyMovers = momentum.daily.top_movers.slice(0, 3).map(m => 
-                            `${m.Ticker} (WM:${m.WM.toFixed(1)})`
-                        ).join(', ') || 'None';
-                        document.getElementById('daily-top-movers').textContent = dailyMovers;
+                        // Update change
+                        const change = current.change;
+                        const changeEl = document.getElementById('momentum-change');
+                        changeEl.textContent = (change >= 0 ? '+' : '') + change.toFixed(2);
+                        changeEl.className = 'fw-bold ' + (change >= 0 ? 'text-success' : 'text-danger');
                         
-                        const weeklyMovers = momentum.weekly.top_movers.slice(0, 3).map(m => 
-                            `${m.Ticker} (WM:${m.WM.toFixed(1)})`
-                        ).join(', ') || 'None';
-                        document.getElementById('weekly-top-movers').textContent = weeklyMovers;
+                        // Update regime
+                        const regimeEl = document.getElementById('momentum-regime');
+                        regimeEl.textContent = current.regime;
+                        regimeEl.className = 'badge ' + getRegimeBadgeClass(current.regime);
+                        
+                        // Update SMA values
+                        document.getElementById('current-sma20').textContent = current.sma20;
+                        document.getElementById('current-sma50').textContent = current.sma50;
+                        
+                        // Update ticker counts
+                        document.getElementById('daily-ticker-count').textContent = tickerAnalysis.daily.current;
+                        document.getElementById('daily-ticker-avg').textContent = tickerAnalysis.daily.average;
+                        
+                        document.getElementById('weekly-ticker-count').textContent = tickerAnalysis.weekly.current;
+                        document.getElementById('weekly-ticker-avg').textContent = tickerAnalysis.weekly.average;
+                        
+                        // Update interpretation
+                        const interpretEl = document.getElementById('momentum-interpretation');
+                        if (interpretEl && data.data.interpretation) {
+                            interpretEl.textContent = data.data.interpretation;
+                        }
                     }
                 })
                 .catch(error => {
@@ -2256,18 +2319,28 @@ ENHANCED_DASHBOARD_HTML = '''
                 });
         }
         
+        function getRegimeBadgeClass(regime) {
+            if (regime.includes('Strong Bullish')) return 'bg-success';
+            if (regime.includes('Bullish')) return 'bg-info';
+            if (regime.includes('Mildly Bearish')) return 'bg-warning';
+            if (regime.includes('Bearish')) return 'bg-danger';
+            return 'bg-secondary';
+        }
+        
         function updateMomentumTrend() {
             fetch('/api/momentum_trend')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success' && data.data) {
-                        const trendData = data.data;
+                        const momentumTrend = data.data.momentum_trend;
+                        const tickerCounts = data.data.ticker_counts;
                         
                         // Update momentum trend chart
                         if (window.momentumTrendChart) {
-                            window.momentumTrendChart.data.labels = trendData.dates;
-                            window.momentumTrendChart.data.datasets[0].data = trendData.daily_counts;
-                            window.momentumTrendChart.data.datasets[1].data = trendData.weekly_counts;
+                            window.momentumTrendChart.data.labels = momentumTrend.dates;
+                            window.momentumTrendChart.data.datasets[0].data = momentumTrend.values;
+                            window.momentumTrendChart.data.datasets[1].data = tickerCounts.daily;
+                            window.momentumTrendChart.data.datasets[2].data = tickerCounts.weekly;
                             window.momentumTrendChart.update();
                         }
                     }
@@ -2498,6 +2571,77 @@ ENHANCED_DASHBOARD_HTML = '''
             initializeDashboard();
         }
     </script>
+    
+    <!-- Optimal Trading Conditions -->
+    <div class="card" style="margin-top: 20px; margin-bottom: 30px; background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">
+        <div class="card-header" style="background: transparent; border-bottom: 2px solid rgba(255,255,255,0.1);">
+            <h4 class="mb-0 text-white">🎯 Optimal SMA20 Breadth Trading Conditions</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="optimal-conditions-box" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                        <h5 class="text-warning mb-3">📉 SHORT REVERSAL STRATEGY</h5>
+                        <div class="condition-item mb-2">
+                            <span class="badge badge-success">BEST</span>
+                            <span class="text-white ml-2">SMA20: 35-50%</span>
+                            <small class="text-muted d-block ml-5">Success: 80% | Avg PnL: +2.91%</small>
+                        </div>
+                        <div class="condition-item mb-2">
+                            <span class="badge badge-warning">GOOD</span>
+                            <span class="text-white ml-2">SMA20: 25-35%</span>
+                            <small class="text-muted d-block ml-5">Success: 66.7% | Avg PnL: +0.66%</small>
+                        </div>
+                        <div class="condition-item mb-2">
+                            <span class="badge badge-danger">AVOID</span>
+                            <span class="text-white ml-2">SMA20: Below 20%</span>
+                            <small class="text-muted d-block ml-5">Oversold bounce risk</small>
+                        </div>
+                        <div class="condition-item">
+                            <span class="badge badge-danger">AVOID</span>
+                            <span class="text-white ml-2">SMA20: Above 50%</span>
+                            <small class="text-muted d-block ml-5">Bullish conditions</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="optimal-conditions-box" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+                        <h5 class="text-info mb-3">📈 LONG REVERSAL STRATEGY</h5>
+                        <div class="condition-item mb-2">
+                            <span class="badge badge-success">BEST</span>
+                            <span class="text-white ml-2">SMA20: 55-70%</span>
+                            <small class="text-muted d-block ml-5">Success: 43-46% | Avg PnL: +0.29-0.47%</small>
+                        </div>
+                        <div class="condition-item mb-2">
+                            <span class="badge badge-warning">MODERATE</span>
+                            <span class="text-white ml-2">SMA20: 45-55%</span>
+                            <small class="text-muted d-block ml-5">Mixed results, use caution</small>
+                        </div>
+                        <div class="condition-item mb-2">
+                            <span class="badge badge-danger">AVOID</span>
+                            <span class="text-white ml-2">SMA20: Below 45%</span>
+                            <small class="text-muted d-block ml-5">Poor success rates</small>
+                        </div>
+                        <div class="condition-item">
+                            <span class="badge badge-danger">AVOID</span>
+                            <span class="text-white ml-2">SMA20: Above 70%</span>
+                            <small class="text-muted d-block ml-5">Potentially overbought</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="alert alert-info mt-3" style="background: rgba(52, 152, 219, 0.1); border: 1px solid rgba(52, 152, 219, 0.3);">
+                <h6 class="alert-heading">💡 Key Insights:</h6>
+                <ul class="mb-0 small">
+                    <li>Shorts work best in moderately weak markets (35-50% breadth)</li>
+                    <li>Longs work best in moderately strong markets (55-70% breadth)</li>
+                    <li>Extreme breadth readings (&lt;20% or &gt;70%) should be avoided</li>
+                    <li>Analysis based on 4-day holding period for reversal trades</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
 </body>
 </html>
 '''
@@ -3117,12 +3261,12 @@ def get_sma_breadth_historical():
 @app.route('/api/momentum_data')
 def get_momentum_data():
     """Get momentum scanner data"""
-    return get_momentum_widget_data()
+    return get_market_breadth_momentum_data()
 
 @app.route('/api/momentum_trend')
 def get_momentum_trend():
     """Get momentum historical trend data"""
-    return get_momentum_trend_data()
+    return get_market_breadth_momentum_trend()
 
 if __name__ == '__main__':
     print("\n" + "="*60)

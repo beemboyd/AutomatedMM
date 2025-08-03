@@ -138,6 +138,91 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-08-02 16:45 IST - [Claude]
+**Changes:**
+- Fixed missing volume breadth data for August 1, 2025
+- Added volume breadth metrics from market breadth scan data
+- Created fix_volume_breadth.py script to populate missing volume data
+- Volume breadth data now complete for both July 31 and August 1
+
+**Impact:**
+- Dashboard volume charts will now display properly for both dates
+- July 31: Volume participation 17.37%
+- August 1: Volume participation 14.12%
+- Low volume participation confirms lack of conviction in market moves
+- Supports the mild bearish bias recommendation
+
+---
+
+### 2025-08-02 16:45 IST - [Claude]
+**Changes:**
+- Verified momentum scanner is operational and integrated with dashboard
+- Momentum Scanner Analysis widget on Market Regime Dashboard (port 8080) is working
+- Current momentum criteria: Price > EMA_100 AND Slope > 0
+- Formula displayed: WM = ((EMA5-EMA8) + (EMA8-EMA13) + (EMA13-EMA21) + (EMA21-EMA50)) / 4
+- API endpoints functional: `/api/momentum_data` and `/api/momentum_trend`
+
+**Impact:**
+- Dashboard shows 7 daily momentum tickers (up from 1 yesterday)
+- Weekly momentum shows 0 tickers (down from 1)
+- Momentum scanner runs daily at 4 PM IST via plist
+- Widget displays top movers but WM/Slope values showing as NaN (known issue with Excel timezone handling)
+- Historical trend data available for dashboard visualization
+
+---
+
+### 2025-08-02 16:50 IST - [Claude]
+**Changes:**
+- Created historical momentum analysis for past 2 months
+- Analyzed 18 momentum reports from July 18 to August 2
+- Generated trend plots showing daily and weekly momentum counts
+- Created momentum_historical_simple.py for analyzing existing reports
+
+**Impact:**
+- Daily momentum averaged 16.8 tickers (Max: 103 on July 18)
+- Weekly momentum averaged 10.2 tickers (Max: 97)
+- Significant drop from July 18 (103 tickers) to current levels (7 tickers)
+- Plots saved: momentum_trend_20250802.png and momentum_analysis_20250802.png
+- Data shows declining momentum trend consistent with bearish market regime
+
+---
+
+### 2025-08-02 17:00 IST - [Claude]
+**Changes:**
+- Updated Momentum Scanner Analysis section on Market Regime Dashboard (port 8080)
+- Changed formula from complex EMA-based to simple: WM = (SMA20 - SMA50) / 2
+- Integrated with Market Breadth dashboard API on port 5001
+- Created market_breadth_momentum_widget.py for new calculations
+- Updated dashboard to show Market Momentum (WM), Daily/Weekly ticker counts, and market interpretation
+
+**Impact:**
+- Current Market Momentum: -2.5 (Mildly Bearish)
+- Formula now directly correlates with market breadth data
+- Dashboard shows dual-axis chart: momentum trend and ticker counts
+- Real-time interpretation: "Mildly Bearish: Slight negative momentum. Market under pressure."
+- Simplified analysis aligns with overall market regime assessment
+
+---
+
+### 2025-08-03 10:00 IST - [Claude]
+**Changes:**
+- Created Keltner Channel monthly scanner (keltner_monthly_scanner.py)
+- Analyzes all tickers for Keltner Channel upper/lower limit touches on monthly timeframe
+- Uses 20-period EMA with 2x ATR multiplier for channel calculation
+- Scans 3 years of monthly data to identify touches and crosses
+
+**Impact:**
+- Upper Limit Touches: 99 tickers (16.4% of 603 scanned)
+  - Top tickers near upper limit: LAURUSLABS (-10.6%), BSE (-2.8%), VENUSREM (-2.2%)
+  - Several tickers currently above upper KC: INDIGO, LLOYDSME, NAVA, CEINSYSTECH
+- Lower Limit Touches: 15 tickers (2.5% of 603 scanned)
+  - ABFRL currently below lower KC (-18.95%)
+  - Most touched lower limit in April-May 2025
+- Results saved to: Daily/analysis/keltner_monthly_results/
+- Provides insight into extreme price movements on monthly timeframe
+
+---
+
 ### 2025-07-31 14:48 IST - [Claude]
 **Changes:**
 - Unloaded and archived 7 plists that are no longer in use:
