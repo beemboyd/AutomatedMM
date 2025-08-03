@@ -137,6 +137,20 @@ This document provides a comprehensive overview of all India-TS system jobs, the
 - **Status**: ✅ Active
 - **Note**: SL Watchdog now includes volume-price anomaly detection for exhaustion pattern warnings
 
+#### 16. **com.india-ts.vsr-telegram-alerts-enhanced** *(New - August 3, 2025)*
+- **Purpose**: Enhanced VSR Telegram alerts service with dual hourly and daily momentum alerts
+- **Schedule**: 8:55 AM - 3:30 PM IST (weekdays, auto-managed)
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/alerts/vsr_telegram_market_hours_manager.py`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.vsr-telegram-alerts-enhanced.plist`
+- **Status**: ✅ Active
+- **Features**:
+  - Hourly VSR alerts (2%+ momentum, 2x+ VSR ratio)
+  - Daily VSR alerts (10%+ momentum, 60+ score)
+  - Configurable thresholds in config.ini
+  - Independent hourly/daily toggle (hourly_telegram_on, daily_telegram_on)
+  - Market hours auto-management (9 AM - 3:30 PM)
+- **Configuration**: See `/Users/maverick/PycharmProjects/India-TS/Daily/docs/VSR_TELEGRAM_ENHANCED_GUIDE.md`
+
 ## Deprecated/Removed Jobs
 
 These jobs have been removed or disabled due to system migration or missing dependencies:
@@ -175,6 +189,7 @@ PLIST_FILES=(
     "com.india-ts.short_reversal_daily.plist"
     "com.india-ts.sl_watchdog_stop.plist"
     "com.india-ts.synch_zerodha_local.plist"
+    "com.india-ts.vsr-telegram-alerts-enhanced.plist"
     "com.india-ts.weekly_backup.plist"
 )
 

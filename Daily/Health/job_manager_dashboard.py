@@ -175,6 +175,12 @@ JOBS = {
         'schedule': '3:30 PM (Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Alerts'
     },
+    'com.india-ts.vsr-telegram-alerts-enhanced': {
+        'name': 'Enhanced VSR Telegram Alerts (Hourly + Daily)',
+        'script': 'vsr_telegram_market_hours_manager.py',
+        'schedule': '8:55 AM - 3:30 PM (Mon-Fri, Auto-managed)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/alerts'
+    },
     'com.india-ts.short-momentum-tracker': {
         'name': 'Short Momentum Tracker',
         'script': 'short_momentum_tracker_service.py',

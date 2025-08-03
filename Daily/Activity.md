@@ -19,6 +19,22 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-03 19:00 IST - [Claude]
+**Changes:**
+- Loaded enhanced VSR Telegram alerts service (com.india-ts.vsr-telegram-alerts-enhanced)
+- Updated job manager dashboard to include the enhanced VSR Telegram service
+- Updated INDIA_TS_JOBS_DOCUMENTATION.md with new service details
+- Service is now active and running with market hours management (9 AM - 3:30 PM IST)
+
+**Impact:**
+- New service provides dual hourly and daily VSR alerts via Telegram
+- Hourly alerts: 2%+ momentum, 2x+ VSR ratio threshold
+- Daily alerts: 10%+ momentum, 60+ score threshold
+- Market hours auto-management ensures service only runs during trading hours
+- Both alert types can be independently toggled via config.ini
+
+---
+
 ### 2025-08-03 19:15 IST - [Claude]
 **Changes:**
 - Created enhanced VSR Telegram service with configurable hourly/daily alerts
