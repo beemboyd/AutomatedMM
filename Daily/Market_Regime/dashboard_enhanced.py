@@ -15,9 +15,14 @@ import pandas as pd
 import re
 import logging
 import sys
+import configparser
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import momentum widget
 from dashboards.market_breadth_momentum_widget import get_market_breadth_momentum_data, get_market_breadth_momentum_trend
@@ -28,11 +33,7 @@ try:
     ML_AVAILABLE = True
 except ImportError:
     ML_AVAILABLE = False
-    logger.warning("ML integration not available")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    logger.warning("ML integration not available - joblib module may be missing")
 
 app = Flask(__name__)
 
@@ -49,6 +50,29 @@ DAILY_DIR = os.path.dirname(SCRIPT_DIR)
 G_PATTERN_DIR = os.path.join(DAILY_DIR, 'G_Pattern_Master')
 LONG_RESULTS_DIR = os.path.join(DAILY_DIR, 'results')
 SHORT_RESULTS_DIR = os.path.join(DAILY_DIR, 'results-s')
+
+# Load dashboard configuration
+config = configparser.ConfigParser()
+config_path = os.path.join(DAILY_DIR, 'config.ini')
+config.read(config_path)
+
+# Get dashboard settings with defaults
+DASHBOARD_CONFIG = {
+    'show_ml_insights': config.getboolean('Dashboard', 'show_ml_insights', fallback=True),
+    'show_market_regime': config.getboolean('Dashboard', 'show_market_regime', fallback=True),
+    'show_sma_breadth': config.getboolean('Dashboard', 'show_sma_breadth', fallback=True),
+    'show_volume_breadth': config.getboolean('Dashboard', 'show_volume_breadth', fallback=True),
+    'show_reversal_patterns': config.getboolean('Dashboard', 'show_reversal_patterns', fallback=True),
+    'show_g_pattern': config.getboolean('Dashboard', 'show_g_pattern', fallback=True),
+    'show_vsr_tracker': config.getboolean('Dashboard', 'show_vsr_tracker', fallback=True),
+    'show_optimal_conditions': config.getboolean('Dashboard', 'show_optimal_conditions', fallback=True),
+    'show_momentum_scanner': config.getboolean('Dashboard', 'show_momentum_scanner', fallback=False),
+    'show_regime_history': config.getboolean('Dashboard', 'show_regime_history', fallback=False),
+    'show_confidence_trend': config.getboolean('Dashboard', 'show_confidence_trend', fallback=False),
+    'show_weekly_bias': config.getboolean('Dashboard', 'show_weekly_bias', fallback=False)
+}
+
+logger.info(f"Dashboard configuration loaded: {DASHBOARD_CONFIG}")
 
 # Store historical data for charts
 HISTORY_WINDOW = 50
@@ -433,6 +457,7 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
+        {% if config.show_weekly_bias %}
         <!-- Weekly Bias Section -->
         <div class="row mb-4">
             <div class="col-12">
@@ -476,6 +501,7 @@ ENHANCED_DASHBOARD_HTML = '''
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <!-- Index Analysis Section -->
         <div class="row mb-4">
@@ -608,19 +634,23 @@ ENHANCED_DASHBOARD_HTML = '''
         
         <!-- Charts Section -->
         <div class="row mb-4">
+            {% if config.show_regime_history %}
             <div class="col-md-6 mb-3">
                 <div class="chart-container">
                     <h5>Regime History</h5>
                     <canvas id="regime-history-chart" height="150"></canvas>
                 </div>
             </div>
+            {% endif %}
             
+            {% if config.show_confidence_trend %}
             <div class="col-md-6 mb-3">
                 <div class="chart-container">
                     <h5>Confidence Trend</h5>
                     <canvas id="confidence-trend-chart" height="150"></canvas>
                 </div>
             </div>
+            {% endif %}
         </div>
         
         <!-- Historical Context -->
@@ -759,6 +789,7 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
+        {% if config.show_momentum_scanner %}
         <!-- Momentum Scanner Section -->
         <div class="row mb-4">
             <div class="col-12">
@@ -844,6 +875,7 @@ ENHANCED_DASHBOARD_HTML = '''
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <!-- Multi-Timeframe Analysis Section -->
         <div class="row mt-4">
@@ -989,6 +1021,9 @@ ENHANCED_DASHBOARD_HTML = '''
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     
     <script>
+        // Dashboard configuration from backend
+        const dashboardConfig = {{ config | tojson }};
+        
         // Test if JavaScript is executing
         console.log('Dashboard JavaScript loaded at', new Date().toISOString());
         document.addEventListener('DOMContentLoaded', function() {
@@ -1011,7 +1046,12 @@ ENHANCED_DASHBOARD_HTML = '''
         };
         
         // Initialize charts
-        const regimeHistoryChart = new Chart(document.getElementById('regime-history-chart'), {
+        // Initialize Regime History Chart only if enabled
+        let regimeHistoryChart = null;
+        if (dashboardConfig.show_regime_history) {
+            const regimeHistoryCanvas = document.getElementById('regime-history-chart');
+            if (regimeHistoryCanvas) {
+                regimeHistoryChart = new Chart(regimeHistoryCanvas, {
             type: 'bar',
             data: {
                 labels: [],
@@ -1021,9 +1061,16 @@ ENHANCED_DASHBOARD_HTML = '''
                 }]
             },
             options: chartOptions
-        });
+                });
+            }
+        }
         
-        const confidenceTrendChart = new Chart(document.getElementById('confidence-trend-chart'), {
+        // Initialize Confidence Trend Chart only if enabled
+        let confidenceTrendChart = null;
+        if (dashboardConfig.show_confidence_trend) {
+            const confidenceTrendCanvas = document.getElementById('confidence-trend-chart');
+            if (confidenceTrendCanvas) {
+                confidenceTrendChart = new Chart(confidenceTrendCanvas, {
             type: 'line',
             data: {
                 labels: [],
@@ -1034,11 +1081,15 @@ ENHANCED_DASHBOARD_HTML = '''
                 }]
             },
             options: chartOptions
-        });
+                });
+            }
+        }
         
-        // Initialize Momentum Trend Chart
-        const momentumCanvas = document.getElementById('momentum-trend-chart');
-        if (momentumCanvas) {
+        // Initialize Momentum Trend Chart only if enabled
+        let momentumTrendChart = null;
+        if (dashboardConfig.show_momentum_scanner) {
+            const momentumCanvas = document.getElementById('momentum-trend-chart');
+            if (momentumCanvas) {
             window.momentumTrendChart = new Chart(momentumCanvas, {
                 type: 'line',
                 data: {
@@ -1122,6 +1173,8 @@ ENHANCED_DASHBOARD_HTML = '''
                     }
                 }
             });
+            momentumTrendChart = window.momentumTrendChart;
+            }
         }
         
         // Initialize SMA breadth charts - TEMPORARILY DISABLED
@@ -2306,6 +2359,7 @@ ENHANCED_DASHBOARD_HTML = '''
         }
         
         function updateMomentumData() {
+            if (!dashboardConfig.show_momentum_scanner) return;
             fetch('/api/momentum_data')
                 .then(response => response.json())
                 .then(data => {
@@ -2412,15 +2466,19 @@ ENHANCED_DASHBOARD_HTML = '''
                 .then(response => response.json())
                 .then(distData => {
                     // Clear existing data first
-                    regimeHistoryChart.data.labels = [];
-                    regimeHistoryChart.data.datasets[0].data = [];
-                    regimeHistoryChart.data.datasets[0].backgroundColor = [];
+                    if (regimeHistoryChart) {
+                        regimeHistoryChart.data.labels = [];
+                        regimeHistoryChart.data.datasets[0].data = [];
+                        regimeHistoryChart.data.datasets[0].backgroundColor = [];
+                    }
                     
                     // Set new data
-                    regimeHistoryChart.data.labels = distData.labels;
-                    regimeHistoryChart.data.datasets[0].data = distData.values;
-                    regimeHistoryChart.data.datasets[0].backgroundColor = distData.colors;
-                    regimeHistoryChart.update('none'); // Use 'none' animation mode to prevent visual issues
+                    if (regimeHistoryChart) {
+                        regimeHistoryChart.data.labels = distData.labels;
+                        regimeHistoryChart.data.datasets[0].data = distData.values;
+                        regimeHistoryChart.data.datasets[0].backgroundColor = distData.colors;
+                        regimeHistoryChart.update('none'); // Use 'none' animation mode to prevent visual issues
+                    }
                 });
             
             // Update confidence trend from API
@@ -2428,13 +2486,15 @@ ENHANCED_DASHBOARD_HTML = '''
                 .then(response => response.json())
                 .then(trendData => {
                     // Clear existing data first
-                    confidenceTrendChart.data.labels = [];
-                    confidenceTrendChart.data.datasets[0].data = [];
-                    
-                    // Set new data
-                    confidenceTrendChart.data.labels = trendData.labels;
-                    confidenceTrendChart.data.datasets[0].data = trendData.values;
-                    confidenceTrendChart.update('none'); // Use 'none' animation mode to prevent visual issues
+                    if (confidenceTrendChart) {
+                        confidenceTrendChart.data.labels = [];
+                        confidenceTrendChart.data.datasets[0].data = [];
+                        
+                        // Set new data
+                        confidenceTrendChart.data.labels = trendData.labels;
+                        confidenceTrendChart.data.datasets[0].data = trendData.values;
+                        confidenceTrendChart.update('none'); // Use 'none' animation mode to prevent visual issues
+                    }
                 });
         }
         
@@ -2606,15 +2666,17 @@ ENHANCED_DASHBOARD_HTML = '''
                 }
             }, 300000);
             
-            // Update ML insights every 5 minutes
-            updateMLInsights();
-            setInterval(function() {
-                try {
-                    updateMLInsights();
-                } catch (error) {
-                    console.error('Error updating ML insights:', error);
-                }
-            }, 300000);
+            // Update ML insights every 5 minutes if enabled
+            if (dashboardConfig.show_ml_insights) {
+                updateMLInsights();
+                setInterval(function() {
+                    try {
+                        updateMLInsights();
+                    } catch (error) {
+                        console.error('Error updating ML insights:', error);
+                    }
+                }, 300000);
+            }
         }
         
         // ML Functions
@@ -2747,6 +2809,7 @@ ENHANCED_DASHBOARD_HTML = '''
         }
     </script>
     
+    {% if config.show_ml_insights %}
     <!-- ML Strategy Recommendations -->
     <div class="card mb-4" id="mlInsightsCard">
         <div class="card-header bg-primary text-white">
@@ -2809,7 +2872,9 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
     </div>
+    {% endif %}
     
+    {% if config.show_optimal_conditions %}
     <!-- Optimal Trading Conditions -->
     <div class="card" style="margin-top: 20px; margin-bottom: 30px; background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">
         <div class="card-header" style="background: transparent; border-bottom: 2px solid rgba(255,255,255,0.1);">
@@ -2879,6 +2944,7 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
     </div>
+    {% endif %}
     
 </body>
 </html>
@@ -2886,7 +2952,7 @@ ENHANCED_DASHBOARD_HTML = '''
 
 @app.route('/')
 def index():
-    return render_template_string(ENHANCED_DASHBOARD_HTML)
+    return render_template_string(ENHANCED_DASHBOARD_HTML, config=DASHBOARD_CONFIG)
 
 @app.route('/api/current_analysis')
 def get_current_analysis():
