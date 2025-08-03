@@ -1825,23 +1825,36 @@ ENHANCED_DASHBOARD_HTML = '''
                     }
                     
                     // Update weekly bias section
-                    if (data.weekly_bias) {
+                    if (data.weekly_bias && dashboardConfig.show_weekly_bias) {
                         const bias = data.weekly_bias;
-                        document.getElementById('weekly-direction').textContent = bias.direction;
-                        document.getElementById('weekly-direction').className = 
-                            bias.direction === 'LONG' ? 'mb-0 text-success' : 
-                            bias.direction === 'SHORT' ? 'mb-0 text-danger' : 'mb-0 text-warning';
-                        document.getElementById('weekly-strength').textContent = bias.strength;
-                        document.getElementById('weekly-allocation').textContent = bias.allocation + '%';
-                        document.getElementById('weekly-rationale').textContent = bias.rationale;
+                        const weeklyDirection = document.getElementById('weekly-direction');
+                        const weeklyStrength = document.getElementById('weekly-strength');
+                        const weeklyAllocation = document.getElementById('weekly-allocation');
+                        const weeklyRationale = document.getElementById('weekly-rationale');
+                        
+                        if (weeklyDirection) {
+                            weeklyDirection.textContent = bias.direction;
+                            weeklyDirection.className = 
+                                bias.direction === 'LONG' ? 'mb-0 text-success' : 
+                                bias.direction === 'SHORT' ? 'mb-0 text-danger' : 'mb-0 text-warning';
+                        }
+                        if (weeklyStrength) weeklyStrength.textContent = bias.strength;
+                        if (weeklyAllocation) weeklyAllocation.textContent = bias.allocation + '%';
+                        if (weeklyRationale) weeklyRationale.textContent = bias.rationale;
                     }
                     
                     // Update enhanced scores
                     if (data.indicators.market_score !== undefined) {
-                        document.getElementById('enhanced-score').textContent = data.indicators.market_score.toFixed(3);
+                        const enhancedScoreEl = document.getElementById('enhanced-score');
+                        if (enhancedScoreEl) {
+                            enhancedScoreEl.textContent = data.indicators.market_score.toFixed(3);
+                        }
                     }
                     if (data.indicators.breadth_score !== undefined) {
-                        document.getElementById('breadth-score-display').textContent = data.indicators.breadth_score.toFixed(3);
+                        const breadthScoreEl = document.getElementById('breadth-score-display');
+                        if (breadthScoreEl) {
+                            breadthScoreEl.textContent = data.indicators.breadth_score.toFixed(3);
+                        }
                     }
                     
                     // Update pattern counts
@@ -1898,10 +1911,15 @@ ENHANCED_DASHBOARD_HTML = '''
                     // Update historical context
                     if (data.historical_context) {
                         const ctx = data.historical_context;
-                        document.getElementById('regime-duration').textContent = 
-                            ctx.regime_duration_hours.toFixed(1) + ' hours';
-                        document.getElementById('stability-score').textContent = 
-                            (ctx.stability_24h * 100).toFixed(0) + '%';
+                        const regimeDurationEl = document.getElementById('regime-duration');
+                        const stabilityScoreEl = document.getElementById('stability-score');
+                        
+                        if (regimeDurationEl) {
+                            regimeDurationEl.textContent = ctx.regime_duration_hours.toFixed(1) + ' hours';
+                        }
+                        if (stabilityScoreEl) {
+                            stabilityScoreEl.textContent = (ctx.stability_24h * 100).toFixed(0) + '%';
+                        }
                     }
                     
                     if (data.model_performance) {
@@ -2391,19 +2409,27 @@ ENHANCED_DASHBOARD_HTML = '''
                         
                         // Update regime
                         const regimeEl = document.getElementById('momentum-regime');
-                        regimeEl.textContent = current.regime;
-                        regimeEl.className = 'badge ' + getRegimeBadgeClass(current.regime);
+                        if (regimeEl) {
+                            regimeEl.textContent = current.regime;
+                            regimeEl.className = 'badge ' + getRegimeBadgeClass(current.regime);
+                        }
                         
                         // Update SMA values
-                        document.getElementById('current-sma20').textContent = current.sma20;
-                        document.getElementById('current-sma50').textContent = current.sma50;
+                        const sma20El = document.getElementById('current-sma20');
+                        const sma50El = document.getElementById('current-sma50');
+                        if (sma20El) sma20El.textContent = current.sma20;
+                        if (sma50El) sma50El.textContent = current.sma50;
                         
                         // Update ticker counts
-                        document.getElementById('daily-ticker-count').textContent = tickerAnalysis.daily.current;
-                        document.getElementById('daily-ticker-avg').textContent = tickerAnalysis.daily.average;
+                        const dailyCountEl = document.getElementById('daily-ticker-count');
+                        const dailyAvgEl = document.getElementById('daily-ticker-avg');
+                        const weeklyCountEl = document.getElementById('weekly-ticker-count');
+                        const weeklyAvgEl = document.getElementById('weekly-ticker-avg');
                         
-                        document.getElementById('weekly-ticker-count').textContent = tickerAnalysis.weekly.current;
-                        document.getElementById('weekly-ticker-avg').textContent = tickerAnalysis.weekly.average;
+                        if (dailyCountEl) dailyCountEl.textContent = tickerAnalysis.daily.current;
+                        if (dailyAvgEl) dailyAvgEl.textContent = tickerAnalysis.daily.average;
+                        if (weeklyCountEl) weeklyCountEl.textContent = tickerAnalysis.weekly.current;
+                        if (weeklyAvgEl) weeklyAvgEl.textContent = tickerAnalysis.weekly.average;
                         
                         // Update interpretation
                         const interpretEl = document.getElementById('momentum-interpretation');
