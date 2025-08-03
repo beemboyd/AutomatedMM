@@ -22,6 +22,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import momentum widget
 from dashboards.market_breadth_momentum_widget import get_market_breadth_momentum_data, get_market_breadth_momentum_trend
 
+# Import ML integration
+try:
+    from ml_dashboard_integration import get_ml_insights, get_ml_alerts, get_ml_performance
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+    logger.warning("ML integration not available")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -299,6 +307,42 @@ ENHANCED_DASHBOARD_HTML = '''
         
         .timeframe-card.strong_uptrend {
             border-color: #2ecc71;
+        }
+        
+        /* ML Styles */
+        .ml-strategy-box {
+            background: #6c757d;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .ml-metrics, .ml-conditions {
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .metric-row, .condition-row {
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .metric-row:last-child, .condition-row:last-child {
+            border-bottom: none;
+        }
+        
+        .insight-card {
+            background: #f8f9fa;
+            transition: transform 0.2s;
+        }
+        
+        .insight-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        #mlInsightsCard {
+            border: 2px solid #007bff;
+            box-shadow: 0 4px 12px rgba(0,123,255,0.15);
         }
     </style>
 </head>
@@ -2561,6 +2605,137 @@ ENHANCED_DASHBOARD_HTML = '''
                     console.error('Error updating momentum data:', error);
                 }
             }, 300000);
+            
+            // Update ML insights every 5 minutes
+            updateMLInsights();
+            setInterval(function() {
+                try {
+                    updateMLInsights();
+                } catch (error) {
+                    console.error('Error updating ML insights:', error);
+                }
+            }, 300000);
+        }
+        
+        // ML Functions
+        async function updateMLInsights() {
+            try {
+                const response = await fetch('/api/ml_insights');
+                if (!response.ok) {
+                    throw new Error('ML insights not available');
+                }
+                
+                const data = await response.json();
+                
+                // Update strategy recommendation
+                const strategyEl = document.getElementById('mlStrategy');
+                const strategyBox = document.getElementById('mlStrategyBox');
+                if (strategyEl && data.strategy) {
+                    strategyEl.textContent = data.strategy.recommended;
+                    
+                    // Update box color based on strategy
+                    strategyBox.className = 'ml-strategy-box text-center p-3 rounded';
+                    if (data.strategy.recommended === 'LONG') {
+                        strategyBox.style.background = '#28a745';
+                        strategyBox.style.color = 'white';
+                    } else if (data.strategy.recommended === 'SHORT') {
+                        strategyBox.style.background = '#dc3545';
+                        strategyBox.style.color = 'white';
+                    } else {
+                        strategyBox.style.background = '#6c757d';
+                        strategyBox.style.color = 'white';
+                    }
+                    
+                    // Update confidence
+                    const confidenceEl = document.getElementById('mlConfidence');
+                    if (confidenceEl) {
+                        confidenceEl.textContent = `Confidence: ${(data.strategy.confidence * 100).toFixed(0)}%`;
+                    }
+                }
+                
+                // Update expected returns
+                document.getElementById('mlLongPnL').textContent = 
+                    `${data.strategy.long_expected_pnl.toFixed(2)}%`;
+                document.getElementById('mlShortPnL').textContent = 
+                    `${data.strategy.short_expected_pnl.toFixed(2)}%`;
+                
+                // Update market conditions
+                if (data.market_conditions) {
+                    document.getElementById('mlSMA20').textContent = 
+                        `${data.market_conditions.sma20_breadth.toFixed(1)}%`;
+                    document.getElementById('mlTrend').textContent = 
+                        data.market_conditions.breadth_trend;
+                }
+                
+                // Update actionable insights
+                updateMLActionableInsights(data.actionable_insights);
+                
+                // Update alerts
+                updateMLAlerts();
+                
+            } catch (error) {
+                console.error('Error fetching ML insights:', error);
+                document.getElementById('mlStrategy').textContent = 'Unavailable';
+            }
+        }
+        
+        function updateMLActionableInsights(insights) {
+            const container = document.getElementById('mlInsightsList');
+            if (!container || !insights) return;
+            
+            container.innerHTML = insights.map(insight => `
+                <div class="col-md-6 mb-3">
+                    <div class="insight-card p-3 border rounded">
+                        <h6><i class="fas ${insight.icon}"></i> ${insight.title}</h6>
+                        <p class="mb-1">${insight.description}</p>
+                        <small class="text-primary"><strong>Action:</strong> ${insight.action}</small>
+                        <div class="mt-2">
+                            <div class="progress" style="height: 5px;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: ${insight.confidence * 100}%"
+                                     aria-valuenow="${insight.confidence * 100}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        async function updateMLAlerts() {
+            try {
+                const response = await fetch('/api/ml_alerts');
+                const alerts = await response.json();
+                
+                const container = document.getElementById('mlAlertsList');
+                if (!container) return;
+                
+                if (alerts.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No active alerts</p>';
+                    return;
+                }
+                
+                container.innerHTML = alerts.map(alert => {
+                    let badgeClass = 'badge-info';
+                    if (alert.severity === 'high') badgeClass = 'badge-danger';
+                    else if (alert.severity === 'warning') badgeClass = 'badge-warning';
+                    
+                    return `
+                        <div class="alert alert-${alert.severity === 'high' ? 'danger' : 
+                                        alert.severity === 'warning' ? 'warning' : 'info'} 
+                                    alert-dismissible fade show" role="alert">
+                            <span class="badge ${badgeClass}">${alert.type}</span>
+                            <strong>${alert.title}:</strong> ${alert.message}
+                            <button type="button" class="close" data-dismiss="alert">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error fetching ML alerts:', error);
+            }
         }
         
         // Try multiple initialization methods
@@ -2571,6 +2746,69 @@ ENHANCED_DASHBOARD_HTML = '''
             initializeDashboard();
         }
     </script>
+    
+    <!-- ML Strategy Recommendations -->
+    <div class="card mb-4" id="mlInsightsCard">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">🤖 ML-Based Strategy Recommendations</h4>
+            <small>Real-time predictions updated every 5 minutes</small>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="ml-strategy-box text-center p-3 rounded" id="mlStrategyBox">
+                        <h3 class="mb-0" id="mlStrategy">Loading...</h3>
+                        <small class="text-muted">Recommended Strategy</small>
+                        <div class="mt-2">
+                            <span class="badge badge-info" id="mlConfidence">Confidence: --</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="ml-metrics p-3">
+                        <h5>Expected Returns</h5>
+                        <div class="metric-row">
+                            <span>Long PnL:</span>
+                            <span id="mlLongPnL" class="float-right">--</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Short PnL:</span>
+                            <span id="mlShortPnL" class="float-right">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="ml-conditions p-3">
+                        <h5>Market Conditions</h5>
+                        <div class="condition-row">
+                            <span>SMA20:</span>
+                            <span id="mlSMA20" class="float-right">--</span>
+                        </div>
+                        <div class="condition-row">
+                            <span>Trend:</span>
+                            <span id="mlTrend" class="float-right">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ML Alerts -->
+            <div class="mt-4" id="mlAlertsContainer">
+                <h5>ML Alerts</h5>
+                <div id="mlAlertsList">
+                    <!-- Alerts will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Actionable Insights -->
+            <div class="mt-4" id="mlInsightsContainer">
+                <h5>Actionable Insights</h5>
+                <div class="row" id="mlInsightsList">
+                    <!-- Insights will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Optimal Trading Conditions -->
     <div class="card" style="margin-top: 20px; margin-bottom: 30px; background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);">
@@ -3267,6 +3505,45 @@ def get_momentum_data():
 def get_momentum_trend():
     """Get momentum historical trend data"""
     return get_market_breadth_momentum_trend()
+
+@app.route('/api/ml_insights')
+def api_ml_insights():
+    """Get ML insights and recommendations"""
+    if not ML_AVAILABLE:
+        return jsonify({'error': 'ML integration not available'}), 503
+    
+    try:
+        insights = get_ml_insights()
+        return jsonify(insights)
+    except Exception as e:
+        logger.error(f"Error getting ML insights: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ml_alerts')
+def api_ml_alerts():
+    """Get ML-based alerts"""
+    if not ML_AVAILABLE:
+        return jsonify([])
+    
+    try:
+        alerts = get_ml_alerts()
+        return jsonify(alerts)
+    except Exception as e:
+        logger.error(f"Error getting ML alerts: {e}")
+        return jsonify([])
+
+@app.route('/api/ml_performance')
+def api_ml_performance():
+    """Get ML model performance metrics"""
+    if not ML_AVAILABLE:
+        return jsonify({'error': 'ML integration not available'}), 503
+    
+    try:
+        performance = get_ml_performance()
+        return jsonify(performance)
+    except Exception as e:
+        logger.error(f"Error getting ML performance: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("\n" + "="*60)

@@ -14,13 +14,17 @@ import joblib
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from breadth_optimization_model import BreadthOptimizationModel
+from Daily.ML.core.breadth_optimization_model import BreadthOptimizationModel
 
 class BreadthStrategyPredictor:
     def __init__(self):
         """Initialize the predictor with trained model"""
         self.model = BreadthOptimizationModel()
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # Go up to India-TS directory
+        current_file = os.path.abspath(__file__)
+        ml_dir = os.path.dirname(os.path.dirname(current_file))  # Daily/ML
+        daily_dir = os.path.dirname(ml_dir)  # Daily
+        self.base_dir = os.path.dirname(daily_dir)  # India-TS
         
     def get_current_breadth_features(self) -> dict:
         """Get current market breadth features"""
