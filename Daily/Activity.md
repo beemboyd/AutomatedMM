@@ -953,3 +953,34 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 - Removed temporary update script after successful update
 
 ---
+
+## 2025-08-04 12:30 IST - Claude - Hourly Breakout Alert Service
+
+**Changes:**
+- Created new service: `hourly_breakout_alert_service.py` in Daily/alerts/
+- Purpose: Alerts when Long Reversal Scanner tickers cross above previous hourly candle close
+- Configuration: Added [HOURLY_BREAKOUT] section to config.ini
+  - breakout_threshold_pct = 0.1% (minimal threshold to catch all breakouts)
+  - alert_cooldown_minutes = 30 (allows multiple alerts per day)
+  - min_daily_score = 5/7 (only tracks high-quality setups)
+  - check_interval_seconds = 30 (checks every 30 seconds during market hours)
+- Scripts: 
+  - start_hourly_breakout_alerts.sh - starts the service
+  - stop_hourly_breakout_alerts.sh - stops the service
+- Plist: com.india-ts.hourly-breakout-alerts.plist
+- Impact: Provides timely entry signals for Long Reversal setups when they break above hourly resistance
+
+---
+
+**Changes:**
+- Created and ran one-time script to update July 29th historical data with volume information
+- Used market_breadth_20250729_154253.json to extract volume data
+- Updated historical data: Volume breadth 11.79%, Volume participation 0.9540
+
+**Impact:**
+- July 29th now displays correct volume data on dashboard charts
+- All historical data points now show volume information
+- Volume Breadth Analysis charts show complete trend without gaps
+- Removed temporary update script after successful update
+
+---
