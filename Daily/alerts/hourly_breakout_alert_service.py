@@ -200,7 +200,7 @@ When price crosses above previous hourly close
 
 Time: {datetime.now().strftime('%I:%M %p')}"""
         
-        self.telegram.send_message(message)
+        self.telegram.send_message(message, parse_mode='HTML')
     
     def update_tracked_tickers(self):
         """Update list of tickers from latest Long Reversal scan"""
@@ -375,7 +375,7 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
 
 <i>Price crossed above previous hourly close</i>"""
                 
-                self.telegram.send_message(message)
+                self.telegram.send_message(message, parse_mode='HTML')
                 self.logger.info(f"Sent breakout alert for {alert.ticker} (+{alert.breakout_pct:.2f}%)")
                 
                 # Rate limiting
