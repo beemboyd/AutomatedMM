@@ -21,7 +21,7 @@ import configparser
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from telegram_notifier import TelegramNotifier
-from user_context_manager import UserContextManager
+from kiteconnect import KiteConnect
 
 @dataclass
 class BreakoutAlert:
@@ -132,8 +132,24 @@ class HourlyBreakoutAlertService:
     def _initialize_kite(self):
         """Initialize KiteConnect instance"""
         try:
-            ucm = UserContextManager()
-            return ucm.get_kite_instance(self.user_name)
+            # Load config
+            config_path = os.path.join(self.base_dir, 'config.ini')
+            config = configparser.ConfigParser()
+            config.read(config_path)
+            
+            # Get credentials for user
+            credential_section = f'API_CREDENTIALS_{self.user_name}'
+            api_key = config.get(credential_section, 'api_key')
+            access_token = config.get(credential_section, 'access_token')
+            
+            if not api_key or not access_token:
+                self.logger.error(f"Missing API credentials for user {self.user_name}")
+                return None
+            
+            # Initialize Kite
+            kite = KiteConnect(api_key=api_key)
+            kite.set_access_token(access_token)
+            return kite
         except Exception as e:
             self.logger.error(f"Failed to initialize Kite: {e}")
             return None
@@ -175,8 +191,7 @@ class HourlyBreakoutAlertService:
 📊 <b>Configuration:</b>
 • Breakout Threshold: {self.breakout_threshold}%
 • Alert Cooldown: {self.alert_cooldown_minutes} min
-• Min Daily Score: {self.min_daily_score}/7
-• Tracking: Long Reversal Scanner tickers
+• Tracking: ALL Long Reversal Scanner tickers
 
 🎯 <b>Alert Trigger:</b>
 When price crosses above previous hourly close
@@ -211,28 +226,26 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                 if k in current_tickers
             }
             
-            # Update tracked tickers
+            # Update tracked tickers - include ALL tickers from scan
             for _, row in df.iterrows():
                 ticker = row['Ticker']
                 score_str = row['Score']
-                score = int(score_str.split('/')[0])
                 
-                # Only track tickers meeting minimum score
-                if score >= self.min_daily_score:
-                    if ticker not in self.tracked_tickers:
-                        self.tracked_tickers[ticker] = {}
-                    
-                    # Update daily data
-                    self.tracked_tickers[ticker]['daily_data'] = {
-                        'score': score_str,
-                        'momentum': row['Momentum_5D'],
-                        'pattern': row['Pattern'],
-                        'entry_price': row['Entry_Price'],
-                        'stop_loss': row['Stop_Loss'],
-                        'last_update': datetime.now().isoformat()
-                    }
+                # Track ALL tickers regardless of score
+                if ticker not in self.tracked_tickers:
+                    self.tracked_tickers[ticker] = {}
+                
+                # Update daily data
+                self.tracked_tickers[ticker]['daily_data'] = {
+                    'score': score_str,
+                    'momentum': row['Momentum_5D'],
+                    'pattern': row['Pattern'],
+                    'entry_price': row['Entry_Price'],
+                    'stop_loss': row['Stop_Loss'],
+                    'last_update': datetime.now().isoformat()
+                }
             
-            self.logger.info(f"Tracking {len(self.tracked_tickers)} tickers with score >= {self.min_daily_score}")
+            self.logger.info(f"Tracking {len(self.tracked_tickers)} tickers from Long Reversal scan")
             self._save_state()
             
         except Exception as e:
