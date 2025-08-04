@@ -208,7 +208,23 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
             current_date = datetime.now().strftime('%Y%m%d')
             tracked_tickers_set = set()
             
-            # 1. Load Hourly VSR results
+            # Get persistence data to check historical appearance
+            hourly_persistence_file = os.path.join(self.base_dir, 'data', 'vsr_ticker_persistence_hourly_long.json')
+            daily_persistence_file = os.path.join(self.base_dir, 'data', 'vsr_ticker_persistence.json')
+            
+            # Load persistence data
+            hourly_persistence = {}
+            daily_persistence = {}
+            
+            if os.path.exists(hourly_persistence_file):
+                with open(hourly_persistence_file, 'r') as f:
+                    hourly_persistence = json.load(f)
+            
+            if os.path.exists(daily_persistence_file):
+                with open(daily_persistence_file, 'r') as f:
+                    daily_persistence = json.load(f)
+            
+            # 1. Load Hourly VSR results - ONLY TODAY's appearances
             hourly_vsr_dir = os.path.join(self.base_dir, 'scanners', 'Hourly')
             hourly_pattern = f"VSR_{current_date}_*.xlsx"
             hourly_files = glob.glob(os.path.join(hourly_vsr_dir, hourly_pattern))
@@ -219,15 +235,34 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                 
                 try:
                     hourly_df = pd.read_excel(latest_hourly)
-                    # Filter for good VSR ratios (2.0+ for hourly)
+                    # Filter for good VSR ratios (2.0+ for hourly) AND first appearance today
                     hourly_filtered = hourly_df[hourly_df['VSR_Ratio'] >= 2.0]
+                    
                     for ticker in hourly_filtered['Ticker']:
-                        tracked_tickers_set.add(ticker)
-                    self.logger.info(f"Added {len(hourly_filtered)} tickers from hourly VSR (VSR >= 2.0)")
+                        # Check if ticker appeared today for the first time
+                        if ticker in hourly_persistence.get('tickers', {}):
+                            ticker_data = hourly_persistence['tickers'][ticker]
+                            first_seen = ticker_data.get('first_seen', '')
+                            # Check if first seen today
+                            if first_seen.startswith(current_date[:4] + '-' + current_date[4:6] + '-' + current_date[6:]):
+                                tracked_tickers_set.add(ticker)
+                                self.logger.info(f"Added {ticker} - first appearance today in hourly VSR")
+                        else:
+                            # New ticker appearing today
+                            tracked_tickers_set.add(ticker)
+                            self.logger.info(f"Added {ticker} - new ticker in hourly VSR")
+                    
+                    self.logger.info(f"Added {len([t for t in hourly_filtered['Ticker'] if t in tracked_tickers_set])} tickers from today's hourly VSR")
                 except Exception as e:
                     self.logger.error(f"Error reading hourly VSR file: {e}")
             
-            # 2. Also check Long Reversal Daily for high momentum tickers
+            # 2. Check Long Reversal Daily for high momentum tickers - THIS WEEK only
+            # Get dates for current week (Monday to today)
+            today = datetime.now()
+            monday = today - timedelta(days=today.weekday())
+            week_dates = [(monday + timedelta(days=i)).strftime('%Y%m%d') 
+                         for i in range((today - monday).days + 1)]
+            
             daily_pattern = f"Long_Reversal_Daily_{current_date}_*.xlsx"
             daily_files = glob.glob(os.path.join(self.daily_results_dir, daily_pattern))
             
@@ -239,9 +274,28 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                     daily_df = pd.read_excel(latest_daily)
                     # Only track high momentum tickers from daily scan (10%+)
                     high_momentum = daily_df[daily_df['Momentum_5D'] >= 10.0]
+                    
                     for ticker in high_momentum['Ticker']:
-                        tracked_tickers_set.add(ticker)
-                    self.logger.info(f"Added {len(high_momentum)} high momentum tickers (>= 10%)")
+                        # Check if ticker first appeared this week
+                        if ticker in daily_persistence.get('tickers', {}):
+                            ticker_data = daily_persistence['tickers'][ticker]
+                            first_seen = ticker_data.get('first_seen', '')
+                            # Parse first_seen date
+                            if first_seen:
+                                try:
+                                    first_seen_date = datetime.fromisoformat(first_seen.split('T')[0])
+                                    # Check if first seen this week
+                                    if first_seen_date >= monday:
+                                        tracked_tickers_set.add(ticker)
+                                        self.logger.info(f"Added {ticker} - appeared this week in daily scan (first seen: {first_seen_date.strftime('%Y-%m-%d')})")
+                                except:
+                                    pass
+                        else:
+                            # New ticker appearing today
+                            tracked_tickers_set.add(ticker)
+                            self.logger.info(f"Added {ticker} - new ticker in daily scan")
+                    
+                    self.logger.info(f"Added {len([t for t in high_momentum['Ticker'] if t in tracked_tickers_set])} high momentum tickers from this week")
                 except Exception as e:
                     self.logger.error(f"Error reading daily scan file: {e}")
             
