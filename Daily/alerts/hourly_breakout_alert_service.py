@@ -193,7 +193,7 @@ class HourlyBreakoutAlertService:
 📊 <b>Configuration:</b>
 • Breakout Threshold: {self.breakout_threshold}%
 • Alert Cooldown: {self.alert_cooldown_minutes} min
-• Tracking: ALL Long Reversal Scanner tickers
+• Tracking: VSR (2.0+) & High Momentum (10%+) tickers
 
 🎯 <b>Alert Trigger:</b>
 When price crosses above previous hourly close
@@ -203,51 +203,82 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
         self.telegram.send_message(message, parse_mode='HTML')
     
     def update_tracked_tickers(self):
-        """Update list of tickers from latest Long Reversal scan"""
+        """Update list of tickers from latest VSR scans (hourly and daily)"""
         try:
-            # Find latest Long Reversal scan file
             current_date = datetime.now().strftime('%Y%m%d')
-            pattern = f"Long_Reversal_Daily_{current_date}_*.xlsx"
-            scan_files = glob.glob(os.path.join(self.daily_results_dir, pattern))
+            tracked_tickers_set = set()
             
-            if not scan_files:
-                self.logger.warning("No Long Reversal scan files found for today")
+            # 1. Load Hourly VSR results
+            hourly_vsr_dir = os.path.join(self.base_dir, 'scanners', 'Hourly')
+            hourly_pattern = f"VSR_{current_date}_*.xlsx"
+            hourly_files = glob.glob(os.path.join(hourly_vsr_dir, hourly_pattern))
+            
+            if hourly_files:
+                latest_hourly = max(hourly_files, key=os.path.getmtime)
+                self.logger.info(f"Loading hourly VSR from: {os.path.basename(latest_hourly)}")
+                
+                try:
+                    hourly_df = pd.read_excel(latest_hourly)
+                    # Filter for good VSR ratios (2.0+ for hourly)
+                    hourly_filtered = hourly_df[hourly_df['VSR_Ratio'] >= 2.0]
+                    for ticker in hourly_filtered['Ticker']:
+                        tracked_tickers_set.add(ticker)
+                    self.logger.info(f"Added {len(hourly_filtered)} tickers from hourly VSR (VSR >= 2.0)")
+                except Exception as e:
+                    self.logger.error(f"Error reading hourly VSR file: {e}")
+            
+            # 2. Also check Long Reversal Daily for high momentum tickers
+            daily_pattern = f"Long_Reversal_Daily_{current_date}_*.xlsx"
+            daily_files = glob.glob(os.path.join(self.daily_results_dir, daily_pattern))
+            
+            if daily_files:
+                latest_daily = max(daily_files, key=os.path.getmtime)
+                self.logger.info(f"Loading daily scan from: {os.path.basename(latest_daily)}")
+                
+                try:
+                    daily_df = pd.read_excel(latest_daily)
+                    # Only track high momentum tickers from daily scan (10%+)
+                    high_momentum = daily_df[daily_df['Momentum_5D'] >= 10.0]
+                    for ticker in high_momentum['Ticker']:
+                        tracked_tickers_set.add(ticker)
+                    self.logger.info(f"Added {len(high_momentum)} high momentum tickers (>= 10%)")
+                except Exception as e:
+                    self.logger.error(f"Error reading daily scan file: {e}")
+            
+            if not tracked_tickers_set:
+                self.logger.warning("No VSR or high momentum tickers found")
                 return
             
-            # Get the latest file
-            latest_file = max(scan_files, key=os.path.getmtime)
-            self.logger.info(f"Loading tickers from: {os.path.basename(latest_file)}")
-            
-            # Read the scan results
-            df = pd.read_excel(latest_file)
-            
             # Clear old tickers not in current scan
-            current_tickers = set(df['Ticker'].tolist())
             self.tracked_tickers = {
                 k: v for k, v in self.tracked_tickers.items() 
-                if k in current_tickers
+                if k in tracked_tickers_set
             }
             
-            # Update tracked tickers - include ALL tickers from scan
-            for _, row in df.iterrows():
-                ticker = row['Ticker']
-                score_str = row['Score']
+            # Now get detailed data for tracked tickers from daily scan
+            if daily_files and tracked_tickers_set:
+                df = pd.read_excel(max(daily_files, key=os.path.getmtime))
                 
-                # Track ALL tickers regardless of score
-                if ticker not in self.tracked_tickers:
-                    self.tracked_tickers[ticker] = {}
-                
-                # Update daily data
-                self.tracked_tickers[ticker]['daily_data'] = {
-                    'score': score_str,
-                    'momentum': row['Momentum_5D'],
-                    'pattern': row['Pattern'],
-                    'entry_price': row['Entry_Price'],
-                    'stop_loss': row['Stop_Loss'],
-                    'last_update': datetime.now().isoformat()
-                }
+                # Update tracked tickers with daily data
+                for _, row in df.iterrows():
+                    ticker = row['Ticker']
+                    
+                    # Only update if ticker is in our tracked set
+                    if ticker in tracked_tickers_set:
+                        if ticker not in self.tracked_tickers:
+                            self.tracked_tickers[ticker] = {}
+                        
+                        # Update daily data
+                        self.tracked_tickers[ticker]['daily_data'] = {
+                            'score': row['Score'],
+                            'momentum': row['Momentum_5D'],
+                            'pattern': row['Pattern'],
+                            'entry_price': row['Entry_Price'],
+                            'stop_loss': row['Stop_Loss'],
+                            'last_update': datetime.now().isoformat()
+                        }
             
-            self.logger.info(f"Tracking {len(self.tracked_tickers)} tickers from Long Reversal scan")
+            self.logger.info(f"Tracking {len(self.tracked_tickers)} tickers (VSR + High Momentum)")
             self._save_state()
             
         except Exception as e:
