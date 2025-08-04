@@ -19,6 +19,46 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-04 18:35 IST - [Claude]
+**Changes:**
+- Modified Telegram notifications to send alerts to channel ID -1002690613302 instead of personal chat
+- Updated config.ini TELEGRAM section with new channel chat_id
+- All Telegram services will now broadcast to the channel instead of individual user
+
+**Impact:**
+- All alerts (VSR, hourly breakout, first hour breakout, etc.) will go to the channel
+- Multiple users can monitor alerts by joining the channel
+- No changes needed to individual service files as they read chat_id from config.ini
+- Channel alerts support same formatting and features as personal chat messages
+
+**Files Modified:**
+- Daily/config.ini - Updated chat_id in TELEGRAM section to -1002690613302
+
+---
+
+### 2025-08-04 13:50 IST - [Claude]
+**Changes:**
+- Created hourly breakout alert service for monitoring VSR-filtered tickers
+- Created first hour breakout service for 5-minute candle monitoring (9:15-10:15 AM)
+- Created Flask dashboards on ports 3005 and 3006 for viewing alerts
+- Updated job manager dashboard to include both new services
+- Updated INDIA_TS_JOBS_DOCUMENTATION.md with service details
+
+**Impact:**
+- Hourly breakout service tracks VSR tickers (ratio >= 2.0) and high momentum daily tickers (>= 10%)
+- First hour service monitors same tickers for 5-minute candle breakouts during market open
+- Both services send real-time Telegram alerts with HTML formatting
+- Log files organized in dedicated folders: alerts_hourlybo/ and alerts_firsthour/
+- Services integrated into job manager for centralized monitoring
+
+**Service Details:**
+- hourly_breakout_alert_service.py: 0.1% threshold, 30-min cooldown
+- first_hour_breakout_service.py: 0.2% threshold, 5-min cooldown, volume ratio tracking
+- Both services maintain state persistence in JSON files
+- Plists created for automation: com.india-ts.hourly-breakout-alerts, com.india-ts.first-hour-alerts
+
+---
+
 ### 2025-08-03 19:00 IST - [Claude]
 **Changes:**
 - Loaded enhanced VSR Telegram alerts service (com.india-ts.vsr-telegram-alerts-enhanced)
