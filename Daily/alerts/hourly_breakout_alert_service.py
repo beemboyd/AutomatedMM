@@ -193,7 +193,7 @@ class HourlyBreakoutAlertService:
 📊 <b>Configuration:</b>
 • Breakout Threshold: {self.breakout_threshold}%
 • Alert Cooldown: {self.alert_cooldown_minutes} min
-• Tracking: VSR (2.0+) & High Momentum (10%+) tickers
+• Tracking: Today's VSR (2.0+) & Last 5 days High Momentum (10%+)
 
 🎯 <b>Alert Trigger:</b>
 When price crosses above previous hourly close
@@ -224,7 +224,21 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                 with open(daily_persistence_file, 'r') as f:
                     daily_persistence = json.load(f)
             
-            # 1. Load Hourly VSR results - ONLY TODAY's appearances
+            # 1. Check VSR persistence for active VSR tickers (both hourly and daily)
+            # Load all active VSR tickers from persistence
+            if daily_persistence.get('tickers'):
+                for ticker, ticker_data in daily_persistence['tickers'].items():
+                    last_seen = ticker_data.get('last_seen', '')
+                    if last_seen and last_seen.startswith(current_date[:4] + '-' + current_date[4:6] + '-' + current_date[6:]):
+                        # Ticker was seen today in VSR scans
+                        positive_momentum_days = ticker_data.get('positive_momentum_days', 0)
+                        if positive_momentum_days >= 1:  # Has positive momentum
+                            tracked_tickers_set.add(ticker)
+                            self.logger.info(f"Added {ticker} - active VSR ticker with {positive_momentum_days} positive momentum days")
+                
+                self.logger.info(f"Added {len(tracked_tickers_set)} active VSR tickers")
+            
+            # Also check Hourly VSR results for high ratio tickers
             hourly_vsr_dir = os.path.join(self.base_dir, 'scanners', 'Hourly')
             hourly_pattern = f"VSR_{current_date}_*.xlsx"
             hourly_files = glob.glob(os.path.join(hourly_vsr_dir, hourly_pattern))
@@ -235,33 +249,20 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                 
                 try:
                     hourly_df = pd.read_excel(latest_hourly)
-                    # Filter for good VSR ratios (2.0+ for hourly) AND first appearance today
-                    hourly_filtered = hourly_df[hourly_df['VSR_Ratio'] >= 2.0]
-                    
-                    for ticker in hourly_filtered['Ticker']:
-                        # Check if ticker appeared today for the first time
-                        if ticker in hourly_persistence.get('tickers', {}):
-                            ticker_data = hourly_persistence['tickers'][ticker]
-                            first_seen = ticker_data.get('first_seen', '')
-                            # Check if first seen today
-                            if first_seen.startswith(current_date[:4] + '-' + current_date[4:6] + '-' + current_date[6:]):
-                                tracked_tickers_set.add(ticker)
-                                self.logger.info(f"Added {ticker} - first appearance today in hourly VSR")
-                        else:
-                            # New ticker appearing today
+                    # Check all VSR tickers, not just high ratio ones
+                    for _, row in hourly_df.iterrows():
+                        ticker = row['Ticker']
+                        vsr_ratio = row['VSR_Ratio']
+                        if vsr_ratio >= 1.0:  # Lower threshold for hourly
                             tracked_tickers_set.add(ticker)
-                            self.logger.info(f"Added {ticker} - new ticker in hourly VSR")
-                    
-                    self.logger.info(f"Added {len([t for t in hourly_filtered['Ticker'] if t in tracked_tickers_set])} tickers from today's hourly VSR")
+                            self.logger.info(f"Added {ticker} from hourly VSR (ratio: {vsr_ratio:.2f})")
                 except Exception as e:
                     self.logger.error(f"Error reading hourly VSR file: {e}")
             
-            # 2. Check Long Reversal Daily for high momentum tickers - THIS WEEK only
-            # Get dates for current week (Monday to today)
+            # 2. Check Long Reversal Daily for high momentum tickers - LAST 5 DAYS
+            # Get date 5 days ago
             today = datetime.now()
-            monday = today - timedelta(days=today.weekday())
-            week_dates = [(monday + timedelta(days=i)).strftime('%Y%m%d') 
-                         for i in range((today - monday).days + 1)]
+            five_days_ago = today - timedelta(days=5)
             
             daily_pattern = f"Long_Reversal_Daily_{current_date}_*.xlsx"
             daily_files = glob.glob(os.path.join(self.daily_results_dir, daily_pattern))
@@ -284,10 +285,10 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                             if first_seen:
                                 try:
                                     first_seen_date = datetime.fromisoformat(first_seen.split('T')[0])
-                                    # Check if first seen this week
-                                    if first_seen_date >= monday:
+                                    # Check if first seen in last 5 days
+                                    if first_seen_date >= five_days_ago:
                                         tracked_tickers_set.add(ticker)
-                                        self.logger.info(f"Added {ticker} - appeared this week in daily scan (first seen: {first_seen_date.strftime('%Y-%m-%d')})")
+                                        self.logger.info(f"Added {ticker} - appeared in last 5 days (first seen: {first_seen_date.strftime('%Y-%m-%d')})")
                                 except:
                                     pass
                         else:
@@ -295,7 +296,7 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                             tracked_tickers_set.add(ticker)
                             self.logger.info(f"Added {ticker} - new ticker in daily scan")
                     
-                    self.logger.info(f"Added {len([t for t in high_momentum['Ticker'] if t in tracked_tickers_set])} high momentum tickers from this week")
+                    self.logger.info(f"Added {len([t for t in high_momentum['Ticker'] if t in tracked_tickers_set])} high momentum tickers from last 5 days")
                 except Exception as e:
                     self.logger.error(f"Error reading daily scan file: {e}")
             
