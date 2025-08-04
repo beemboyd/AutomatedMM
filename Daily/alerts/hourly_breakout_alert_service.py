@@ -78,10 +78,12 @@ class HourlyBreakoutAlertService:
         # Send startup message
         if self.telegram.is_configured() and self.enabled:
             self._send_startup_message()
+            # Small delay to ensure startup message is delivered first
+            time.sleep(2)
     
     def _setup_logging(self):
         """Set up logging configuration"""
-        log_dir = os.path.join(self.base_dir, 'logs')
+        log_dir = os.path.join(self.base_dir, 'logs', 'alerts_hourlybo')
         os.makedirs(log_dir, exist_ok=True)
         
         log_file = os.path.join(log_dir, f'hourly_breakout_{datetime.now().strftime("%Y%m%d")}.log')

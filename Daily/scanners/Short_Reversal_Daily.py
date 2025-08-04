@@ -1074,7 +1074,6 @@ def main():
     logger.info("Short Reversal Daily filter with Al Brooks L2 Patterns")
     
     start_time = time.time()
-
     try:
         # Read the tickers
         tickers = read_ticker_file()

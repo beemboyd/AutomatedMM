@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hourly Breakout Alert Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header .subtitle {
+            margin-top: 5px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .container {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+        .sidebar {
+            width: 300px;
+            background-color: #0f0f0f;
+            padding: 20px;
+            border-right: 1px solid #2a2a2a;
+            overflow-y: auto;
+        }
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .controls {
+            background-color: #141414;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .status-running {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            border: 1px solid #4CAF50;
+        }
+        .status-stopped {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+            border: 1px solid #f44336;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: currentColor;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background-color: #1976D2;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+        button.stop {
+            background-color: #f44336;
+        }
+        button.stop:hover {
+            background-color: #d32f2f;
+        }
+        .log-container {
+            flex: 1;
+            background-color: #0a0a0a;
+            overflow-y: auto;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            background-color: #141414;
+            border-left: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .log-entry:hover {
+            background-color: #1a1a1a;
+        }
+        .log-alert {
+            border-left-color: #4CAF50;
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+        .log-error {
+            border-left-color: #f44336;
+            background-color: rgba(244, 67, 54, 0.1);
+        }
+        .log-warning {
+            border-left-color: #ff9800;
+            background-color: rgba(255, 152, 0, 0.1);
+        }
+        .log-success {
+            border-left-color: #00bcd4;
+            background-color: rgba(0, 188, 212, 0.1);
+        }
+        .log-tracking {
+            border-left-color: #9c27b0;
+            background-color: rgba(156, 39, 176, 0.1);
+        }
+        .log-debug {
+            opacity: 0.7;
+            font-size: 12px;
+        }
+        .timestamp {
+            color: #666;
+            margin-right: 10px;
+        }
+        .log-level {
+            font-weight: bold;
+            margin-right: 10px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .log-level.INFO { background-color: #2196F3; color: white; }
+        .log-level.ERROR { background-color: #f44336; color: white; }
+        .log-level.WARNING { background-color: #ff9800; color: white; }
+        .stats-card {
+            background-color: #141414;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #2a2a2a;
+        }
+        .stats-card h3 {
+            margin: 0 0 10px 0;
+            color: #2196F3;
+            font-size: 16px;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .ticker-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .ticker-item {
+            background-color: #1a1a1a;
+            padding: 8px;
+            margin: 4px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .ticker-name {
+            font-weight: bold;
+            color: #2196F3;
+        }
+        .ticker-percentage {
+            color: #4CAF50;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+        .error-message {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px;
+            border: 1px solid #f44336;
+        }
+        .refresh-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .header-icon {
+            font-size: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span class="header-icon">📈</span>
+            Hourly Breakout Alert Dashboard
+        </h1>
+        <div class="subtitle">Monitor price breakouts above previous hourly candle close</div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="stats-card">
+                <h3>Alert Statistics</h3>
+                <div id="stats-content">
+                    <div class="loading">Loading statistics...</div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <h3>Recent Breakouts</h3>
+                <div id="ticker-list" class="ticker-list">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <div class="refresh-info">
+                Auto-refresh: <span id="refresh-countdown">5</span>s
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="controls">
+                <div id="service-status" class="status-indicator status-stopped">
+                    <span class="status-dot"></span>
+                    <span>Service Stopped</span>
+                </div>
+                
+                <div class="control-buttons">
+                    <button id="start-btn" onclick="startService()">Start Service</button>
+                    <button id="stop-btn" class="stop" onclick="stopService()" disabled>Stop Service</button>
+                    <button onclick="refreshLogs()">Refresh</button>
+                </div>
+            </div>
+
+            <div id="log-container" class="log-container">
+                <div class="loading">Loading logs...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval;
+        let countdownInterval;
+        let countdown = 5;
+
+        function updateServiceStatus() {
+            fetch('/api/service/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusEl = document.getElementById('service-status');
+                    const startBtn = document.getElementById('start-btn');
+                    const stopBtn = document.getElementById('stop-btn');
+                    
+                    if (data.running) {
+                        statusEl.className = 'status-indicator status-running';
+                        statusEl.innerHTML = '<span class="status-dot"></span><span>Service Running</span>';
+                        startBtn.disabled = true;
+                        stopBtn.disabled = false;
+                    } else {
+                        statusEl.className = 'status-indicator status-stopped';
+                        statusEl.innerHTML = '<span class="status-dot"></span><span>Service Stopped</span>';
+                        startBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    }
+                })
+                .catch(error => console.error('Error checking service status:', error));
+        }
+
+        function formatLogEntry(entry) {
+            let html = '<div class="log-entry ' + entry.class + '">';
+            
+            if (entry.timestamp) {
+                html += '<span class="timestamp">' + entry.timestamp + '</span>';
+            }
+            
+            if (entry.level) {
+                html += '<span class="log-level ' + entry.level + '">' + entry.level + '</span>';
+            }
+            
+            html += '<span class="message">' + entry.message + '</span>';
+            html += '</div>';
+            
+            return html;
+        }
+
+        function updateStatistics(stats) {
+            let statsHtml = `
+                <div class="stat-item">
+                    <span>Total Alerts:</span>
+                    <span class="stat-value">${stats.total_alerts}</span>
+                </div>
+                <div class="stat-item">
+                    <span>Error Count:</span>
+                    <span class="stat-value" style="color: ${stats.error_count > 0 ? '#f44336' : '#4CAF50'}">${stats.error_count}</span>
+                </div>
+            `;
+            
+            if (stats.last_alert_time) {
+                statsHtml += `
+                    <div class="stat-item">
+                        <span>Last Alert:</span>
+                        <span class="stat-value" style="font-size: 12px;">${stats.last_alert_time}</span>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('stats-content').innerHTML = statsHtml;
+
+            // Update ticker list
+            let tickerHtml = '';
+            for (const [ticker, percentages] of Object.entries(stats.alerts_by_ticker)) {
+                const avgPercentage = (percentages.reduce((a, b) => a + b, 0) / percentages.length).toFixed(2);
+                tickerHtml += `
+                    <div class="ticker-item">
+                        <span class="ticker-name">${ticker}</span>
+                        <span class="ticker-percentage">+${avgPercentage}%</span>
+                    </div>
+                `;
+            }
+            
+            if (tickerHtml === '') {
+                tickerHtml = '<div style="text-align: center; color: #666;">No alerts yet</div>';
+            }
+            
+            document.getElementById('ticker-list').innerHTML = tickerHtml;
+        }
+
+        function refreshLogs() {
+            fetch('/api/logs')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('log-container');
+                    
+                    if (data.error) {
+                        container.innerHTML = '<div class="error-message">Error: ' + data.error + '</div>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    for (const entry of data.lines) {
+                        html += formatLogEntry(entry);
+                    }
+                    
+                    if (html === '') {
+                        html = '<div class="loading">No log entries found</div>';
+                    }
+                    
+                    container.innerHTML = html;
+                    container.scrollTop = container.scrollHeight;
+                    
+                    // Update statistics
+                    if (data.statistics) {
+                        updateStatistics(data.statistics);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading logs:', error);
+                    document.getElementById('log-container').innerHTML = 
+                        '<div class="error-message">Failed to load logs: ' + error + '</div>';
+                });
+        }
+
+        function startService() {
+            fetch('/api/service/start', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Service started successfully');
+                        updateServiceStatus();
+                        setTimeout(refreshLogs, 2000);
+                    } else {
+                        alert('Failed to start service: ' + data.error);
+                    }
+                })
+                .catch(error => alert('Error starting service: ' + error));
+        }
+
+        function stopService() {
+            fetch('/api/service/stop', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Service stopped successfully');
+                        updateServiceStatus();
+                    } else {
+                        alert('Failed to stop service: ' + data.error);
+                    }
+                })
+                .catch(error => alert('Error stopping service: ' + error));
+        }
+
+        function updateCountdown() {
+            countdown--;
+            if (countdown <= 0) {
+                countdown = 5;
+                refreshLogs();
+                updateServiceStatus();
+            }
+            document.getElementById('refresh-countdown').textContent = countdown;
+        }
+
+        // Initialize
+        updateServiceStatus();
+        refreshLogs();
+        
+        // Set up auto-refresh
+        countdownInterval = setInterval(updateCountdown, 1000);
+
+        // Update service status every 10 seconds
+        setInterval(updateServiceStatus, 10000);
+    </script>
+</body>
+</html>

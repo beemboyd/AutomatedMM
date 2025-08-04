@@ -2,7 +2,7 @@
 """
 Hourly Tracker Service for Long Reversal Hourly
 Tracks tickers from Long_Reversal_Hourly scanner outputs
-Based on VSR tracker but for hourly data without Telegram notifications
+Based on VSR tracker but for hourly data with optional Telegram notifications
 """
 
 import os
@@ -36,10 +36,13 @@ from scanners.VSR_Momentum_Scanner import (
     interval_mapping
 )
 
+# Import Telegram notifier
+from alerts.telegram_notifier import TelegramNotifier
+
 class HourlyTracker:
     """Hourly tracker for Long Reversal Hourly scanner results"""
     
-    def __init__(self, user_name='Sai'):
+    def __init__(self, user_name='Sai', enable_telegram=True):
         self.user_name = user_name
         self.data_cache = DataCache()
         self.last_ticker_file = None
@@ -57,6 +60,18 @@ class HourlyTracker:
         
         # Track momentum data
         self.current_momentum_data = {}
+        
+        # Initialize Telegram notifier
+        self.telegram_notifier = None
+        if enable_telegram:
+            try:
+                self.telegram_notifier = TelegramNotifier()
+                if self.telegram_notifier.enabled:
+                    self.logger.info("Telegram notifications enabled")
+                else:
+                    self.logger.info("Telegram notifications disabled in config")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Telegram notifier: {e}")
         
         self.logger.info(f"Hourly Tracker initialized for user: {user_name}")
         self.logger.info("Monitoring Long_Reversal_Hourly scanner results")
@@ -299,6 +314,12 @@ class HourlyTracker:
                 self.logger.info(f"✅ Successfully tracked: {len(results)} tickers")
                 if errors:
                     self.logger.info(f"❌ Failed to track: {len(errors)} tickers")
+                
+                # Send Telegram notifications for high score tickers
+                if self.telegram_notifier and self.telegram_notifier.enabled:
+                    high_score_tickers = [t for t in sorted_results if t.get('Score', 0) >= 80]
+                    if high_score_tickers:
+                        self.send_telegram_alerts(high_score_tickers)
                     
                 # Save current state for dashboard
                 self.save_current_state(results)
@@ -330,12 +351,48 @@ class HourlyTracker:
         except Exception as e:
             self.logger.error(f"Error saving state: {e}")
     
+    def send_telegram_alerts(self, high_score_tickers):
+        """Send Telegram alerts for high score tickers"""
+        try:
+            for ticker_data in high_score_tickers:
+                ticker = ticker_data['Ticker']
+                score = ticker_data.get('Score', 0)
+                vsr = ticker_data.get('VSR_Ratio', 0)
+                momentum = ticker_data.get('Momentum_5D', 0)
+                price = ticker_data.get('Last_Price', 0)
+                sector = ticker_data.get('Sector', 'Unknown')
+                
+                # Format message
+                message = (
+                    f"🚨 **HOURLY LONG ALERT** 🚨\n\n"
+                    f"📊 **{ticker}**\n"
+                    f"💯 Score: {score}\n"
+                    f"📈 VSR: {vsr:.2f}x\n"
+                    f"🚀 Momentum: {momentum:.2f}%\n"
+                    f"💰 Price: ₹{price:.2f}\n"
+                    f"🏭 Sector: {sector}\n"
+                    f"⏰ Time: {datetime.datetime.now().strftime('%I:%M %p')}\n"
+                    f"📱 Source: Long Reversal Hourly"
+                )
+                
+                # Send notification
+                if self.telegram_notifier.send_message(message):
+                    self.logger.info(f"Telegram alert sent for {ticker}")
+                else:
+                    self.logger.warning(f"Failed to send Telegram alert for {ticker}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error sending Telegram alerts: {e}")
+    
     def run(self, interval_seconds=60):
         """Run the tracker service"""
         self.logger.info(f"Starting Hourly Tracker Service")
         self.logger.info(f"Update interval: {interval_seconds} seconds")
         self.logger.info(f"User: {self.user_name}")
-        self.logger.info("Telegram notifications: DISABLED")
+        if self.telegram_notifier and self.telegram_notifier.enabled:
+            self.logger.info("Telegram notifications: ENABLED")
+        else:
+            self.logger.info("Telegram notifications: DISABLED")
         
         while True:
             try:

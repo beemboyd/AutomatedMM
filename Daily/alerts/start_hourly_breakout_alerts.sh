@@ -38,10 +38,10 @@ cat > "$PLIST_FILE" << EOF
     <string>${PROJECT_ROOT}</string>
     
     <key>StandardOutPath</key>
-    <string>${PROJECT_ROOT}/Daily/logs/hourly_breakout_alerts.log</string>
+    <string>${PROJECT_ROOT}/Daily/logs/alerts_hourlybo/hourly_breakout_alerts.log</string>
     
     <key>StandardErrorPath</key>
-    <string>${PROJECT_ROOT}/Daily/logs/hourly_breakout_alerts_error.log</string>
+    <string>${PROJECT_ROOT}/Daily/logs/alerts_hourlybo/hourly_breakout_alerts_error.log</string>
     
     <key>EnvironmentVariables</key>
     <dict>
@@ -87,7 +87,7 @@ if launchctl list | grep -q "$SERVICE_NAME"; then
     echo "Service name: $SERVICE_NAME"
     echo ""
     echo "To check logs:"
-    echo "  tail -f ${PROJECT_ROOT}/Daily/logs/hourly_breakout_alerts.log"
+    echo "  tail -f ${PROJECT_ROOT}/Daily/logs/alerts_hourlybo/hourly_breakout_alerts.log"
     echo ""
     echo "To stop the service:"
     echo "  launchctl bootout gui/\$(id -u) $PLIST_FILE"

@@ -1031,6 +1031,17 @@ def main():
     logger.info("Long Reversal Daily filter with Sector Information")
     
     start_time = time.time()
+    
+    # Initialize Telegram notifier
+    telegram_notifier = None
+    try:
+        telegram_notifier = TelegramNotifier()
+        if telegram_notifier.enabled:
+            logger.info("Telegram notifications enabled")
+        else:
+            logger.info("Telegram notifications disabled in config")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Telegram notifier: {e}")
 
     try:
         # Read the tickers
@@ -1105,6 +1116,31 @@ def main():
 
             print(f"\nDetailed results saved to: {excel_file}")
             print(f"HTML report opened in browser: {html_file}")
+            
+            # Send Telegram notifications for high score patterns
+            if telegram_notifier and telegram_notifier.enabled:
+                high_score_patterns = results_df[results_df['Score'] >= 6].head(5)  # Top 5 patterns with score >= 6
+                if not high_score_patterns.empty:
+                    for idx, row in high_score_patterns.iterrows():
+                        message = (
+                            f"🚨 **DAILY LONG ALERT** 🚨\n\n"
+                            f"📊 **{row['Ticker']}**\n"
+                            f"💯 Score: {row['Score']}/7\n"
+                            f"📈 Pattern: {row['Pattern']}\n"
+                            f"💰 Entry: ₹{row['Entry_Price']:.2f}\n"
+                            f"🛑 Stop Loss: ₹{row['Stop_Loss']:.2f}\n"
+                            f"🎯 Target 1: ₹{row['Target1']:.2f}\n"
+                            f"📊 R:R Ratio: {row['Risk_Reward_Ratio']:.2f}\n"
+                            f"📈 Volume: {row['Volume_Ratio']:.1f}x avg\n"
+                            f"🏭 Sector: {row['Sector']}\n"
+                            f"⏰ Time: {datetime.datetime.now().strftime('%I:%M %p')}\n"
+                            f"📱 Source: Long Reversal Daily"
+                        )
+                        
+                        if telegram_notifier.send_message(message):
+                            logger.info(f"Telegram alert sent for {row['Ticker']}")
+                        else:
+                            logger.warning(f"Failed to send Telegram alert for {row['Ticker']}")
         else:
             # Create empty Excel with columns
             empty_cols = ['Ticker', 'Sector', 'Pattern', 'Direction', 'Score', 'Entry_Price', 'Stop_Loss', 'Target1', 'Target2', 

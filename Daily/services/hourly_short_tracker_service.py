@@ -31,11 +31,14 @@ from scanners.VSR_Momentum_Scanner import (
 # Import Kite Connect
 from kiteconnect import KiteConnect
 
+# Import Telegram notifier
+from alerts.telegram_notifier import TelegramNotifier
+
 # Global kite variable for fetch_data_kite function
 kite = None
 
 class HourlyShortTrackerService:
-    def __init__(self, user_name: str = 'Sai', interval: int = 60):
+    def __init__(self, user_name: str = 'Sai', interval: int = 60, enable_telegram: bool = True):
         """Initialize the hourly short tracker service"""
         self.user_name = user_name
         self.interval = interval
@@ -60,9 +63,23 @@ class HourlyShortTrackerService:
         self.persistence_file = os.path.join(self.short_momentum_dir, 'vsr_ticker_persistence_hourly_short.json')
         self.persistence_data = self.load_persistence()
         
+        # Initialize Telegram notifier
+        self.telegram_notifier = None
+        if enable_telegram:
+            try:
+                self.telegram_notifier = TelegramNotifier()
+                if self.telegram_notifier.enabled:
+                    self.logger.info("Telegram notifications: ENABLED")
+                else:
+                    self.logger.info("Telegram notifications: DISABLED (config)")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Telegram notifier: {e}")
+                self.logger.info("Telegram notifications: DISABLED")
+        else:
+            self.logger.info("Telegram notifications: DISABLED")
+        
         self.logger.info(f"[{user_name}] Hourly Short Tracker Service initialized")
         self.logger.info(f"Scan interval: {interval} seconds")
-        self.logger.info("Telegram notifications: DISABLED")
         
     def setup_logging(self):
         """Setup logging configuration"""
@@ -382,6 +399,12 @@ class HourlyShortTrackerService:
             # Save persistence data
             self.save_persistence()
             
+            # Send Telegram notifications for high score tickers
+            if self.telegram_notifier and self.telegram_notifier.enabled:
+                high_score_tickers = [r for r in results if r['Score'] >= 80]
+                if high_score_tickers:
+                    self.send_telegram_alerts(high_score_tickers)
+            
             # Clean up old tickers from persistence
             current_date = datetime.datetime.now().date()
             tickers_to_remove = []
@@ -401,6 +424,39 @@ class HourlyShortTrackerService:
             
         except Exception as e:
             self.logger.error(f"Error in scan: {e}", exc_info=True)
+    
+    def send_telegram_alerts(self, high_score_tickers):
+        """Send Telegram alerts for high score tickers"""
+        try:
+            for result in high_score_tickers:
+                ticker = result['Ticker']
+                score = result['Score']
+                vsr = result['VSR']
+                momentum = result['Momentum']
+                price = result['Price']
+                sector = result['Sector']
+                
+                # Format message
+                message = (
+                    f"🚨 **HOURLY SHORT ALERT** 🚨\n\n"
+                    f"📊 **{ticker}**\n"
+                    f"💯 Score: {score}\n"
+                    f"📈 VSR: {vsr:.2f}x\n"
+                    f"🚀 Momentum: {momentum:.2f}%\n"
+                    f"💰 Price: ₹{price:.2f}\n"
+                    f"🏭 Sector: {sector}\n"
+                    f"⏰ Time: {datetime.datetime.now().strftime('%I:%M %p')}\n"
+                    f"📱 Source: Short Reversal Hourly"
+                )
+                
+                # Send notification
+                if self.telegram_notifier.send_message(message):
+                    self.logger.info(f"Telegram alert sent for {ticker}")
+                else:
+                    self.logger.warning(f"Failed to send Telegram alert for {ticker}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error sending Telegram alerts: {e}")
     
     def run(self):
         """Main run loop"""
