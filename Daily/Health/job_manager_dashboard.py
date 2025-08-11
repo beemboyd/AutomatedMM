@@ -351,6 +351,18 @@ JOBS = {
         'script': 'fix_brooks_plist.sh',
         'schedule': 'RunAtLoad (Once daily)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/scripts'
+    },
+    'com.india-ts.hourly-breakout-alerts': {
+        'name': 'Hourly Breakout Alerts',
+        'script': 'hourly_breakout_alert_service.py',
+        'schedule': 'Every 30 sec (9:00-15:30, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/alerts'
+    },
+    'com.india-ts.first-hour-alerts': {
+        'name': 'First Hour Breakout Alerts (5-min)',
+        'script': 'first_hour_breakout_service.py',
+        'schedule': 'Every 20 sec (9:15-10:15, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/alerts'
     }
 }
 
@@ -427,6 +439,22 @@ DASHBOARDS = {
         'port': 3004,
         'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_hourly_short_dashboard.sh',
         'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/stop_hourly_short_dashboard.sh'
+    },
+    'hourly_breakout_dashboard': {
+        'name': 'Hourly Breakout Dashboard',
+        'script': 'hourly_breakout_dashboard.py',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 3005,
+        'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_hourly_breakout_dashboard.sh',
+        'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/stop_hourly_breakout_dashboard.sh'
+    },
+    'first_hour_dashboard': {
+        'name': 'First Hour Breakout Dashboard',
+        'script': 'first_hour_dashboard.py',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards',
+        'port': 3006,
+        'start_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/start_first_hour_dashboard.sh',
+        'stop_script': '/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/stop_first_hour_dashboard.sh'
     }
 }
 

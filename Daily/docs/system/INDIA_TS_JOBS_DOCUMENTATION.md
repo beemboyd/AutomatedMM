@@ -151,6 +151,38 @@ This document provides a comprehensive overview of all India-TS system jobs, the
   - Market hours auto-management (9 AM - 3:30 PM)
 - **Configuration**: See `/Users/maverick/PycharmProjects/India-TS/Daily/docs/VSR_TELEGRAM_ENHANCED_GUIDE.md`
 
+#### 17. **com.india-ts.hourly-breakout-alerts** *(New - August 4, 2025)*
+- **Purpose**: Monitors VSR-filtered tickers for hourly candle breakouts
+- **Schedule**: Runs continuously from 9:00 AM to 3:30 PM IST (weekdays)
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/alerts/hourly_breakout_alert_service.py`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.hourly-breakout-alerts.plist`
+- **Dashboard**: Port 3005 - `/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/hourly_breakout_dashboard.py`
+- **Status**: ✅ Active
+- **Features**:
+  - Tracks tickers from hourly VSR scans (VSR ratio >= 2.0)
+  - Tracks tickers from daily Long Reversal scans (momentum >= 10%)
+  - 0.1% breakout threshold above previous hourly candle close
+  - 30-minute cooldown between alerts per ticker
+  - Real-time Telegram notifications with HTML formatting
+  - State persistence in JSON
+- **Logs**: `/Users/maverick/PycharmProjects/India-TS/Daily/logs/alerts_hourlybo/`
+
+#### 18. **com.india-ts.first-hour-alerts** *(New - August 4, 2025)*
+- **Purpose**: Monitors 5-minute candle breakouts during first hour of trading
+- **Schedule**: 9:14 AM IST (weekdays), runs until 10:15 AM
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/alerts/first_hour_breakout_service.py`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.first-hour-alerts.plist`
+- **Dashboard**: Port 3006 - `/Users/maverick/PycharmProjects/India-TS/Daily/dashboards/first_hour_dashboard.py`
+- **Status**: ✅ Active
+- **Features**:
+  - Monitors same tickers as hourly breakout service
+  - 5-minute candle breakout detection
+  - 0.2% breakout threshold above previous 5-min high
+  - 5-minute cooldown between alerts per ticker
+  - Volume ratio tracking
+  - Real-time Telegram notifications
+- **Logs**: `/Users/maverick/PycharmProjects/India-TS/Daily/logs/alerts_firsthour/`
+
 ## Deprecated/Removed Jobs
 
 These jobs have been removed or disabled due to system migration or missing dependencies:
@@ -191,6 +223,8 @@ PLIST_FILES=(
     "com.india-ts.synch_zerodha_local.plist"
     "com.india-ts.vsr-telegram-alerts-enhanced.plist"
     "com.india-ts.weekly_backup.plist"
+    "com.india-ts.hourly-breakout-alerts.plist"
+    "com.india-ts.first-hour-alerts.plist"
 )
 
 LAUNCHAGENTS_DIR="/Users/maverick/Library/LaunchAgents"
@@ -232,6 +266,44 @@ echo "Done! Checking status..."
 launchctl list | grep india-ts
 ```
 
+### Tracker Services
+
+#### 19. **com.india-ts.hourly-tracker-service** *(Critical for Dashboard)*
+- **Purpose**: Tracks Long Reversal Hourly tickers and provides data for dashboard
+- **Schedule**: Runs continuously during market hours
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/services/hourly_tracker_service_fixed.py`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.hourly-tracker-service.plist`
+- **Dashboard**: Port 3002 - Hourly Tracker Dashboard
+- **Status**: ✅ Active
+- **Critical Note**: Must restart daily at 9:00 AM or log files use wrong date
+
+#### 20. **com.india-ts.hourly-short-tracker-service** *(Critical for Dashboard)*
+- **Purpose**: Tracks Short Reversal Hourly tickers
+- **Schedule**: Runs continuously during market hours
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/services/hourly_short_tracker_service.py`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.hourly-short-tracker-service.plist`
+- **Dashboard**: Port 3004 - Hourly Short Dashboard
+- **Status**: ✅ Active
+- **Critical Note**: Must restart daily at 9:00 AM or log files use wrong date
+
+#### 21. **com.india-ts.short-momentum-tracker** *(Critical for Dashboard)*
+- **Purpose**: Tracks Short Reversal Daily momentum
+- **Schedule**: Runs continuously during market hours
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/services/short_momentum_tracker_service.py`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.short-momentum-tracker.plist`
+- **Dashboard**: Port 3003 - Short Momentum Dashboard
+- **Status**: ✅ Active
+- **Critical Note**: Must restart daily at 9:00 AM or log files use wrong date
+
+#### 22. **com.india-ts.vsr-tracker-enhanced** *(Critical for Dashboard)*
+- **Purpose**: Enhanced VSR tracking service
+- **Schedule**: Runs continuously during market hours
+- **Script**: `/Users/maverick/PycharmProjects/India-TS/Daily/services/VSR_Tracker_Enhanced.py`
+- **Plist**: `/Users/maverick/Library/LaunchAgents/com.india-ts.vsr-tracker-enhanced.plist`
+- **Dashboard**: Port 3001 - VSR Dashboard
+- **Status**: ✅ Active
+- **Critical Note**: Must restart daily at 9:00 AM for fresh state
+
 ## Troubleshooting
 
 ### Common Issues and Solutions
@@ -250,11 +322,34 @@ launchctl list | grep india-ts
    - Check file permissions: `ls -la /path/to/plist`
    - Ensure plist is in `/Users/maverick/Library/LaunchAgents/`
 
+4. **Dashboard Shows No Data** (Ports 3002, 3003, 3004):
+   - **Root Cause**: Tracker services use previous day's date for log files
+   - **Solution**: Restart tracker services daily at 9:00 AM
+   - **Automated Fix**: Run `./pre_market_setup.sh` which now includes service restarts
+   - **Manual Fix**: 
+     ```bash
+     launchctl unload ~/Library/LaunchAgents/com.india-ts.hourly-tracker-service.plist
+     launchctl load ~/Library/LaunchAgents/com.india-ts.hourly-tracker-service.plist
+     # Repeat for other tracker services
+     ```
+
 ### Log File Locations
 
 - Daily logs: `/Users/maverick/PycharmProjects/India-TS/Daily/logs/`
 - Market Regime logs: `/Users/maverick/PycharmProjects/India-TS/Market_Regime/logs/`
 - System logs: `/Users/maverick/PycharmProjects/India-TS/logs/`
+
+## Pre-Market Setup Schedule (Critical)
+
+**Daily at 9:00 AM IST:**
+1. Update access token via `loginz.py`
+2. **Restart all tracker services** (hourly-tracker, short-momentum, vsr-tracker)
+3. Run VSR Scanner
+4. Restart alert services
+5. Start hourly breakout alerts
+6. Start all dashboards
+
+**Note**: Step 2 is critical - services must restart to use correct date for log files.
 
 ## System Reboot Instructions
 
@@ -296,4 +391,4 @@ After system reboot, follow these steps:
 
 ---
 
-Last Updated: 2025-07-14
+Last Updated: 2025-08-04

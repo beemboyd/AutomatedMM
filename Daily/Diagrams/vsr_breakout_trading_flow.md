@@ -53,8 +53,8 @@
 │                       ORDER EXECUTION                                │
 │  ┌──────────────────┐        ┌──────────────────────┐              │
 │  │ Position Sizing  │        │ Place Orders         │              │
-│  │ - 1% of Portfolio│ ──────▶│ - LIMIT orders       │              │
-│  │ - Max 5 positions│        │ - CNC product        │              │
+│  │ - 1% of Portfolio│ ──────▶│ - LIMIT @ High+0.5%  │              │
+│  │ - Max 5 positions│        │ - MIS product        │              │
 │  └──────────────────┘        │ - Update state       │              │
 │                              └──────────────────────┘              │
 └─────────────────────────────────────────────────────────────────────┘
@@ -95,7 +95,7 @@
                                              ▼
 ┌──────────────┐      Kite API       ┌──────────────────┐
 │   Zerodha    │ ◀────────────────── │ Place Orders     │
-│   Broker     │                     │ (LIMIT, CNC)     │
+│   Broker     │                     │ (LIMIT, MIS)     │
 └──────────────┘                     └──────────────────┘
 ```
 

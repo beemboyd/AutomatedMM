@@ -389,6 +389,78 @@ class TrendDashboard:
         </div>
         """
         
+        # Add PCR section if available
+        pcr_data = report.get('pcr_analysis', {})
+        if pcr_data:
+            # Determine sentiment color
+            pcr_sentiment = pcr_data.get('sentiment', 'neutral')
+            if 'bullish_signal' in pcr_sentiment:
+                pcr_sentiment_color = '#27ae60'  # Green for bullish signal
+                pcr_display = 'Bullish Signal'
+            elif 'bearish_signal' in pcr_sentiment:
+                pcr_sentiment_color = '#e74c3c'  # Red for bearish signal
+                pcr_display = 'Bearish Signal'
+            else:
+                pcr_sentiment_color = '#95a5a6'  # Gray for neutral
+                pcr_display = 'Neutral'
+            
+            # Signal strength color
+            signal_strength = pcr_data.get('signal_strength', 0)
+            if signal_strength > 0.6:
+                signal_color = '#27ae60'  # Strong signal
+            elif signal_strength > 0.3:
+                signal_color = '#f39c12'  # Moderate signal
+            else:
+                signal_color = '#95a5a6'  # Weak signal
+            
+            # Interpretation text
+            pcr_combined = pcr_data.get('pcr_combined', 1.0)
+            if pcr_combined > 1.2:
+                interpretation = "High put buying indicates bearish sentiment - Contrarian bullish signal"
+            elif pcr_combined < 0.8:
+                interpretation = "High call buying indicates bullish sentiment - Contrarian bearish signal"
+            else:
+                interpretation = "Neutral PCR indicates balanced sentiment"
+            
+            html_content += f"""
+        <!-- PCR Section -->
+        <div class="breadth-section" style="background-color: #f0f8ff; border: 2px solid #3498db; margin-top: 20px;">
+            <h2 class="section-title" style="color: #2c3e50;">📊 Put-Call Ratio (PCR) Analysis</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #3498db;">{pcr_data.get('pcr_oi', 0):.3f}</div>
+                    <div class="metric-label">PCR (OI)</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #9b59b6;">{pcr_data.get('pcr_volume', 0):.3f}</div>
+                    <div class="metric-label">PCR (Volume)</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #2c3e50; font-weight: bold;">{pcr_data.get('pcr_combined', 0):.3f}</div>
+                    <div class="metric-label">PCR Combined</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-value" style="color: {pcr_sentiment_color};">{pcr_display}</div>
+                    <div class="metric-label">Market Sentiment</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; padding: 15px; background-color: rgba(52, 152, 219, 0.1); border-radius: 8px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 1.2em; margin-bottom: 10px;">
+                        <strong>Signal Strength:</strong> <span style="color: {signal_color};">{signal_strength:.1%}</span>
+                    </div>
+                    <div style="font-size: 0.95em; color: #7f8c8d;">
+                        {interpretation}
+                    </div>
+                </div>
+            </div>
+        </div>
+        """
+        
         # Add Macro/Micro View Section
         html_content += """
         <div class="breadth-section" style="background-color: #2c3e50; color: white; margin-bottom: 30px; margin-top: 30px;">

@@ -288,80 +288,81 @@ def get_historical_breadth():
         logger.error(f"Error loading historical data: {e}")
         return jsonify([]), 404
 
-@app.route('/api/early-bird')
-def get_early_bird():
-    """API endpoint for Early Bird (KC_Breakout_Watch first appearances)"""
-    try:
-        # Get the latest KC Upper Limit results
-        kc_results_dir = os.path.join(os.path.dirname(SCRIPT_DIR), 'results')
-        
-        # Find today's KC files
-        today = datetime.now(IST).strftime('%Y%m%d')
-        kc_files = sorted([f for f in os.listdir(kc_results_dir) 
-                          if f.startswith(f'KC_Upper_Limit_Trending_{today}') 
-                          and f.endswith('.xlsx')])
-        
-        if not kc_files:
-            # Try yesterday if no files today
-            yesterday = (datetime.now(IST) - timedelta(days=1)).strftime('%Y%m%d')
-            kc_files = sorted([f for f in os.listdir(kc_results_dir) 
-                              if f.startswith(f'KC_Upper_Limit_Trending_{yesterday}') 
-                              and f.endswith('.xlsx')])
-        
-        early_birds = []
-        seen_tickers = set()
-        
-        # Process files chronologically to find first appearances
-        for filename in kc_files:
-            filepath = os.path.join(kc_results_dir, filename)
-            try:
-                df = pd.read_excel(filepath)
-                
-                # Filter for KC_Breakout_Watch pattern
-                kc_breakout = df[df['Pattern'] == 'KC_Breakout_Watch']
-                
-                for _, row in kc_breakout.iterrows():
-                    ticker = row['Ticker']
-                    if ticker not in seen_tickers:
-                        seen_tickers.add(ticker)
-                        
-                        # Extract timestamp from filename (YYYYMMDD_HHMMSS)
-                        timestamp_str = filename.replace('KC_Upper_Limit_Trending_', '').replace('.xlsx', '')
-                        time_parts = timestamp_str.split('_')
-                        if len(time_parts) == 2:
-                            hour = time_parts[1][:2]
-                            minute = time_parts[1][2:4]
-                            time_str = f"{hour}:{minute}"
-                        else:
-                            time_str = "N/A"
-                        
-                        early_birds.append({
-                            'ticker': ticker,
-                            'sector': row.get('Sector', 'Unknown'),
-                            'entry_price': round(row.get('Entry_Price', 0), 2),
-                            'stop_loss': round(row.get('Stop_Loss', 0), 2),
-                            'target1': round(row.get('Target1', 0), 2),
-                            'probability_score': round(row.get('Probability_Score', 0), 1),
-                            'volume_ratio': round(row.get('Volume_Ratio', 0), 2),
-                            'time_appeared': time_str,
-                            'description': row.get('Description', ''),
-                            'kc_distance': round(row.get('KC_Distance_%', 0), 2)
-                        })
-            except Exception as e:
-                logger.error(f"Error processing KC file {filename}: {e}")
-                continue
-        
-        # Sort by probability score descending
-        early_birds.sort(key=lambda x: x['probability_score'], reverse=True)
-        
-        return jsonify({
-            'early_birds': early_birds[:10],  # Top 10
-            'total_count': len(early_birds)
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting Early Bird data: {e}")
-        return jsonify({'early_birds': [], 'total_count': 0})
+# ARCHIVED: Early Bird endpoint - commented out on 2025-08-08
+# @app.route('/api/early-bird')
+# def get_early_bird():
+#     """API endpoint for Early Bird (KC_Breakout_Watch first appearances)"""
+#     try:
+#         # Get the latest KC Upper Limit results
+#         kc_results_dir = os.path.join(os.path.dirname(SCRIPT_DIR), 'results')
+#         
+#         # Find today's KC files
+#         today = datetime.now(IST).strftime('%Y%m%d')
+#         kc_files = sorted([f for f in os.listdir(kc_results_dir) 
+#                           if f.startswith(f'KC_Upper_Limit_Trending_{today}') 
+#                           and f.endswith('.xlsx')])
+#         
+#         if not kc_files:
+#             # Try yesterday if no files today
+#             yesterday = (datetime.now(IST) - timedelta(days=1)).strftime('%Y%m%d')
+#             kc_files = sorted([f for f in os.listdir(kc_results_dir) 
+#                               if f.startswith(f'KC_Upper_Limit_Trending_{yesterday}') 
+#                               and f.endswith('.xlsx')])
+#         
+#         early_birds = []
+#         seen_tickers = set()
+#         
+#         # Process files chronologically to find first appearances
+#         for filename in kc_files:
+#             filepath = os.path.join(kc_results_dir, filename)
+#             try:
+#                 df = pd.read_excel(filepath)
+#                 
+#                 # Filter for KC_Breakout_Watch pattern
+#                 kc_breakout = df[df['Pattern'] == 'KC_Breakout_Watch']
+#                 
+#                 for _, row in kc_breakout.iterrows():
+#                     ticker = row['Ticker']
+#                     if ticker not in seen_tickers:
+#                         seen_tickers.add(ticker)
+#                         
+#                         # Extract timestamp from filename (YYYYMMDD_HHMMSS)
+#                         timestamp_str = filename.replace('KC_Upper_Limit_Trending_', '').replace('.xlsx', '')
+#                         time_parts = timestamp_str.split('_')
+#                         if len(time_parts) == 2:
+#                             hour = time_parts[1][:2]
+#                             minute = time_parts[1][2:4]
+#                             time_str = f"{hour}:{minute}"
+#                         else:
+#                             time_str = "N/A"
+#                         
+#                         early_birds.append({
+#                             'ticker': ticker,
+#                             'sector': row.get('Sector', 'Unknown'),
+#                             'entry_price': round(row.get('Entry_Price', 0), 2),
+#                             'stop_loss': round(row.get('Stop_Loss', 0), 2),
+#                             'target1': round(row.get('Target1', 0), 2),
+#                             'probability_score': round(row.get('Probability_Score', 0), 1),
+#                             'volume_ratio': round(row.get('Volume_Ratio', 0), 2),
+#                             'time_appeared': time_str,
+#                             'description': row.get('Description', ''),
+#                             'kc_distance': round(row.get('KC_Distance_%', 0), 2)
+#                         })
+#             except Exception as e:
+#                 logger.error(f"Error processing KC file {filename}: {e}")
+#                 continue
+#         
+#         # Sort by probability score descending
+#         early_birds.sort(key=lambda x: x['probability_score'], reverse=True)
+#         
+#         return jsonify({
+#             'early_birds': early_birds[:10],  # Top 10
+#             'total_count': len(early_birds)
+#         })
+#         
+#     except Exception as e:
+#         logger.error(f"Error getting Early Bird data: {e}")
+#         return jsonify({'early_birds': [], 'total_count': 0})
 
 @app.route('/health')
 def health_check():

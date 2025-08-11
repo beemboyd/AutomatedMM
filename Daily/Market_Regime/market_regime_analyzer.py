@@ -31,6 +31,8 @@ from index_sma_analyzer import IndexSMAAnalyzer
 from multi_timeframe_analyzer import MultiTimeframeAnalyzer
 from breadth_regime_consistency import BreadthRegimeConsistencyChecker
 from enhanced_market_score_calculator import EnhancedMarketScoreCalculator
+from regime_change_notifier import RegimeChangeNotifier
+from pcr_analyzer import PCRAnalyzer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from analysis.market_regime.market_indicators import MarketIndicators
 
@@ -69,6 +71,8 @@ class MarketRegimeAnalyzer:
         self.multi_tf_analyzer = MultiTimeframeAnalyzer()
         self.breadth_consistency_checker = BreadthRegimeConsistencyChecker()
         self.enhanced_score_calculator = EnhancedMarketScoreCalculator()
+        self.regime_notifier = RegimeChangeNotifier()
+        self.pcr_analyzer = PCRAnalyzer()
         
         # Market regime definitions
         self.regimes = {
@@ -109,8 +113,8 @@ class MarketRegimeAnalyzer:
             }
         }
         
-    def determine_market_regime(self, trend_report, use_index_analysis=True):
-        """Determine market regime based on trend analysis and index SMA positions"""
+    def determine_market_regime(self, trend_report, use_index_analysis=True, use_pcr_analysis=True):
+        """Determine market regime based on trend analysis, index SMA positions, and PCR"""
         trend = trend_report['trend_strength']['trend']
         
         # Map trend strength to market regime
@@ -143,6 +147,56 @@ class MarketRegimeAnalyzer:
                 regime = base_regime
         else:
             regime = base_regime
+        
+        # Apply PCR adjustment if enabled
+        if use_pcr_analysis:
+            try:
+                pcr_data = self.pcr_analyzer.get_latest_pcr()
+                if pcr_data:
+                    pcr_adjustment, pcr_weight = self.pcr_analyzer.get_pcr_regime_adjustment(pcr_data)
+                    
+                    # Apply PCR adjustment with 20% weightage
+                    PCR_WEIGHTAGE = 0.20
+                    adjusted_weight = pcr_weight * PCR_WEIGHTAGE
+                    
+                    if pcr_adjustment == 'bullish' and adjusted_weight > 0.1:
+                        # PCR suggests bullish bias - upgrade regime
+                        if regime == 'strong_downtrend':
+                            regime = 'downtrend'
+                        elif regime == 'downtrend':
+                            regime = 'choppy_bearish'
+                        elif regime == 'choppy_bearish':
+                            regime = 'choppy'
+                        elif regime == 'choppy':
+                            regime = 'choppy_bullish'
+                        elif regime == 'choppy_bullish':
+                            regime = 'uptrend'
+                        elif regime == 'uptrend' and adjusted_weight > 0.15:
+                            regime = 'strong_uptrend'
+                            
+                        logger.info(f"PCR adjustment applied: {pcr_adjustment} (PCR: {pcr_data['pcr_combined']:.3f}, Weight: {adjusted_weight:.1%})")
+                        
+                    elif pcr_adjustment == 'bearish' and adjusted_weight > 0.1:
+                        # PCR suggests bearish bias - downgrade regime
+                        if regime == 'strong_uptrend':
+                            regime = 'uptrend'
+                        elif regime == 'uptrend':
+                            regime = 'choppy_bullish'
+                        elif regime == 'choppy_bullish':
+                            regime = 'choppy'
+                        elif regime == 'choppy':
+                            regime = 'choppy_bearish'
+                        elif regime == 'choppy_bearish':
+                            regime = 'downtrend'
+                        elif regime == 'downtrend' and adjusted_weight > 0.15:
+                            regime = 'strong_downtrend'
+                            
+                        logger.info(f"PCR adjustment applied: {pcr_adjustment} (PCR: {pcr_data['pcr_combined']:.3f}, Weight: {adjusted_weight:.1%})")
+                    else:
+                        logger.info(f"PCR neutral or weak signal (PCR: {pcr_data.get('pcr_combined', 'N/A')}, Weight: {adjusted_weight:.1%})")
+                        
+            except Exception as e:
+                logger.error(f"Error in PCR analysis: {e}")
         
         # Adjust based on momentum if available
         if trend_report.get('momentum'):
@@ -510,6 +564,25 @@ class MarketRegimeAnalyzer:
             insights.insert(0, divergence_alert)
         
         # Prepare complete report
+        # Get PCR data for the report
+        pcr_data = None
+        pcr_signal = None
+        try:
+            pcr_data = self.pcr_analyzer.get_latest_pcr()
+            if pcr_data:
+                pcr_adjustment, pcr_weight = self.pcr_analyzer.get_pcr_regime_adjustment(pcr_data)
+                pcr_signal = {
+                    'pcr_oi': pcr_data.get('pcr_oi'),
+                    'pcr_volume': pcr_data.get('pcr_volume'),
+                    'pcr_combined': pcr_data.get('pcr_combined'),
+                    'sentiment': pcr_data.get('sentiment'),
+                    'signal_strength': pcr_data.get('signal_strength'),
+                    'regime_adjustment': pcr_adjustment,
+                    'adjustment_weight': pcr_weight * 0.20  # 20% weightage
+                }
+        except Exception as e:
+            logger.error(f"Error getting PCR data for report: {e}")
+        
         report = {
             'timestamp': datetime.datetime.now().isoformat(),
             'market_regime': {
@@ -550,7 +623,8 @@ class MarketRegimeAnalyzer:
             'scan_files': {
                 'long': scan_results.get('long_file'),
                 'short': scan_results.get('short_file')
-            }
+            },
+            'pcr_analysis': pcr_signal if pcr_signal else None
         }
         
         # Enhance report with multi-timeframe analysis
@@ -592,6 +666,12 @@ class MarketRegimeAnalyzer:
             
         # Save to central database
         self._save_report_to_db(report)
+        
+        # Check for regime change and send alert if needed
+        try:
+            self.regime_notifier.check_regime_change()
+        except Exception as e:
+            logger.error(f"Error checking regime change: {e}")
             
         return report
     

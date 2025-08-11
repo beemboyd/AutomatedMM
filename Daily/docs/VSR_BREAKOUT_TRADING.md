@@ -20,10 +20,10 @@ The VSR Breakout Trading System (`place_orders_daily_long_vsr.py`) is an automat
   - Days tracked in the system
 
 ### 2. Hourly Breakout Strategy
-- Entry Signal: Price crosses above previous hourly candle high
-- Entry Price: Previous hourly high + 0.1% buffer
+- Entry Signal: Previous hourly candle high is breakout level
+- Entry Price: Limit order at previous hourly high + 0.5% buffer
 - Stop Loss: 2% below entry price
-- Product Type: CNC (Cash and Carry - delivery)
+- Product Type: MIS (Margin Intraday Square-off)
 
 ### 3. Position Sizing
 - Fixed 1% of total portfolio value per position
@@ -133,11 +133,11 @@ Placing orders...
 ================================================================================
 ORDER SUMMARY
 ================================================================================
-✅ Successfully placed 4 order(s):
-  - KRBL: 235 shares @ ₹427.72
-  - INDIANB: 171 shares @ ₹584.85
-  - LUPIN: 80 shares @ ₹1250.48
-  - KPIL: 112 shares @ ₹896.05
+✅ Successfully placed 4 limit order(s):
+  - KRBL: 235 shares @ ₹427.72 (Breakout: ₹425.30)
+  - INDIANB: 171 shares @ ₹584.85 (Breakout: ₹582.50)
+  - LUPIN: 80 shares @ ₹1250.48 (Breakout: ₹1245.60)
+  - KPIL: 112 shares @ ₹896.05 (Breakout: ₹892.40)
 ================================================================================
 ```
 

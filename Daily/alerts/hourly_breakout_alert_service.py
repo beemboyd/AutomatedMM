@@ -445,12 +445,12 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                     emoji = "🔥"
                     priority = "BREAKOUT"
                 
-                message = f"""{emoji} <b>Hourly Breakout Alert</b>
+                message = f"""📈 <b>Trend Continuation Detected</b>
 
 🎯 <b>{alert.ticker}</b>
 💰 Current: ₹{alert.current_price:.2f}
 📊 Prev Hr Close: ₹{alert.prev_hourly_close:.2f}
-📈 Breakout: +{alert.breakout_pct:.2f}%
+📈 Continuation: +{alert.breakout_pct:.2f}%
 
 📊 <b>Daily Setup:</b>
 • Score: {alert.daily_score}
@@ -459,10 +459,10 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
 
 ⏰ {alert.timestamp.strftime('%I:%M %p')}
 
-<i>Price crossed above previous hourly close</i>"""
+<i>Uptrend continuation - Price sustaining above hourly close</i>"""
                 
                 self.telegram.send_message(message, parse_mode='HTML')
-                self.logger.info(f"Sent breakout alert for {alert.ticker} (+{alert.breakout_pct:.2f}%)")
+                self.logger.info(f"Sent trend continuation alert for {alert.ticker} (+{alert.breakout_pct:.2f}%)")
                 
                 # Rate limiting
                 time.sleep(0.5)

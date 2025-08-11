@@ -282,7 +282,7 @@ def display_candidates(candidates: List[Dict]) -> List[Dict]:
     return final_candidates
 
 def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_manager):
-    """Place orders for VSR breakout candidates"""
+    """Place limit orders for VSR breakout candidates at 0.5% above previous hourly high"""
     portfolio_value = get_portfolio_value(order_manager)
     if portfolio_value <= 0:
         logging.error("Could not determine portfolio value")
@@ -306,35 +306,31 @@ def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_
                 logging.warning(f"Could not get current price for {ticker}, skipping")
                 continue
             
-            # Check if already broken out
-            if current_price > breakout_level:
-                logging.info(f"{ticker} already broke out (Current: {current_price}, Breakout: {breakout_level})")
-                entry_price = current_price * 1.001  # Add 0.1% buffer
-            else:
-                entry_price = breakout_level * 1.001  # Add 0.1% buffer for breakout
-                logging.info(f"{ticker} waiting for breakout (Current: {current_price}, Breakout: {breakout_level})")
+            # Set limit price at 0.5% above previous hourly high
+            limit_price = round(breakout_level * 1.005, 2)  # Add 0.5% buffer
             
             # Calculate position size
-            quantity = calculate_position_size(portfolio_value, entry_price)
+            quantity = calculate_position_size(portfolio_value, limit_price)
             
-            # Calculate stop loss (2% below entry)
-            stop_loss = round(entry_price * 0.98, 2)
+            # Calculate stop loss (2% below limit price)
+            stop_loss = round(limit_price * 0.98, 2)
             
-            # Place order
+            # Place LIMIT order at 0.5% above breakout level
+            logging.info(f"{ticker} - Placing limit order at ₹{limit_price:.2f} (Previous high: ₹{breakout_level:.2f}, Current: ₹{current_price:.2f})")
+            
             order_params = {
                 'tradingsymbol': ticker,
                 'quantity': quantity,
                 'order_type': 'LIMIT',
-                'price': round(entry_price, 2),
-                'trigger_price': round(entry_price - 0.05, 2),  # Small buffer for limit order
-                'product': 'CNC',
+                'price': limit_price,  # Limit price at 0.5% above previous hourly high
+                'product': 'MIS',  # Intraday order
                 'exchange': 'NSE',
                 'transaction_type': 'BUY',
                 'validity': 'DAY',
                 'tag': 'VSR_BREAKOUT'
             }
             
-            logging.info(f"Placing order for {ticker}: {quantity} shares @ ₹{entry_price:.2f}, SL: ₹{stop_loss:.2f}")
+            logging.info(f"Placing LIMIT order for {ticker}: {quantity} shares @ ₹{limit_price:.2f}, SL target: ₹{stop_loss:.2f}")
             
             order_id = order_manager.place_order(**order_params)
             
@@ -343,29 +339,34 @@ def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_
                     'ticker': ticker,
                     'order_id': order_id,
                     'quantity': quantity,
-                    'entry_price': entry_price,
+                    'entry_price': limit_price,
+                    'breakout_level': breakout_level,
                     'stop_loss': stop_loss,
                     'vsr_score': candidate['score'],
-                    'momentum': candidate['momentum']
+                    'momentum': candidate['momentum'],
+                    'order_type': 'LIMIT'
                 })
                 
-                # Update state manager
+                # Update state manager with MIS product type
                 state_manager.add_position(
                     ticker=ticker,
                     quantity=quantity,
-                    entry_price=entry_price,
+                    entry_price=limit_price,
                     stop_loss=stop_loss,
-                    product_type='CNC',
+                    product_type='MIS',  # Intraday
                     order_id=order_id,
                     metadata={
                         'strategy': 'VSR_BREAKOUT',
                         'vsr_score': candidate['score'],
                         'momentum': candidate['momentum'],
-                        'entry_time': datetime.datetime.now().isoformat()
+                        'entry_time': datetime.datetime.now().isoformat(),
+                        'order_type': 'LIMIT',
+                        'limit_price': limit_price,
+                        'breakout_level': breakout_level
                     }
                 )
                 
-                logging.info(f"✅ Order placed successfully for {ticker}: {order_id}")
+                logging.info(f"✅ Limit order placed successfully for {ticker}: {order_id}")
                 
                 # Small delay between orders
                 time.sleep(0.5)
@@ -375,6 +376,7 @@ def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_
             continue
     
     return orders_placed
+
 
 def main():
     """Main execution function"""
@@ -456,9 +458,9 @@ def main():
     print("="*80)
     
     if orders:
-        print(f"✅ Successfully placed {len(orders)} order(s):")
+        print(f"✅ Successfully placed {len(orders)} limit order(s):")
         for order in orders:
-            print(f"  - {order['ticker']}: {order['quantity']} shares @ ₹{order['entry_price']:.2f}")
+            print(f"  - {order['ticker']}: {order['quantity']} shares @ ₹{order['entry_price']:.2f} (Breakout: ₹{order['breakout_level']:.2f})")
     else:
         print("❌ No orders were placed")
     

@@ -138,7 +138,12 @@ class HourlyShortTrackerService:
         if os.path.exists(self.persistence_file):
             try:
                 with open(self.persistence_file, 'r') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Handle new format with 'tickers' key
+                    if 'tickers' in data:
+                        return data['tickers']
+                    # Fallback to old format
+                    return data
             except:
                 pass
         return {}
@@ -146,8 +151,13 @@ class HourlyShortTrackerService:
     def save_persistence(self):
         """Save persistence data"""
         os.makedirs(os.path.dirname(self.persistence_file), exist_ok=True)
+        # Save in new format with 'tickers' key and timestamp
+        data_to_save = {
+            'tickers': self.persistence_data,
+            'last_updated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
         with open(self.persistence_file, 'w') as f:
-            json.dump(self.persistence_data, f, indent=2)
+            json.dump(data_to_save, f, indent=2)
     
     def get_latest_short_reversal_tickers(self) -> List[str]:
         """Get tickers from the latest Short_Reversal_Hourly Excel file"""
@@ -410,9 +420,18 @@ class HourlyShortTrackerService:
             tickers_to_remove = []
             
             for ticker, data in self.persistence_data.items():
-                if ticker not in tickers and 'last_updated' in data:
-                    last_updated = datetime.datetime.strptime(data['last_updated'], '%Y-%m-%d %H:%M:%S').date()
-                    if (current_date - last_updated).days > 3:
+                if ticker not in tickers:
+                    # Check if 'last_seen' exists (new format) or 'last_updated' (old format)
+                    if 'last_seen' in data:
+                        last_seen = datetime.datetime.strptime(data['last_seen'], '%Y-%m-%d %H:%M:%S').date()
+                    elif 'last_updated' in data:
+                        last_seen = datetime.datetime.strptime(data['last_updated'], '%Y-%m-%d %H:%M:%S').date()
+                    else:
+                        # If neither exists, mark for removal
+                        tickers_to_remove.append(ticker)
+                        continue
+                    
+                    if (current_date - last_seen).days > 3:
                         tickers_to_remove.append(ticker)
             
             for ticker in tickers_to_remove:

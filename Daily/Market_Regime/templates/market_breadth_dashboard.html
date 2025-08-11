@@ -637,14 +637,14 @@
             </div>
         </div>
         
-        <!-- Early Bird Section -->
-        <div class="early-bird-section" style="margin-bottom: 30px;">
+        <!-- Early Bird Section - ARCHIVED on 2025-08-08 -->
+        <!-- <div class="early-bird-section" style="margin-bottom: 30px;">
             <h2>🐦 Early Bird Opportunities (KC Breakout Watch)</h2>
             <p style="color: #8892b0; margin-bottom: 20px;">First appearances of KC_Breakout_Watch pattern - stocks breaking above Keltner Channel without volume confirmation yet</p>
             <div class="early-bird-grid" id="early-bird-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
                 <div class="loading">Loading Early Bird data...</div>
             </div>
-        </div>
+        </div> -->
         
         <div class="stock-lists">
             <div class="stock-list-card">
@@ -868,16 +868,17 @@
             }
         }
         
-        async function fetchEarlyBirdData() {
-            try {
-                const response = await fetch('/api/early-bird');
-                if (!response.ok) throw new Error('Failed to fetch early bird data');
-                return await response.json();
-            } catch (error) {
-                console.error('Error fetching early bird data:', error);
-                return { early_birds: [], total_count: 0 };
-            }
-        }
+        // ARCHIVED: Early Bird data fetching - commented out on 2025-08-08
+        // async function fetchEarlyBirdData() {
+        //     try {
+        //         const response = await fetch('/api/early-bird');
+        //         if (!response.ok) throw new Error('Failed to fetch early bird data');
+        //         return await response.json();
+        //     } catch (error) {
+        //         console.error('Error fetching early bird data:', error);
+        //         return { early_birds: [], total_count: 0 };
+        //     }
+        // }
         
         function showError(message) {
             const errorEl = document.getElementById('error-message');
@@ -1186,50 +1187,52 @@
             const stockDetails = await fetchStockDetails();
             updateStockLists(stockDetails);
             
-            const earlyBirdData = await fetchEarlyBirdData();
-            updateEarlyBirdDisplay(earlyBirdData);
+            // ARCHIVED: Early Bird display update - commented out on 2025-08-08
+            // const earlyBirdData = await fetchEarlyBirdData();
+            // updateEarlyBirdDisplay(earlyBirdData);
             
             // Update SMA breadth charts
             updateSMABreadthCharts();
         }
         
-        function updateEarlyBirdDisplay(data) {
-            const grid = document.getElementById('early-bird-grid');
-            
-            if (!data.early_birds || data.early_birds.length === 0) {
-                grid.innerHTML = '<div class="loading">No Early Bird opportunities found today</div>';
-                return;
-            }
-            
-            grid.innerHTML = data.early_birds.map(bird => `
-                <div class="early-bird-card">
-                    <div class="early-bird-ticker">${bird.ticker}</div>
-                    <div class="early-bird-time">First appeared at ${bird.time_appeared}</div>
-                    <div class="early-bird-details">
-                        <div>Sector: ${bird.sector}</div>
-                        <div>Entry: ₹${bird.entry_price}</div>
-                        <div>Stop Loss: ₹${bird.stop_loss} | Target 1: ₹${bird.target1}</div>
-                        <div style="margin-top: 5px; font-size: 0.8em; color: #fbbf24;">
-                            ${bird.description}
-                        </div>
-                    </div>
-                    <div class="early-bird-metrics">
-                        <div>
-                            <div style="font-size: 0.8em; color: #8892b0;">Score</div>
-                            <div style="font-weight: bold; color: #4ade80;">${bird.probability_score}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 0.8em; color: #8892b0;">Volume</div>
-                            <div style="font-weight: bold;">${bird.volume_ratio}x</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 0.8em; color: #8892b0;">KC Dist</div>
-                            <div style="font-weight: bold;">${bird.kc_distance}%</div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
+        // ARCHIVED: Early Bird display function - commented out on 2025-08-08
+        // function updateEarlyBirdDisplay(data) {
+        //     const grid = document.getElementById('early-bird-grid');
+        //     
+        //     if (!data.early_birds || data.early_birds.length === 0) {
+        //         grid.innerHTML = '<div class="loading">No Early Bird opportunities found today</div>';
+        //         return;
+        //     }
+        //     
+        //     grid.innerHTML = data.early_birds.map(bird => `
+        //         <div class="early-bird-card">
+        //             <div class="early-bird-ticker">${bird.ticker}</div>
+        //             <div class="early-bird-time">First appeared at ${bird.time_appeared}</div>
+        //             <div class="early-bird-details">
+        //                 <div>Sector: ${bird.sector}</div>
+        //                 <div>Entry: ₹${bird.entry_price}</div>
+        //                 <div>Stop Loss: ₹${bird.stop_loss} | Target 1: ₹${bird.target1}</div>
+        //                 <div style="margin-top: 5px; font-size: 0.8em; color: #fbbf24;">
+        //                     ${bird.description}
+        //                 </div>
+        //             </div>
+        //             <div class="early-bird-metrics">
+        //                 <div>
+        //                     <div style="font-size: 0.8em; color: #8892b0;">Score</div>
+        //                     <div style="font-weight: bold; color: #4ade80;">${bird.probability_score}</div>
+        //                 </div>
+        //                 <div>
+        //                     <div style="font-size: 0.8em; color: #8892b0;">Volume</div>
+        //                     <div style="font-weight: bold;">${bird.volume_ratio}x</div>
+        //                 </div>
+        //                 <div>
+        //                     <div style="font-size: 0.8em; color: #8892b0;">KC Dist</div>
+        //                     <div style="font-weight: bold;">${bird.kc_distance}%</div>
+        //                 </div>
+        //             </div>
+        //         </div>
+        //     `).join('');
+        // }
         
         // Initialize when everything is ready
         function initializeApp() {

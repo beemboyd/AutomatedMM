@@ -640,6 +640,34 @@ ENHANCED_DASHBOARD_HTML = '''
             </div>
         </div>
         
+        <!-- PCR Analysis Row -->
+        <div class="row mb-3">
+            <div class="col-md-3 mb-3">
+                <div class="metric-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="metric-title" style="color: white;">PCR (OI)</div>
+                    <div class="metric-value" id="pcr-oi" style="color: white;">-</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="metric-title" style="color: white;">PCR (Volume)</div>
+                    <div class="metric-value" id="pcr-volume" style="color: white;">-</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="metric-title" style="color: white;">PCR Combined</div>
+                    <div class="metric-value" id="pcr-combined" style="color: white;">-</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <div class="metric-title" style="color: white;">PCR Signal</div>
+                    <div class="metric-value" id="pcr-signal" style="color: white; font-size: 1.2em;">-</div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Charts Section -->
         <div class="row mb-4">
             {% if config.show_regime_history %}
@@ -1830,6 +1858,50 @@ ENHANCED_DASHBOARD_HTML = '''
                     const avgAtrElement = document.getElementById('avg-atr');
                     if (avgAtrElement && data.volatility && data.volatility.avg_atr) {
                         avgAtrElement.textContent = `Avg ATR: ${data.volatility.avg_atr.toFixed(2)}%`;
+                    }
+                    
+                    // Update PCR Analysis
+                    if (data.pcr_analysis) {
+                        const pcr = data.pcr_analysis;
+                        
+                        // Update PCR OI
+                        const pcrOiEl = document.getElementById('pcr-oi');
+                        if (pcrOiEl) {
+                            pcrOiEl.textContent = pcr.pcr_oi ? pcr.pcr_oi.toFixed(3) : '-';
+                        }
+                        
+                        // Update PCR Volume
+                        const pcrVolEl = document.getElementById('pcr-volume');
+                        if (pcrVolEl) {
+                            pcrVolEl.textContent = pcr.pcr_volume ? pcr.pcr_volume.toFixed(3) : '-';
+                        }
+                        
+                        // Update PCR Combined
+                        const pcrCombinedEl = document.getElementById('pcr-combined');
+                        if (pcrCombinedEl) {
+                            pcrCombinedEl.textContent = pcr.pcr_combined ? pcr.pcr_combined.toFixed(3) : '-';
+                        }
+                        
+                        // Update PCR Signal
+                        const pcrSignalEl = document.getElementById('pcr-signal');
+                        if (pcrSignalEl) {
+                            let signalText = 'Neutral';
+                            let sentiment = pcr.sentiment || 'neutral';
+                            
+                            if (sentiment.includes('bullish_signal')) {
+                                signalText = '🔺 Bullish';
+                            } else if (sentiment.includes('bearish_signal')) {
+                                signalText = '🔻 Bearish';
+                            } else {
+                                signalText = '◼ Neutral';
+                            }
+                            
+                            if (pcr.signal_strength) {
+                                signalText += ` (${(pcr.signal_strength * 100).toFixed(1)}%)`;
+                            }
+                            
+                            pcrSignalEl.textContent = signalText;
+                        }
                     }
                     
                     // Update weekly bias section
@@ -3023,7 +3095,8 @@ def get_current_analysis():
             'position_recommendations': data.get('position_recommendations', {}),
             'model_performance': data.get('model_performance', {}),
             'historical_context': data.get('historical_context', {}),
-            'multi_timeframe_analysis': data.get('multi_timeframe_analysis', {})
+            'multi_timeframe_analysis': data.get('multi_timeframe_analysis', {}),
+            'pcr_analysis': data.get('pcr_analysis', {})
         }
         
         # Store in history
