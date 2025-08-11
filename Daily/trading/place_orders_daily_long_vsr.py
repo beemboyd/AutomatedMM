@@ -28,7 +28,9 @@ from user_context_manager import (
 )
 
 # Configuration
-VSR_DASHBOARD_URL = "http://localhost:3001/api/vsr-tickers"
+VSR_DASHBOARD_URL = "http://localhost:3001/api/trending-tickers"
+VSR_JSON_FILE = "/Users/maverick/PycharmProjects/India-TS/Daily/data/vsr_ticker_persistence.json"
+USE_JSON_FILE = False  # Set to True to read from file instead of API
 MIN_VSR_SCORE = 60  # Minimum VSR score to consider
 MIN_MOMENTUM = 2.0  # Minimum positive momentum %
 POSITION_SIZE_PERCENT = 1.0  # 1% of portfolio per position
@@ -107,40 +109,103 @@ def setup_user_context(user_credentials: UserCredentials, config):
 
     logging.info(f"Context set for user: {user_credentials.name}")
 
+def fetch_vsr_tickers_from_file() -> List[Dict]:
+    """Fetch VSR tickers from the JSON persistence file"""
+    try:
+        with open(VSR_JSON_FILE, 'r') as f:
+            data = json.load(f)
+        
+        all_tickers = []
+        tickers_data = data.get('tickers', {})
+        
+        for ticker, info in tickers_data.items():
+            # Get the latest momentum from history
+            momentum_history = info.get('momentum_history', [])
+            if momentum_history:
+                latest_momentum = momentum_history[-1].get('momentum', 0)
+                
+                # Calculate score based on appearances and positive momentum days
+                appearances = info.get('appearances', 0)
+                positive_days = info.get('positive_momentum_days', 0)
+                days_tracked = info.get('days_tracked', 0)
+                
+                # Simple scoring: appearances weighted by positive momentum ratio
+                if days_tracked > 0:
+                    score = min(100, int((appearances / 10) * (positive_days / days_tracked + 1)))
+                else:
+                    score = 0
+                
+                # Filter for positive momentum and minimum score
+                if score >= MIN_VSR_SCORE and latest_momentum >= MIN_MOMENTUM:
+                    # Get latest price from the file's real-time data if available
+                    price = info.get('latest_price', 0)
+                    if price == 0 and momentum_history:
+                        # Try to extract from momentum history if available
+                        price = momentum_history[-1].get('price', 0)
+                    
+                    all_tickers.append({
+                        'ticker': ticker,
+                        'score': score,
+                        'momentum': latest_momentum,
+                        'vsr_ratio': info.get('latest_vsr', 0),
+                        'volume': info.get('latest_volume', 0),
+                        'price': price,
+                        'days_tracked': days_tracked
+                    })
+        
+        # Sort by score and momentum
+        all_tickers.sort(key=lambda x: (x['score'], x['momentum']), reverse=True)
+        
+        logging.info(f"Fetched {len(all_tickers)} VSR tickers from file with positive momentum")
+        return all_tickers
+        
+    except Exception as e:
+        logging.error(f"Error fetching VSR tickers from file: {e}")
+        return []
+
 def fetch_vsr_tickers() -> List[Dict]:
-    """Fetch current VSR tickers from the dashboard API"""
+    """Fetch current VSR tickers from the dashboard API or file"""
+    if USE_JSON_FILE:
+        return fetch_vsr_tickers_from_file()
+    
     try:
         response = requests.get(VSR_DASHBOARD_URL, timeout=5)
         if response.status_code == 200:
             data = response.json()
-            tickers = data.get('tickers', {})
             
-            # Filter for positive momentum and minimum score
-            filtered_tickers = []
-            for ticker, info in tickers.items():
-                score = info.get('score', 0)
-                momentum = info.get('latest_momentum', 0)
+            # Get all tickers from the categories
+            all_tickers = []
+            categories = data.get('categories', {})
+            
+            # Process all_tickers category
+            for ticker_data in categories.get('all_tickers', []):
+                ticker = ticker_data.get('ticker')
+                score = ticker_data.get('score', 0)
+                momentum = ticker_data.get('momentum', 0)
                 
-                if score >= MIN_VSR_SCORE and momentum >= MIN_MOMENTUM:
-                    filtered_tickers.append({
+                # Filter for positive momentum and minimum score
+                if ticker and score >= MIN_VSR_SCORE and momentum >= MIN_MOMENTUM:
+                    all_tickers.append({
                         'ticker': ticker,
                         'score': score,
                         'momentum': momentum,
-                        'vsr_ratio': info.get('latest_vsr', 0),
-                        'volume': info.get('latest_volume', 0),
-                        'price': info.get('latest_price', 0),
-                        'days_tracked': info.get('days_tracked', 0)
+                        'vsr_ratio': ticker_data.get('vsr', 0),  # May not be available
+                        'volume': ticker_data.get('volume', 0),
+                        'price': ticker_data.get('price', 0),
+                        'days_tracked': ticker_data.get('days_tracked', 0)
                     })
             
             # Sort by score and momentum
-            filtered_tickers.sort(key=lambda x: (x['score'], x['momentum']), reverse=True)
+            all_tickers.sort(key=lambda x: (x['score'], x['momentum']), reverse=True)
             
-            logging.info(f"Fetched {len(filtered_tickers)} VSR tickers with positive momentum")
-            return filtered_tickers
+            logging.info(f"Fetched {len(all_tickers)} VSR tickers with positive momentum from API")
+            return all_tickers
             
     except Exception as e:
-        logging.error(f"Error fetching VSR tickers: {e}")
-        return []
+        logging.error(f"Error fetching VSR tickers from API: {e}")
+        # Fallback to file if API fails
+        logging.info("Falling back to JSON file...")
+        return fetch_vsr_tickers_from_file()
 
 def get_hourly_breakout_level(ticker: str, data_handler) -> Optional[float]:
     """
@@ -403,9 +468,7 @@ def main():
     state_manager = get_user_state_manager()
     order_manager = get_user_order_manager()
     
-    # Initialize Kite connection
-    order_manager.initialize_kite()
-    
+    # Order manager already has kite initialized through data_handler
     print(f"\n✅ Connected to Zerodha for user: {selected_user.name}")
     
     # Fetch VSR tickers from dashboard
