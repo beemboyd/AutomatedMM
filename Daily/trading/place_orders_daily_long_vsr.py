@@ -249,9 +249,10 @@ def get_hourly_breakout_level(ticker: str, data_handler) -> Optional[float]:
 def get_current_price(ticker: str, data_handler) -> Optional[float]:
     """Get current market price for a ticker"""
     try:
-        quote = data_handler.get_quote(ticker)
-        if quote and ticker in quote:
-            return float(quote[ticker].get('last_price', 0))
+        # Use kite.quote to get current price
+        quote = data_handler.kite.quote([f"NSE:{ticker}"])
+        if quote and f"NSE:{ticker}" in quote:
+            return float(quote[f"NSE:{ticker}"].get('last_price', 0))
     except Exception as e:
         logging.error(f"Error getting current price for {ticker}: {e}")
     return None
@@ -262,16 +263,16 @@ def calculate_position_size(portfolio_value: float, price: float) -> int:
     quantity = int(position_value / price)
     return max(1, quantity)  # At least 1 share
 
-def get_portfolio_value(order_manager) -> float:
+def get_portfolio_value(data_handler) -> float:
     """Get total portfolio value including cash and holdings"""
     try:
-        # Get margins
-        margins = order_manager.kite.margins()
+        # Get margins using data_handler's kite
+        margins = data_handler.kite.margins()
         equity_margin = margins.get('equity', {})
         available_cash = float(equity_margin.get('available', {}).get('cash', 0))
         
         # Get holdings value
-        holdings = order_manager.kite.holdings()
+        holdings = data_handler.kite.holdings()
         holdings_value = sum(
             float(h.get('quantity', 0)) * float(h.get('last_price', 0))
             for h in holdings
@@ -285,7 +286,7 @@ def get_portfolio_value(order_manager) -> float:
         logging.error(f"Error getting portfolio value: {e}")
         return 0
 
-def check_existing_positions(tickers: List[str], state_manager, order_manager) -> List[str]:
+def check_existing_positions(tickers: List[str], state_manager, data_handler) -> List[str]:
     """Check which tickers already have positions"""
     existing = []
     
@@ -296,9 +297,9 @@ def check_existing_positions(tickers: List[str], state_manager, order_manager) -
             if position and position.get('quantity', 0) > 0:
                 existing.append(ticker)
                 
-        # Check broker positions
-        if order_manager and hasattr(order_manager, 'kite'):
-            positions = order_manager.kite.positions()
+        # Check broker positions using data_handler's kite
+        if data_handler and hasattr(data_handler, 'kite'):
+            positions = data_handler.kite.positions()
             for pos in positions.get('net', []):
                 symbol = pos.get('tradingsymbol', '')
                 if symbol in tickers and symbol not in existing:
@@ -348,7 +349,7 @@ def display_candidates(candidates: List[Dict]) -> List[Dict]:
 
 def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_manager):
     """Place limit orders for VSR breakout candidates at 0.5% above previous hourly high"""
-    portfolio_value = get_portfolio_value(order_manager)
+    portfolio_value = get_portfolio_value(data_handler)
     if portfolio_value <= 0:
         logging.error("Could not determine portfolio value")
         return
@@ -383,21 +384,17 @@ def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_
             # Place LIMIT order at 0.5% above breakout level
             logging.info(f"{ticker} - Placing limit order at ₹{limit_price:.2f} (Previous high: ₹{breakout_level:.2f}, Current: ₹{current_price:.2f})")
             
-            order_params = {
-                'tradingsymbol': ticker,
-                'quantity': quantity,
-                'order_type': 'LIMIT',
-                'price': limit_price,  # Limit price at 0.5% above previous hourly high
-                'product': 'MIS',  # Intraday order
-                'exchange': 'NSE',
-                'transaction_type': 'BUY',
-                'validity': 'DAY',
-                'tag': 'VSR_BREAKOUT'
-            }
-            
             logging.info(f"Placing LIMIT order for {ticker}: {quantity} shares @ ₹{limit_price:.2f}, SL target: ₹{stop_loss:.2f}")
             
-            order_id = order_manager.place_order(**order_params)
+            # Use the OrderManager's place_order method with correct parameters
+            order_id = order_manager.place_order(
+                tradingsymbol=ticker,
+                transaction_type='BUY',
+                order_type='LIMIT',
+                quantity=quantity,
+                price=limit_price,
+                product_type='MIS'  # Intraday order
+            )
             
             if order_id:
                 orders_placed.append({
@@ -483,7 +480,7 @@ def main():
     
     # Check for existing positions
     ticker_symbols = [t['ticker'] for t in vsr_tickers]
-    existing_positions = check_existing_positions(ticker_symbols, state_manager, order_manager)
+    existing_positions = check_existing_positions(ticker_symbols, state_manager, data_handler)
     
     if existing_positions:
         print(f"\n⚠️ Already have positions in: {', '.join(existing_positions)}")
