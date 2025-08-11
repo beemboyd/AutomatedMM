@@ -372,19 +372,27 @@ def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_
                 logging.warning(f"Could not get current price for {ticker}, skipping")
                 continue
             
-            # Set limit price at 0.5% above previous hourly high
-            limit_price = round(breakout_level * 1.005, 2)  # Add 0.5% buffer
+            # IMPORTANT: Check if current price is above previous hourly high
+            # Only place order if we've already broken above the previous high
+            if current_price <= breakout_level:
+                logging.info(f"{ticker} - Current price (₹{current_price:.2f}) is below previous hourly high (₹{breakout_level:.2f}), skipping")
+                continue
+            
+            # Now that price is above breakout, place limit order at previous high
+            # This ensures we enter on a pullback to the breakout level
+            limit_price = round(breakout_level, 2)  # Place order exactly at previous high
             
             # Calculate position size
             quantity = calculate_position_size(portfolio_value, limit_price)
             
-            # Calculate stop loss (2% below limit price)
+            # Calculate stop loss (2% below entry)
             stop_loss = round(limit_price * 0.98, 2)
             
-            # Place LIMIT order at 0.5% above breakout level
-            logging.info(f"{ticker} - Placing limit order at ₹{limit_price:.2f} (Previous high: ₹{breakout_level:.2f}, Current: ₹{current_price:.2f})")
+            # Place LIMIT order at breakout level (previous hourly high)
+            logging.info(f"{ticker} - Breakout confirmed! Current: ₹{current_price:.2f} > Previous high: ₹{breakout_level:.2f}")
+            logging.info(f"Placing LIMIT buy order at ₹{limit_price:.2f} (waiting for pullback to breakout level)")
             
-            logging.info(f"Placing LIMIT order for {ticker}: {quantity} shares @ ₹{limit_price:.2f}, SL target: ₹{stop_loss:.2f}")
+            logging.info(f"Order details for {ticker}: {quantity} shares @ ₹{limit_price:.2f}, SL target: ₹{stop_loss:.2f}")
             
             # Use the OrderManager's place_order method with correct parameters
             order_id = order_manager.place_order(

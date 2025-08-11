@@ -20,10 +20,16 @@ The VSR Breakout Trading System (`place_orders_daily_long_vsr.py`) is an automat
   - Days tracked in the system
 
 ### 2. Hourly Breakout Strategy
-- Entry Signal: Previous hourly candle high is breakout level
-- Entry Price: Limit order at previous hourly high + 0.5% buffer
-- Stop Loss: 2% below entry price
-- Product Type: MIS (Margin Intraday Square-off)
+- **Breakout Confirmation**: Current price MUST be above previous hourly high
+- **Entry Signal**: Only place order if breakout is confirmed (current > previous high)
+- **Entry Price**: LIMIT order at exact previous hourly high (wait for pullback)
+- **Stop Loss**: 2% below entry price
+- **Product Type**: MIS (Margin Intraday Square-off)
+
+**Example**:
+- If KCP previous hourly high = ₹215 and current price = ₹202
+- No order placed (202 < 215, breakout not confirmed)
+- If current price rises to ₹217, then place LIMIT buy at ₹215
 
 ### 3. Position Sizing
 - Fixed 1% of total portfolio value per position
