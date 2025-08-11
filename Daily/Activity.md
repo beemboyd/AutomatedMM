@@ -19,6 +19,28 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-11 12:16 IST - [Claude]
+**Changes:**
+- Enhanced VSR Telegram alert service to filter out negative momentum tickers
+- Added automatic loading of short momentum tickers from multiple sources
+- Implemented filtering logic to prevent high momentum alerts for tickers in short positions
+- Added hourly refresh of negative momentum ticker list
+
+**Impact:**
+- Telegram notifications now exclude tickers that are in negative/short momentum
+- Prevents conflicting signals where a ticker might appear in both long and short lists
+- Loads negative momentum tickers from:
+  - vsr_ticker_persistence_hourly_short.json (33 tickers loaded)
+  - latest_short_momentum.json
+  - Short_Reversal_Daily scanner results
+- Filters applied to both hourly and daily high momentum alerts
+- Automatic refresh every hour to keep list current
+
+**Files Modified:**
+- /Daily/alerts/vsr_telegram_service_enhanced.py - Added negative momentum filtering
+
+---
+
 ### 2025-08-11 11:10 IST - [Claude]
 **Changes:**
 - Created VSR Efficiency Analyzer program (vsr_efficiency_analyzer.py)

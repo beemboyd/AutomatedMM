@@ -26,6 +26,9 @@ class EnhancedVSRTelegramService(EnhancedVSRTracker):
     
     def __init__(self, user_name='Sai'):
         """Initialize Enhanced VSR Telegram Service"""
+        # Set base_dir before calling parent init
+        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
         super().__init__(user_name)
         
         # Load configuration
@@ -47,13 +50,22 @@ class EnhancedVSRTelegramService(EnhancedVSRTracker):
         self.hourly_momentum_threshold = telegram_config.getfloat('hourly_momentum_threshold', 2.0)
         self.hourly_vsr_threshold = telegram_config.getfloat('hourly_vsr_threshold', 2.0)
         
+        # Short alerts configuration
+        self.enable_short_alerts = telegram_config.getboolean('enable_short_alerts', True)
+        
         # Track alerts separately for hourly and daily
         self.hourly_alerts_sent = set()
         self.daily_alerts_sent = set()
+        
+        # Load negative momentum (short) tickers to filter
+        self.negative_momentum_tickers = set()
+        self._load_negative_momentum_tickers()
         self.hourly_batch = []
         self.daily_batch = []
         self.last_hourly_batch_time = datetime.now()
         self.last_daily_batch_time = datetime.now()
+        self.daily_alerts_count = 0
+        self.hourly_alerts_count = 0
         
         # Hourly scan tracking
         self.last_hourly_scan_time = None
@@ -76,6 +88,49 @@ class EnhancedVSRTelegramService(EnhancedVSRTracker):
             else:
                 self.logger.error("❌ Telegram connection failed")
     
+    def _load_negative_momentum_tickers(self):
+        """Load tickers that are in negative/short momentum"""
+        try:
+            # Load from short momentum persistence file
+            short_persist_file = os.path.join(self.base_dir, 'data', 'short_momentum', 'vsr_ticker_persistence_hourly_short.json')
+            if os.path.exists(short_persist_file):
+                with open(short_persist_file, 'r') as f:
+                    data = json.load(f)
+                    tickers = data.get('tickers', {})
+                    self.negative_momentum_tickers = set(tickers.keys())
+                    self.logger.info(f"Loaded {len(self.negative_momentum_tickers)} negative momentum tickers to filter")
+            
+            # Also load from latest short momentum data
+            latest_short_file = os.path.join(self.base_dir, 'data', 'short_momentum', 'latest_short_momentum.json')
+            if os.path.exists(latest_short_file):
+                with open(latest_short_file, 'r') as f:
+                    data = json.load(f)
+                    short_tickers = data.get('tickers', [])
+                    if short_tickers:
+                        self.negative_momentum_tickers.update(short_tickers)
+                        
+            # Load from short reversal daily results
+            short_results_dir = os.path.join(self.base_dir, 'results-s')
+            if os.path.exists(short_results_dir):
+                today_str = datetime.now().strftime('%Y%m%d')
+                short_files = glob.glob(os.path.join(short_results_dir, f'Short_Reversal_Daily_{today_str}*.xlsx'))
+                
+                for short_file in short_files[-1:]:  # Latest file only
+                    try:
+                        df = pd.read_excel(short_file)
+                        if 'Ticker' in df.columns:
+                            short_tickers = df['Ticker'].tolist()
+                            self.negative_momentum_tickers.update(short_tickers)
+                    except Exception as e:
+                        self.logger.debug(f"Error loading short file {short_file}: {e}")
+            
+            if self.negative_momentum_tickers:
+                self.logger.info(f"Total negative momentum tickers to filter: {len(self.negative_momentum_tickers)}")
+                self.logger.debug(f"Negative momentum tickers: {sorted(self.negative_momentum_tickers)}")
+                
+        except Exception as e:
+            self.logger.error(f"Error loading negative momentum tickers: {e}")
+    
     def _load_config(self):
         """Load configuration from config.ini"""
         config_path = os.path.join(self.base_dir, 'config.ini')
@@ -96,6 +151,8 @@ class EnhancedVSRTelegramService(EnhancedVSRTracker):
             telegram_section['hourly_momentum_threshold'] = '2.0'
         if 'hourly_vsr_threshold' not in telegram_section:
             telegram_section['hourly_vsr_threshold'] = '2.0'
+        if 'enable_short_alerts' not in telegram_section:
+            telegram_section['enable_short_alerts'] = 'yes'
         
         # Save updated config
         with open(config_path, 'w') as f:
@@ -110,6 +167,7 @@ class EnhancedVSRTelegramService(EnhancedVSRTracker):
 📊 <b>Configuration:</b>
 • Hourly Alerts: {'✅ ON' if self.hourly_alerts_enabled else '❌ OFF'}
 • Daily Alerts: {'✅ ON' if self.daily_alerts_enabled else '❌ OFF'}
+• Short Side Alerts: {'✅ ON' if self.enable_short_alerts else '❌ OFF'}
 
 📈 <b>Hourly Thresholds:</b>
 • Momentum: {self.hourly_momentum_threshold}%
@@ -172,10 +230,22 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
             
             for _, row in df.iterrows():
                 ticker = row.get('Ticker', '')
+                
+                # Filter out negative momentum tickers from hourly alerts
+                if ticker in self.negative_momentum_tickers:
+                    self.logger.debug(f"Filtering out {ticker} from hourly alert - ticker is in negative momentum list")
+                    continue
+                
                 vsr_ratio = row.get('VSR_Ratio', 0)
                 momentum = row.get('Momentum%', 0)
                 pattern = row.get('Pattern', '')
                 score = row.get('Score', 0)
+                direction = row.get('Direction', 'LONG')
+                
+                # Filter out short signals if disabled
+                if not self.enable_short_alerts and direction == 'SHORT':
+                    self.logger.debug(f"Skipping SHORT signal for {ticker} - short alerts disabled")
+                    continue
                 
                 # Check hourly thresholds
                 if (vsr_ratio >= self.hourly_vsr_threshold and 
@@ -284,6 +354,21 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
         self.telegram.send_message(message)
         self.logger.info(f"Sent hourly batch alert with {len(sorted_batch)} tickers")
     
+    def check_high_momentum(self, result):
+        """Check if result has high momentum worthy of alert"""
+        momentum = abs(result.get('momentum', 0))
+        score = result.get('score', 0)
+        ticker = result.get('ticker', '')
+        
+        # Filter out negative momentum tickers from high momentum (long) alerts
+        direction = result.get('direction', 'LONG')
+        if direction == 'LONG' and ticker in self.negative_momentum_tickers:
+            self.logger.debug(f"Filtering out {ticker} from high momentum alert - ticker is in negative momentum list")
+            return False
+        
+        # Check momentum and score thresholds
+        return momentum >= self.momentum_threshold and score >= self.score_threshold
+    
     def log_result(self, result):
         """Override to add daily Telegram alerts"""
         # Call parent method for standard logging
@@ -292,6 +377,13 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
         # Only process daily alerts if enabled
         if not self.daily_alerts_enabled:
             return
+        
+        # Filter out short signals if disabled
+        if not self.enable_short_alerts:
+            direction = result.get('direction', 'LONG')
+            if direction == 'SHORT':
+                self.logger.debug(f"Skipping SHORT signal for {result.get('ticker', '')} - short alerts disabled")
+                return
         
         # Check for high momentum (daily)
         if self.check_high_momentum(result):
@@ -342,12 +434,21 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
     def run_monitoring_cycle(self):
         """Run a complete monitoring cycle"""
         try:
+            # Refresh negative momentum tickers periodically (every hour)
+            current_time = datetime.now()
+            if not hasattr(self, '_last_refresh_time'):
+                self._last_refresh_time = current_time
+            
+            if (current_time - self._last_refresh_time).total_seconds() >= 3600:  # Every hour
+                self._load_negative_momentum_tickers()
+                self._last_refresh_time = current_time
+            
             # Check hourly VSR scans
             self.check_hourly_vsr_scans()
             
             # Run normal VSR tracking (daily)
             if self.daily_alerts_enabled:
-                super().run_monitoring_cycle()
+                super().run_tracking_cycle()
             
             # Send any pending batch alerts
             if self.batch_alerts:
