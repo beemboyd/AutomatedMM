@@ -311,20 +311,32 @@ def check_existing_positions(tickers: List[str], state_manager, data_handler) ->
         
     return existing
 
-def display_candidates(candidates: List[Dict]) -> List[Dict]:
+def display_candidates(candidates: List[Dict], portfolio_value: float = None, data_handler=None) -> List[Dict]:
     """Display candidate tickers and allow user to exclude some"""
     print("\n" + "="*80)
-    print("VSR BREAKOUT CANDIDATES")
+    print("VSR BREAKOUT CANDIDATES (MIS - Intraday)")
     print("="*80)
-    print(f"{'No.':<5} {'Ticker':<12} {'Score':<8} {'Momentum %':<12} {'VSR':<8} {'Price':<10} {'Days':<6}")
+    print(f"{'No.':<5} {'Ticker':<12} {'Score':<8} {'Momentum %':<12} {'Price':<10} {'Est. Qty':<10} {'Capital':<15}")
     print("-"*80)
+    
+    capital_per_position = portfolio_value * (POSITION_SIZE_PERCENT / 100) if portfolio_value else 0
     
     for i, candidate in enumerate(candidates, 1):
+        # Calculate estimated quantity for this ticker
+        est_quantity = int(capital_per_position / candidate['price']) if portfolio_value else 0
+        est_capital = est_quantity * candidate['price']
+        
         print(f"{i:<5} {candidate['ticker']:<12} {candidate['score']:<8} "
-              f"{candidate['momentum']:<12.2f} {candidate['vsr_ratio']:<8.2f} "
-              f"₹{candidate['price']:<10.2f} {candidate['days_tracked']:<6}")
+              f"{candidate['momentum']:<12.2f} ₹{candidate['price']:<10.2f} "
+              f"{est_quantity:<10} ₹{est_capital:<15,.0f}")
     
     print("-"*80)
+    
+    # Show capital deployment summary
+    if portfolio_value:
+        print(f"\n💰 Capital Deployment: ₹{capital_per_position:,.2f} per position (1% of ₹{portfolio_value:,.2f})")
+        print(f"📊 Maximum Positions: {MAX_POSITIONS} (Total Max Deployment: ₹{capital_per_position * MAX_POSITIONS:,.2f})")
+        print(f"📈 Product Type: MIS (Margin Intraday Square-off - Auto square-off at 3:20 PM)")
     
     # Ask for exclusions
     exclude_input = input("\nEnter ticker numbers to EXCLUDE (comma-separated, or press Enter for none): ").strip()
@@ -385,14 +397,22 @@ def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_
             # Calculate position size
             quantity = calculate_position_size(portfolio_value, limit_price)
             
+            # Calculate capital deployment
+            capital_deployed = quantity * limit_price
+            capital_percentage = (capital_deployed / portfolio_value) * 100
+            
             # Calculate stop loss (2% below entry)
             stop_loss = round(limit_price * 0.98, 2)
+            potential_loss = quantity * (limit_price - stop_loss)
             
             # Place LIMIT order at breakout level (previous hourly high)
             logging.info(f"{ticker} - Breakout confirmed! Current: ₹{current_price:.2f} > Previous high: ₹{breakout_level:.2f}")
             logging.info(f"Placing LIMIT buy order at ₹{limit_price:.2f} (waiting for pullback to breakout level)")
             
-            logging.info(f"Order details for {ticker}: {quantity} shares @ ₹{limit_price:.2f}, SL target: ₹{stop_loss:.2f}")
+            logging.info(f"Order details for {ticker}:")
+            logging.info(f"  - Quantity: {quantity} shares @ ₹{limit_price:.2f}")
+            logging.info(f"  - Capital Deployed: ₹{capital_deployed:,.2f} ({capital_percentage:.2f}% of portfolio)")
+            logging.info(f"  - Stop Loss: ₹{stop_loss:.2f} (Max Risk: ₹{potential_loss:,.2f})")
             
             # Use the OrderManager's place_order method with correct parameters
             order_id = order_manager.place_order(
@@ -499,8 +519,11 @@ def main():
         print("❌ No new positions to take")
         return
     
-    # Display candidates and get user selection
-    final_candidates = display_candidates(vsr_tickers[:10])  # Show top 10
+    # Get portfolio value for display purposes
+    portfolio_value = get_portfolio_value(data_handler)
+    
+    # Display candidates and get user selection with portfolio info
+    final_candidates = display_candidates(vsr_tickers[:10], portfolio_value, data_handler)  # Show top 10
     
     if not final_candidates:
         print("No tickers selected for trading")
@@ -526,9 +549,14 @@ def main():
     print("="*80)
     
     if orders:
-        print(f"✅ Successfully placed {len(orders)} limit order(s):")
+        print(f"✅ Successfully placed {len(orders)} MIS limit order(s):")
+        total_capital = 0
         for order in orders:
-            print(f"  - {order['ticker']}: {order['quantity']} shares @ ₹{order['entry_price']:.2f} (Breakout: ₹{order['breakout_level']:.2f})")
+            order_capital = order['quantity'] * order['entry_price']
+            total_capital += order_capital
+            print(f"  - {order['ticker']}: {order['quantity']} shares @ ₹{order['entry_price']:.2f}")
+            print(f"    Capital: ₹{order_capital:,.2f} | Breakout: ₹{order['breakout_level']:.2f} | SL: ₹{order['stop_loss']:.2f}")
+        print(f"\n💰 Total Capital Deployed: ₹{total_capital:,.2f}")
     else:
         print("❌ No orders were placed")
     
