@@ -42,6 +42,11 @@ The following files add the parent India-TS directory to Python's sys.path:
   - Imports: `from ML.Frequent_ticker_performance import FrequentTickerPerformanceAnalyzer`
   - Also adds ML directory to sys.path: `sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'ML'))`
 
+#### From user_context_manager (in parent directory):
+- `/trading/place_orders_daily_long_vsr.py`:
+  - Imports: `from user_context_manager import get_context_manager, get_user_data_handler, get_user_state_manager, get_user_order_manager, UserCredentials`
+  - Manages multi-user authentication and order placement
+
 ### 3. Hardcoded Absolute Paths
 Several files contain hardcoded absolute paths that reference the Daily directory:
 
