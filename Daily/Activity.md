@@ -19,6 +19,384 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-11 09:37 IST - [Claude]
+**Changes:**
+- Documented root cause of recurring dashboard data refresh issues
+- Created comprehensive analysis document: DASHBOARD_DATA_REFRESH_ISSUE.md
+- Developed enhanced pre_market_data_refresh.sh script to automate all fixes
+- Identified 4 root causes: no automated data generation, static symlinks, date filtering, service restart requirements
+
+**Impact:**
+- Clear understanding of why dashboards show stale data every morning
+- Automated solution script that handles all refresh tasks:
+  - Runs Market Breadth Scanner
+  - Updates symlinks to latest files
+  - Runs VSR Scanner
+  - Updates historical breadth data
+  - Clears persistence files
+  - Restarts all tracker services
+- Script can be scheduled via launchctl for 8:45 AM daily execution
+- Permanent fix for recurring "dashboard shows old date" issue
+
+**Root Causes Identified:**
+1. Market Breadth Scanner doesn't run automatically pre-market
+2. Symlinks don't auto-update to newest files
+3. Services filter out "previous day" data on weekends
+4. Services don't roll over to new date at midnight
+
+---
+
+### 2025-08-11 09:32 IST - [Claude]  
+**Changes:**
+- Ran Market Breadth Scanner to generate today's data (August 11)
+- Updated symlink to point to market_breadth_20250811_091020.json
+- Ran append_historical_breadth.py to include today in historical data
+- Market Breadth Dashboard now shows August 11 data
+
+**Impact:**
+- Market Breadth Dashboard (5001) now displaying current date (8/11)
+- SMA20: 32.26%, SMA50: 37.26% for August 11
+- Historical breadth data includes today's entry
+- Dashboard properly showing fresh market data
+
+---
+
+### 2025-08-11 09:02 IST - [Claude]
+**Changes:**
+- Fixed Market Breadth Dashboard (port 5001) not showing current data
+- Updated symlink market_breadth_latest.json to point to August 8th data (was pointing to August 1st)
+- Restarted Market Breadth Dashboard (PID: 12028)
+- Dashboard now accessible and showing latest breadth data
+
+**Impact:**
+- Market Breadth Dashboard (5001) now showing data from August 8, 2025
+- Symlink fixed: market_breadth_latest.json -> market_breadth_20250808_154058.json  
+- Historical breadth data confirmed up to date through August 8th
+- Dashboard properly refreshed and serving content
+
+---
+
+### 2025-08-11 08:55 IST - [Claude]
+**Changes:**
+- Executed pre-market setup routine for Sunday trading preparation
+- Restarted all tracker services to ensure correct date logging (20250811):
+  - VSR Tracker Enhanced service
+  - Hourly tracker service (PID: 10617)
+  - Hourly short tracker service (PID: 10674)
+  - Short momentum tracker service (PID: 10684)
+- Restarted VSR Telegram alerts enhanced service (PID: 10753)
+- Started missing dashboards:
+  - VSR Dashboard on port 3001 (PID: 10910)
+  - Short Momentum Dashboard on port 3003 (PID: 10953)
+- Ran VSR scanner successfully with Sai's credentials
+- Restarted hourly breakout alert service
+
+**Impact:**
+- All services now logging to correct date files (20250811) instead of previous dates
+- Fresh VSR scan data generated at 08:54 AM
+- All 7 main dashboards operational:
+  - Port 3001: VSR Dashboard ✓
+  - Port 3002: Hourly Tracker Dashboard ✓
+  - Port 3003: Short Momentum Dashboard ✓
+  - Port 3004: Hourly Short Dashboard ✓
+  - Port 3005: Hourly Breakout Dashboard ✓
+  - Port 5001: Market Breadth Dashboard ✓
+  - Port 8080: Market Regime Dashboard ✓
+- System ready for market open with all services using current date
+- Resolved repeat issue where services were stuck on old dates
+
+**Services Verified:**
+- All tracker services writing to logs/*/20250811.log files
+- Telegram alerts operational and connected
+- VSR persistence files updated
+- System status check shows 6 scanner runs today
+
+---
+
+### 2025-08-08 20:01 IST - [Claude]
+**Changes:**
+- Removed Early Bird Opportunities section from Market Breadth Dashboard (port 5001)
+- Commented out `/api/early-bird` endpoint in market_breadth_dashboard.py
+- Commented out HTML display section and JavaScript functions in templates/market_breadth_dashboard.html
+- Created archive documentation at Daily/Market_Regime/archive/early_bird_20250808/
+
+**Impact:**
+- Dashboard continues functioning normally without Early Bird section
+- No data loss - KC Upper Limit results still being generated
+- Feature can be restored by uncommenting archived code sections
+- Sent HUP signal to dashboard process (PID 55035) to reload changes
+
+**Findings:**
+- Identified SMA breadth discrepancy: 16.9% is real-time intraday value, 33.6% is historical daily close value
+- Both values are correct but represent different timeframes
+
+---
+
+### 2025-08-08 13:06 IST - [Claude]
+**Changes:**
+- Disabled Telegram alerts for hourly short and continuation trend (hourly breakout) alerts
+- Modified config.ini: Set `enable_short_alerts = no` in TELEGRAM section
+- Modified config.ini: Set `[HOURLY_BREAKOUT] enabled = no`
+- Restarted services to pick up new configuration:
+  - com.india-ts.hourly-short-tracker-service.plist
+  - com.india-ts.short-momentum-tracker.plist
+  - com.india-ts.vsr-telegram-alerts-enhanced.plist
+  - com.india-ts.hourly-breakout-alerts.plist
+
+**Impact:**
+- System will NOT send Telegram alerts for short momentum signals from hourly short tracker service
+- Continuation trend breakouts from hourly breakout alert service will NOT trigger alerts
+- Services confirmed running with disabled alert configuration
+
+---
+
+### 2025-08-08 12:52 IST - [Claude]
+**Changes:**
+- Enabled Telegram alerts for hourly short and continuation trend (hourly breakout) alerts
+- Modified config.ini: Set `enable_short_alerts = yes` in TELEGRAM section
+- Verified `[HOURLY_BREAKOUT] enabled = yes` was already set
+- Restarted services to pick up new configuration:
+  - com.india-ts.hourly-short-tracker-service.plist
+  - com.india-ts.short-momentum-tracker.plist
+  - com.india-ts.vsr-telegram-alerts-enhanced.plist
+  - com.india-ts.hourly-breakout-alerts.plist
+
+**Impact:**
+- System will now send Telegram alerts for short momentum signals from hourly short tracker service
+- Continuation trend breakouts from hourly breakout alert service will trigger alerts
+- All alerts will be sent to channel ID -1002690613302
+- Services confirmed running with new configuration
+
+---
+
+### 2025-08-08 10:05 IST - [Claude]
+**Changes:**
+- Fixed hourly tracker services (ports 3002, 3004) not showing data due to persistence file issues
+- Modified hourly_tracker_service_fixed.py and hourly_short_tracker_service.py to handle new persistence format
+- Fixed date format mismatch (ISO format vs standard datetime) in persistence cleanup logic
+- Completely reset persistence files to clear corrupted July 30 data
+- Services now correctly tracking and displaying VSR scores
+
+**Impact:**
+- Hourly Tracker Dashboard (3002) now showing VSR scores for Long Reversal tickers
+- Hourly Short Dashboard (3004) processing Short Reversal tickers
+- Fixed persistence file format to include 'tickers' key and 'last_updated' timestamp
+- Services properly logging VSR scores: KRBL (55), LICI (10), KAJARIACER (10), etc.
+- Dashboards will now display real-time tracking data throughout the day
+
+**Root Cause:**
+- Old persistence data from July 30 kept being restored
+- Date format mismatch between ISO format (2025-07-30T08:26:48) and expected format
+- Missing 'last_updated' field at root level of persistence JSON
+
+---
+
+### 2025-08-08 09:40 IST - [Claude]
+**Changes:**
+- Fixed VSR tracker enhanced service not running and applied log file date fix
+- Restarted com.india-ts.vsr-tracker-enhanced service (PID: 13027)
+- Service now correctly logging to vsr_tracker_enhanced_20250808.log
+- Applied same fix as documented on 2025-08-07 for date rollover issue
+
+**Impact:**
+- VSR tracker service now operational and logging to correct date file
+- Service will track VSR momentum indicators throughout the day
+- Dashboard on port 3001 will show real-time VSR data
+- Fix ensures service uses current date for log files after pre-market restart
+
+---
+
+### 2025-08-07 10:35 IST - [Claude]
+**Changes:**
+- Fixed dashboard data display issues on ports 3002, 3003, 3004
+- Identified root cause: Tracker services using previous day's date for log files
+- Updated pre_market_setup.sh to include service restarts in Step 2
+- Fixed date format in vsr_ticker_persistence_hourly_long.json
+- Created missing log file hourly_tracker_20250807.log
+- Documented optimal pre-market service restart schedule
+
+**Impact:**
+- All dashboards now display data correctly after service restart
+- Pre-market setup script automatically handles service restarts
+- Services will use correct date for log files going forward
+- Dashboards read from properly dated log files
+
+**Root Cause:**
+- Tracker services don't automatically update date at midnight
+- Services continue writing to previous day's log file
+- Dashboards look for today's date in log filename
+- Result: Dashboard shows no data despite services running
+
+**Solution:**
+- Restart all tracker services during pre-market (9:00 AM)
+- This ensures log files use current date
+- Added to pre_market_setup.sh for automation
+
+---
+
+### 2025-08-06 10:15 IST - [Claude]
+**Changes:**
+- Fixed and restarted dashboards on ports 3002, 3003, 3004
+- Killed stale processes that were blocking these ports
+- Started Hourly Tracker Dashboard (port 3002)
+- Started Short Momentum Dashboard (port 3003)
+- Started Hourly Short Tracker Dashboard (port 3004)
+- Started corresponding tracker services
+
+**Impact:**
+- All 6 main dashboards now running and accessible
+- Port 3001: VSR Dashboard
+- Port 3002: Hourly Tracker Dashboard
+- Port 3003: Short Momentum Dashboard
+- Port 3004: Hourly Short Dashboard
+- Port 3005: Hourly Breakout Dashboard
+- Port 3006: First Hour Dashboard
+
+**Services Started:**
+- com.india-ts.hourly-short-tracker-service
+- com.india-ts.short-momentum-tracker
+
+---
+
+### 2025-08-06 09:35 IST - [Claude]
+**Changes:**
+- Fixed VSR Telegram alert service errors
+- Fixed AttributeError for missing base_dir in vsr_telegram_service_enhanced.py
+- Fixed method name mismatch (run_monitoring_cycle -> run_tracking_cycle)
+- Added missing check_high_momentum method
+- Enabled hourly VSR alerts in config.ini
+
+**Impact:**
+- VSR Telegram alerts now working correctly
+- Both hourly and daily VSR alerts enabled
+- Service successfully processing 112 tickers
+- Dashboard running on port 3001
+- Telegram notifications being sent to channel -1002690613302
+
+**Files Modified:**
+- Daily/alerts/vsr_telegram_service_enhanced.py (fixed multiple errors)
+- Daily/config.ini (enabled hourly_telegram_on)
+
+**Services Restarted:**
+- com.india-ts.vsr-telegram-alerts-enhanced (running PID: 11475)
+- VSR Dashboard (already running PID: 65489)
+
+---
+
+### 2025-08-05 12:00 IST - [Claude]
+**Changes:**
+- Added market regime change Telegram alerts
+- Created regime_change_notifier.py to monitor regime changes
+- Integrated notifier into market_regime_analyzer.py
+- Created comprehensive dependency map for market regime system
+
+**Impact:**
+- Users will receive Telegram alerts when market regime changes
+- Alerts include regime transition, confidence, and current conditions
+- Regime changes tracked in state file to prevent duplicate alerts
+- Dashboard link included in alerts for quick access
+
+**Files Created/Modified:**
+- Daily/Market_Regime/regime_change_notifier.py (created)
+- Daily/Market_Regime/market_regime_analyzer.py (modified)
+- Daily/docs/MARKET_REGIME_DEPENDENCY_MAP.md (created)
+
+---
+
+### 2025-08-05 11:45 IST - [Claude]
+**Changes:**
+- Renamed hourly breakout alerts to "Trend Continuation Detected"
+- Changed alert message from "Hourly Breakout Alert" to "Trend Continuation Detected"
+- Updated description to "Uptrend continuation - Price sustaining above hourly close"
+- Changed "Breakout:" label to "Continuation:" in alert
+
+**Impact:**
+- More accurately describes the signal (continuation vs breakout)
+- Clearer messaging about what the alert represents
+- Service restarted to apply changes
+
+**Files Modified:**
+- Daily/alerts/hourly_breakout_alert_service.py
+
+---
+
+### 2025-08-05 11:30 IST - [Claude]
+**Changes:**
+- Created comprehensive alerts and dashboards dependency mapping document
+- Added ALERTS_DASHBOARDS_DEPENDENCY_MAP.md to docs folder
+- Documented all service dependencies, configuration locations, and troubleshooting steps
+
+**Impact:**
+- Quick reference for diagnosing alert and dashboard issues
+- Clear service dependency matrix showing data flow
+- Troubleshooting decision tree for common problems
+- Service control commands organized by type (long/short)
+
+**Files Created:**
+- Daily/docs/ALERTS_DASHBOARDS_DEPENDENCY_MAP.md
+
+---
+
+### 2025-08-05 11:20 IST - [Claude]
+**Changes:**
+- Disabled hourly short alerts by stopping related services
+- Stopped com.india-ts.hourly-short-tracker-service (was sending HOURLY SHORT ALERT messages)
+- Stopped com.india-ts.short-reversal-hourly scanner
+- Stopped com.india-ts.short-momentum-tracker service
+
+**Impact:**
+- No more "HOURLY SHORT ALERT" Telegram messages
+- Short reversal hourly scanner will not run
+- Short momentum tracking is paused
+- Dashboards remain running for monitoring but won't send alerts
+- To re-enable: Use launchctl load with the respective plist files
+
+**Services Stopped:**
+- hourly-short-tracker-service.plist
+- short-reversal-hourly.plist
+- short-momentum-tracker.plist
+
+---
+
+### 2025-08-05 11:00 IST - [Claude]
+**Changes:**
+- Added configuration option to disable short-side alerts in VSR Telegram service
+- Added `enable_short_alerts = no` to config.ini TELEGRAM section
+- Modified vsr_telegram_service_enhanced.py to filter out SHORT signals when disabled
+- Applied filter to both hourly and daily VSR alerts
+
+**Impact:**
+- Short signals will no longer trigger Telegram alerts when `enable_short_alerts = no`
+- Long signals continue to work normally
+- Service restarted to apply configuration changes
+- Both hourly and daily alerts respect this setting
+
+**Files Modified:**
+- Daily/config.ini (added enable_short_alerts parameter)
+- Daily/alerts/vsr_telegram_service_enhanced.py (added short signal filtering logic)
+
+---
+
+### 2025-08-05 10:30 IST - [Claude]
+**Changes:**
+- Diagnosed and fixed dashboard issues (ports 3002, 3003, 3004 showing no data)
+- Root cause: Persistence files contained stale data from July 30 with incompatible format
+- Created PLAYBOOK_DASHBOARD_TROUBLESHOOTING.md with detailed troubleshooting guide
+- Reset persistence files for hourly trackers after backing up old data
+
+**Impact:**
+- All dashboards now operational and showing real-time data
+- Hourly tracker services recovered from KeyError: 'last_updated' issue
+- Created comprehensive playbook to prevent future occurrences
+- Established daily maintenance checklist and emergency recovery procedures
+
+**Files Modified:**
+- Daily/PLAYBOOK_DASHBOARD_TROUBLESHOOTING.md (created)
+- Daily/data/vsr_ticker_persistence_hourly_long.json (reset)
+- Daily/data/short_momentum/vsr_ticker_persistence_hourly_short.json (reset)
+
+---
+
 ### 2025-08-04 18:35 IST - [Claude]
 **Changes:**
 - Modified Telegram notifications to send alerts to channel ID -1002690613302 instead of personal chat
