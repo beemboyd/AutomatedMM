@@ -247,6 +247,11 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                     self.logger.debug(f"Skipping SHORT signal for {ticker} - short alerts disabled")
                     continue
                 
+                # Filter out tickers with negative momentum
+                if momentum < 0:
+                    self.logger.debug(f"Filtering out {ticker} - negative momentum {momentum:.1f}%")
+                    continue
+                    
                 # Check hourly thresholds
                 if (vsr_ratio >= self.hourly_vsr_threshold and 
                     momentum >= self.hourly_momentum_threshold and

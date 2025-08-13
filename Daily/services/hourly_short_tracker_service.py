@@ -513,7 +513,11 @@ def main():
     
     args = parser.parse_args()
     
-    service = HourlyShortTrackerService(args.user, args.interval)
+    # Check if short alerts are enabled in config
+    config = load_daily_config(args.user)
+    enable_telegram = config.get('TELEGRAM', 'enable_short_alerts', fallback='yes').lower() == 'yes'
+    
+    service = HourlyShortTrackerService(args.user, args.interval, enable_telegram=enable_telegram)
     service.run()
 
 

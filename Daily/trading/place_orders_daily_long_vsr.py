@@ -207,21 +207,22 @@ def fetch_vsr_tickers() -> List[Dict]:
         logging.info("Falling back to JSON file...")
         return fetch_vsr_tickers_from_file()
 
-def get_hourly_breakout_level(ticker: str, data_handler) -> Optional[float]:
+def get_hourly_breakout_level(ticker: str, data_handler, lookback_candles: int = 4) -> Optional[float]:
     """
-    Get the high of the previous hourly candle for breakout entry
+    Get the HIGHEST high from the previous 4 hourly candles
     
     Args:
         ticker: Stock symbol
         data_handler: Data handler instance
+        lookback_candles: Number of previous hourly candles to check (default: 4)
         
     Returns:
-        Previous hourly high price or None
+        Highest hourly high price from the previous 4 candles or None
     """
     try:
-        # Get current time and 1 day ago for hourly data
+        # Get current time and fetch last 2 days of hourly data to ensure we have enough candles
         end_date = datetime.datetime.now()
-        start_date = end_date - datetime.timedelta(days=1)
+        start_date = end_date - datetime.timedelta(days=2)
         
         # Fetch hourly data
         hourly_data = data_handler.fetch_historical_data(
@@ -231,16 +232,37 @@ def get_hourly_breakout_level(ticker: str, data_handler) -> Optional[float]:
             to_date=end_date.strftime('%Y-%m-%d')
         )
         
-        if hourly_data is None or hourly_data.empty or len(hourly_data) < 2:
+        if hourly_data is None or hourly_data.empty:
+            logging.warning(f"No hourly data available for {ticker}")
+            return None
+        
+        # Remove the current incomplete candle (last row)
+        if len(hourly_data) > 1:
+            completed_candles = hourly_data.iloc[:-1]  # All except current candle
+        else:
             logging.warning(f"Insufficient hourly data for {ticker}")
             return None
             
-        # Get the previous completed hour (second to last row)
-        prev_hour = hourly_data.iloc[-2]
-        prev_high = float(prev_hour.get('High', 0))
+        # Get the last 'lookback_candles' completed candles
+        if len(completed_candles) < lookback_candles:
+            logging.warning(f"Only {len(completed_candles)} completed candles available for {ticker}, need {lookback_candles}")
+            recent_candles = completed_candles
+        else:
+            recent_candles = completed_candles.iloc[-lookback_candles:]
         
-        logging.info(f"Previous hourly high for {ticker}: {prev_high}")
-        return prev_high
+        # Find the highest high from these candles
+        highest_high = float(recent_candles['High'].max())
+        
+        logging.info(f"Analysis for {ticker}:")
+        logging.info(f"  Checked last {len(recent_candles)} hourly candles")
+        logging.info(f"  Period: {recent_candles.index[0]} to {recent_candles.index[-1]}")
+        logging.info(f"  Highest high: ₹{highest_high:.2f}")
+        
+        # Log individual candle highs for transparency
+        for idx, (timestamp, row) in enumerate(recent_candles.iterrows(), 1):
+            logging.debug(f"    Candle {idx}: {timestamp} - High: ₹{row['High']:.2f}")
+        
+        return highest_high
         
     except Exception as e:
         logging.error(f"Error getting hourly breakout level for {ticker}: {e}")
@@ -384,15 +406,14 @@ def place_vsr_orders(candidates: List[Dict], order_manager, data_handler, state_
                 logging.warning(f"Could not get current price for {ticker}, skipping")
                 continue
             
-            # IMPORTANT: Check if current price is above previous hourly high
-            # Only place order if we've already broken above the previous high
+            # IMPORTANT: Check if current price is above the highest high of previous 4 candles
+            # Only place order if we've already broken above this level
             if current_price <= breakout_level:
-                logging.info(f"{ticker} - Current price (₹{current_price:.2f}) is below previous hourly high (₹{breakout_level:.2f}), skipping")
+                logging.info(f"{ticker} - Current price (₹{current_price:.2f}) is below highest high of last 4 candles (₹{breakout_level:.2f}), skipping")
                 continue
             
-            # Now that price is above breakout, place limit order at previous high
-            # This ensures we enter on a pullback to the breakout level
-            limit_price = round(breakout_level, 2)  # Place order exactly at previous high
+            # Now that price is above breakout, place limit order at 0.5% above highest high
+            limit_price = round(breakout_level * 1.005, 2)  # Add 0.5% to highest high
             
             # Calculate position size
             quantity = calculate_position_size(portfolio_value, limit_price)

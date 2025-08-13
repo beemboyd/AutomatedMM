@@ -19,6 +19,36 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ## Activity Log
 
+### 2025-08-13 16:35 IST - [Claude]
+**Changes:**
+- Fixed negative momentum filtering in VSR Telegram alerts
+- Added filter to skip tickers with momentum < 0% in hourly alerts (line 251-253 in vsr_telegram_service_enhanced.py)
+- Manually ran hourly scanners to populate dashboard data
+- Updated SMA20 and SMA50 breadth data (35.76% and 40.76% respectively, Downtrend regime)
+- Prepared for system restart to clear memory issues
+
+**Impact:**
+- VSR Telegram alerts now properly filter out negative momentum tickers like SUZLON
+- Hourly dashboards (ports 3002 and 3004) now showing proper ticker data
+- Market breadth data updated for EOD analysis
+- All services and dashboards prepared for restart
+
+**Issues Resolved:**
+- JISLJALEQS not alerting: Ticker not in scanner results despite 7.97% momentum
+- Negative momentum tickers appearing in alerts: Fixed with explicit < 0% filter
+- Hourly dashboards showing no tickers: Fixed by manually running scanners
+
+**Services Running Before Restart:**
+- VSR Dashboard (Port 3001)
+- Hourly Tracker Dashboard (Port 3002) 
+- Short Momentum Dashboard (Port 3003)
+- Hourly Short Tracker Dashboard (Port 3004)
+- VSR Telegram Enhanced Service (PID 25238)
+- Hourly tracker services
+- Market breadth dashboard (Port 8080)
+
+---
+
 ### 2025-08-11 13:22 IST - [Claude]
 **Changes:**
 - Created new VSR breakout trading script: place_orders_daily_long_vsr.py

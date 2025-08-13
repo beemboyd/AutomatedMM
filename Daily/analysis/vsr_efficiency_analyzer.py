@@ -121,7 +121,7 @@ class VSREfficiencyAnalyzer:
                         continue
                         
                     score = row.get(score_col, 0)
-                    price = row.get('Current Price', row.get('Price', row.get('Close', 0)))
+                    price = row.get('Entry_Price', row.get('Current Price', row.get('Price', row.get('Close', 0))))
                     
                     # Determine if long or short based on score or other indicators
                     if score > 50:  # High VSR score indicates long opportunity
@@ -171,7 +171,7 @@ class VSREfficiencyAnalyzer:
                 if not ticker:
                     continue
                     
-                price = row.get('Current Price', row.get('Price', row.get('Close', 0)))
+                price = row.get('Entry_Price', row.get('Current Price', row.get('Price', row.get('Close', 0))))
                 score = row.get('VSR Score', row.get('Score', row.get('Signal Strength', 0)))
                 
                 if ticker not in target_dict:
@@ -272,10 +272,10 @@ class VSREfficiencyAnalyzer:
                 row['Latest Alert Time'] = latest['time'].strftime('%Y-%m-%d %H:%M:%S') if isinstance(latest['time'], datetime) else str(latest['time'])
                 row['Latest Price'] = round(latest['price'], 2) if latest['price'] else 0
                 
-                # Calculate price change
+                # Calculate price change (as decimal for percentage format)
                 if data['first_price'] and latest['price']:
-                    price_change = ((latest['price'] - data['first_price']) / data['first_price']) * 100
-                    row['Price Change %'] = round(price_change, 2)
+                    price_change = (latest['price'] - data['first_price']) / data['first_price']
+                    row['Price Change %'] = round(price_change, 4)  # Keep as decimal (0.05 = 5%)
                 else:
                     row['Price Change %'] = 0
             
