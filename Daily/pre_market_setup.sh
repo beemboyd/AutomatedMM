@@ -1,17 +1,37 @@
 #!/bin/bash
 # Pre-Market Setup Script for India-TS
-# Run this after updating access token to ensure system is ready
+# Run this AFTER manually updating access token via loginz.py
 
 cd /Users/maverick/PycharmProjects/India-TS/Daily
 
 echo "=== India-TS Pre-Market Setup ==="
 echo "Time: $(date '+%I:%M %p')"
+echo "Note: Ensure you have already updated access token via loginz.py"
 echo ""
 
-echo "Step 1: Update access token"
-echo "Please run: python3 loginz.py"
-echo "Press Enter after updating config.ini with new token..."
-read
+echo "Step 1: Run Long/Short Reversal scanners first"
+echo "Running Long Reversal Daily scanner..."
+cd scanners && python3 Long_Reversal_Daily.py > /dev/null 2>&1 &
+LONG_PID=$!
+echo "Running Short Reversal Daily scanner..."
+python3 Short_Reversal_Daily.py > /dev/null 2>&1 &
+SHORT_PID=$!
+echo "Waiting for scanners to complete (max 60 seconds)..."
+COUNTER=0
+while [ $COUNTER -lt 60 ]; do
+    if ! ps -p $LONG_PID > /dev/null && ! ps -p $SHORT_PID > /dev/null; then
+        echo "✓ Long/Short Reversal scanners completed"
+        break
+    fi
+    sleep 1
+    COUNTER=$((COUNTER + 1))
+done
+if [ $COUNTER -eq 60 ]; then
+    kill $LONG_PID 2>/dev/null
+    kill $SHORT_PID 2>/dev/null
+    echo "⚠ Scanners took too long, proceeding anyway"
+fi
+cd ..
 
 echo ""
 echo "Step 2: Clean up JSON persistence files"
@@ -45,32 +65,7 @@ launchctl load ~/Library/LaunchAgents/com.india-ts.vsr-tracker-enhanced.plist
 echo "✓ Tracker services restarted"
 
 echo ""
-echo "Step 4: Run Long/Short Reversal scanners first"
-echo "Running Long Reversal Daily scanner..."
-cd scanners && python3 Long_Reversal_Daily.py > /dev/null 2>&1 &
-LONG_PID=$!
-echo "Running Short Reversal Daily scanner..."
-python3 Short_Reversal_Daily.py > /dev/null 2>&1 &
-SHORT_PID=$!
-echo "Waiting for scanners to complete (max 60 seconds)..."
-COUNTER=0
-while [ $COUNTER -lt 60 ]; do
-    if ! ps -p $LONG_PID > /dev/null && ! ps -p $SHORT_PID > /dev/null; then
-        echo "✓ Long/Short Reversal scanners completed"
-        break
-    fi
-    sleep 1
-    COUNTER=$((COUNTER + 1))
-done
-if [ $COUNTER -eq 60 ]; then
-    kill $LONG_PID 2>/dev/null
-    kill $SHORT_PID 2>/dev/null
-    echo "⚠ Scanners took too long, proceeding anyway"
-fi
-cd ..
-
-echo ""
-echo "Step 5: Run VSR scanner"
+echo "Step 4: Run VSR scanner"
 cd scanners && python3 VSR_Momentum_Scanner.py -u Sai && cd ..
 if [ $? -eq 0 ]; then
     echo "✓ VSR scanner completed successfully"
@@ -80,18 +75,18 @@ else
 fi
 
 echo ""
-echo "Step 6: Restart alert services"
+echo "Step 5: Restart alert services"
 launchctl unload ~/Library/LaunchAgents/com.india-ts.vsr-telegram-alerts-enhanced.plist 2>/dev/null
 launchctl load ~/Library/LaunchAgents/com.india-ts.vsr-telegram-alerts-enhanced.plist
 echo "✓ VSR Telegram service restarted"
 
 echo ""
-echo "Step 7: Start hourly breakout"
+echo "Step 6: Start hourly breakout"
 ./alerts/start_hourly_breakout_alerts.sh
 echo "✓ Hourly breakout service started"
 
 echo ""
-echo "Step 8: Restart dashboards for fresh data"
+echo "Step 7: Restart dashboards for fresh data"
 echo "Killing existing dashboard processes..."
 pkill -f "tracker_dashboard.py" 2>/dev/null
 pkill -f "momentum_dashboard.py" 2>/dev/null
@@ -109,7 +104,7 @@ echo "✓ Hourly Short Dashboard started on port 3004"
 cd ..
 
 echo ""
-echo "Step 9: Check system status"
+echo "Step 8: Check system status"
 ./check_all_systems.sh
 
 echo ""
