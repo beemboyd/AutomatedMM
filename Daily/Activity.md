@@ -49,6 +49,35 @@ Each entry should include: Date, Time, Author, Changes Made, and Impact.
 
 ---
 
+### 2025-08-14 10:58 IST - [Claude]
+**Changes:**
+- Fixed stale data issue in hourly tracker dashboards (ports 3002 and 3004)
+- Reset JSON persistence files with current timestamps:
+  - /Daily/data/vsr_ticker_persistence_hourly_long.json
+  - /Daily/data/short_momentum/vsr_ticker_persistence_hourly_short.json
+- Restarted hourly tracker services via launchctl
+- Created log files for today's date (hourly_tracker_20250814.log)
+- Restarted all dashboards to read fresh data
+- Updated pre_market_setup.sh to include JSON persistence cleanup
+
+**Impact:**
+- Hourly Tracker Dashboard (3002) now reading current data
+- Hourly Short Dashboard (3004) now reading current data
+- Tracker services properly initialized with today's date
+- Pre-market script now handles stale data automatically
+
+**Issues Resolved:**
+- Dashboards showing stale data from 8:26-8:27 AM
+- Log files not found warnings in dashboard logs
+- JSON persistence files not resetting on new day
+
+**Services Restarted:**
+- com.india-ts.hourly-tracker-service
+- com.india-ts.hourly-short-tracker-service
+- All 4 dashboards (VSR, Hourly, Short Momentum, Hourly Short)
+
+---
+
 ### 2025-08-11 13:22 IST - [Claude]
 **Changes:**
 - Created new VSR breakout trading script: place_orders_daily_long_vsr.py
