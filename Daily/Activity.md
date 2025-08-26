@@ -1,5 +1,25 @@
 # Activity Log
 
+## 2025-08-26 10:20 IST - Claude
+**PERMANENT FIX: Dashboard Port Configuration**
+
+**Applied Permanent Fix for Port 8080 Conflict:**
+1. Updated `/Users/maverick/Library/LaunchAgents/com.india-ts.market_breadth_dashboard.plist` to include:
+   ```xml
+   <key>DASHBOARD_PORT</key>
+   <string>5001</string>
+   ```
+2. Updated backup in `/Users/maverick/PycharmProjects/India-TS/Daily/scheduler/plists/com.india-ts.market_breadth_dashboard.plist`
+3. This ensures Market Breadth dashboard will always start on port 5001 even after system reboot
+
+**Permanent Configuration:**
+- Port 8080: Enhanced Dashboard (Market Regime, Kelly Criterion, G Pattern) - hardcoded
+- Port 5001: Market Breadth Dashboard - now permanently set via plist environment variable
+
+**This fix prevents future port conflicts and ensures correct dashboard assignment after system restarts.**
+
+---
+
 ## 2025-08-26 09:30 IST - Claude
 **Dashboard Port Configuration Issue - Root Cause & Resolution**
 
@@ -15,7 +35,7 @@
 4. Dashboard Enhanced is hardcoded to use port 8080
 5. Pre-market setup script was starting Market Breadth on 8080 instead of 5001
 
-**Resolution:**
+**Initial Resolution (Temporary):**
 1. Stopped LaunchAgent service: `launchctl unload ~/Library/LaunchAgents/com.india-ts.market_breadth_dashboard.plist`
 2. Killed all existing dashboard processes on port 8080
 3. Started Market Regime Enhanced dashboard on port 8080: `python3 Daily/Market_Regime/dashboard_enhanced.py`
