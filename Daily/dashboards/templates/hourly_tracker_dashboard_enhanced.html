@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSR Hourly Tracker - Persistence Levels</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+        
+        .stat-card.extreme::before { background: #FF1744; }
+        .stat-card.very-high::before { background: #FF6F00; }
+        .stat-card.high::before { background: #FFC107; }
+        .stat-card.medium::before { background: #4CAF50; }
+        .stat-card.low::before { background: #9E9E9E; }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .stat-info {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        .persistence-levels {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .level-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .level-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .level-card.extreme { border-color: #FF1744; background: #ffebee; }
+        .level-card.very-high { border-color: #FF6F00; background: #fff3e0; }
+        .level-card.high { border-color: #FFC107; background: #fffde7; }
+        .level-card.medium { border-color: #4CAF50; background: #e8f5e9; }
+        .level-card.low { border-color: #9E9E9E; background: #fafafa; }
+        
+        .level-name {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .level-stats {
+            font-size: 11px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .level-count {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 8px 0;
+        }
+        
+        .ticker-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .ticker-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .ticker-table th {
+            background: #f8f9fa;
+            padding: 10px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .ticker-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 13px;
+        }
+        
+        .ticker-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .ticker-symbol {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .persistence-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .persistence-badge.extreme { background: #FF1744; }
+        .persistence-badge.very-high { background: #FF6F00; }
+        .persistence-badge.high { background: #FFC107; color: #333; }
+        .persistence-badge.medium { background: #4CAF50; }
+        .persistence-badge.low { background: #9E9E9E; }
+        
+        .alert-count {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .position-size {
+            background: #f3e5f5;
+            color: #7b1fa2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .transition-alert {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        
+        .transition-alert.upgrade {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        
+        .transition-alert.downgrade {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .momentum-positive { color: #28a745; font-weight: bold; }
+        .momentum-negative { color: #dc3545; font-weight: bold; }
+        
+        .score-perfect { 
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .vsr-high {
+            color: #ff6f00;
+            font-weight: bold;
+        }
+        
+        .refresh-timer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            font-size: 12px;
+            color: #666;
+        }
+        
+        @media (max-width: 768px) {
+            .level-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 VSR Hourly Tracker - Persistence Levels</h1>
+            <div class="subtitle">
+                <span id="timestamp"></span> | 
+                <span id="filter-mode">POSITIVE MOMENTUM WITH PERSISTENCE</span> | 
+                <span id="total-count">0 tickers tracked</span>
+            </div>
+        </div>
+        
+        <div class="stats-row" id="stats-row">
+            <!-- Stats cards will be inserted here -->
+        </div>
+        
+        <div class="persistence-levels">
+            <div class="section-title">📊 Persistence Level Distribution</div>
+            <div class="level-grid" id="level-grid">
+                <!-- Level cards will be inserted here -->
+            </div>
+        </div>
+        
+        <div id="transitions-section" class="ticker-section" style="display: none;">
+            <div class="section-title">🔄 Recent Level Transitions</div>
+            <div id="transitions-list">
+                <!-- Transitions will be inserted here -->
+            </div>
+        </div>
+        
+        <div class="ticker-section">
+            <div class="section-title">
+                🔥 Extreme Persistence (75+ alerts)
+                <span style="font-size: 12px; color: #666;">100% Win Rate | 9.68% Avg Return</span>
+            </div>
+            <table class="ticker-table" id="extreme-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Alerts</th>
+                        <th>Score</th>
+                        <th>VSR</th>
+                        <th>Price</th>
+                        <th>Momentum</th>
+                        <th>Position Size</th>
+                        <th>Expected Return</th>
+                    </tr>
+                </thead>
+                <tbody id="extreme-tbody">
+                    <!-- Data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="ticker-section">
+            <div class="section-title">
+                ⚡ Very High Persistence (51-75 alerts)
+                <span style="font-size: 12px; color: #666;">100% Win Rate | 5.73% Avg Return</span>
+            </div>
+            <table class="ticker-table" id="very-high-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Alerts</th>
+                        <th>Score</th>
+                        <th>VSR</th>
+                        <th>Price</th>
+                        <th>Momentum</th>
+                        <th>Position Size</th>
+                        <th>Expected Return</th>
+                    </tr>
+                </thead>
+                <tbody id="very-high-tbody">
+                    <!-- Data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="ticker-section">
+            <div class="section-title">
+                🚀 High Persistence (26-50 alerts)
+                <span style="font-size: 12px; color: #666;">88.9% Win Rate | 2.72% Avg Return</span>
+            </div>
+            <table class="ticker-table" id="high-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Alerts</th>
+                        <th>Score</th>
+                        <th>VSR</th>
+                        <th>Price</th>
+                        <th>Momentum</th>
+                        <th>Position Size</th>
+                        <th>Expected Return</th>
+                    </tr>
+                </thead>
+                <tbody id="high-tbody">
+                    <!-- Data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="ticker-section">
+            <div class="section-title">
+                📈 Medium & Low Persistence
+                <span style="font-size: 12px; color: #666;">For Reference Only</span>
+            </div>
+            <table class="ticker-table" id="other-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Level</th>
+                        <th>Alerts</th>
+                        <th>Score</th>
+                        <th>VSR</th>
+                        <th>Price</th>
+                        <th>Momentum</th>
+                        <th>Win Rate</th>
+                    </tr>
+                </thead>
+                <tbody id="other-tbody">
+                    <!-- Data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="refresh-timer">
+        🔄 Auto-refresh in <span id="countdown">30</span>s
+    </div>
+    
+    <script>
+        let countdownValue = 30;
+        
+        function formatNumber(num) {
+            return new Intl.NumberFormat('en-IN').format(num);
+        }
+        
+        function formatPrice(price) {
+            return '₹' + formatNumber(price.toFixed(2));
+        }
+        
+        function formatMomentum(value) {
+            const className = value >= 0 ? 'momentum-positive' : 'momentum-negative';
+            return `<span class="${className}">${value > 0 ? '+' : ''}${value.toFixed(2)}%</span>`;
+        }
+        
+        function formatScore(score) {
+            if (score === 100) {
+                return `<span class="score-perfect">${score}</span>`;
+            }
+            return score;
+        }
+        
+        function formatVSR(vsr) {
+            if (vsr >= 10) {
+                return `<span class="vsr-high">${vsr.toFixed(2)}</span>`;
+            }
+            return vsr.toFixed(2);
+        }
+        
+        function createTickerRow(ticker, forTable = 'extreme') {
+            if (forTable === 'other') {
+                return `
+                    <tr>
+                        <td><span class="ticker-symbol">${ticker.ticker}</span></td>
+                        <td><span class="persistence-badge ${ticker.persistence_level.toLowerCase().replace(' ', '-')}">${ticker.persistence_level}</span></td>
+                        <td><span class="alert-count">${ticker.alert_count}</span></td>
+                        <td>${formatScore(ticker.score)}</td>
+                        <td>${formatVSR(ticker.vsr)}</td>
+                        <td>${formatPrice(ticker.price)}</td>
+                        <td>${formatMomentum(ticker.momentum)}</td>
+                        <td>${ticker.expected_win_rate}</td>
+                    </tr>
+                `;
+            }
+            
+            return `
+                <tr>
+                    <td><span class="ticker-symbol">${ticker.ticker}</span></td>
+                    <td><span class="alert-count">${ticker.alert_count}</span></td>
+                    <td>${formatScore(ticker.score)}</td>
+                    <td>${formatVSR(ticker.vsr)}</td>
+                    <td>${formatPrice(ticker.price)}</td>
+                    <td>${formatMomentum(ticker.momentum)}</td>
+                    <td><span class="position-size">${ticker.position_size}</span></td>
+                    <td>${ticker.expected_return}</td>
+                </tr>
+            `;
+        }
+        
+        function updateDashboard(data) {
+            // Update timestamp
+            document.getElementById('timestamp').textContent = data.timestamp;
+            document.getElementById('total-count').textContent = `${data.total_tickers} tickers tracked`;
+            
+            // Update persistence level cards
+            const levelGrid = document.getElementById('level-grid');
+            levelGrid.innerHTML = '';
+            
+            const levels = ['Extreme', 'Very High', 'High', 'Medium', 'Low'];
+            levels.forEach(level => {
+                const stats = data.persistence_stats[level];
+                const card = document.createElement('div');
+                card.className = `level-card ${level.toLowerCase().replace(' ', '-')}`;
+                card.innerHTML = `
+                    <div class="level-name">${level}</div>
+                    <div class="level-count">${stats.count}</div>
+                    <div class="level-stats">
+                        Position: ${stats.info.position_size}<br>
+                        Win Rate: ${stats.info.win_rate}<br>
+                        Avg Return: ${stats.info.avg_return}
+                    </div>
+                `;
+                levelGrid.appendChild(card);
+            });
+            
+            // Update transitions if any
+            if (data.transitions && data.transitions.length > 0) {
+                document.getElementById('transitions-section').style.display = 'block';
+                const transitionsList = document.getElementById('transitions-list');
+                transitionsList.innerHTML = '';
+                
+                data.transitions.forEach(transition => {
+                    const isUpgrade = getPriorityLevel(transition.to_level) > getPriorityLevel(transition.from_level);
+                    const alertClass = isUpgrade ? 'upgrade' : 'downgrade';
+                    const icon = isUpgrade ? '⬆️' : '⬇️';
+                    
+                    const alert = document.createElement('div');
+                    alert.className = `transition-alert ${alertClass}`;
+                    alert.innerHTML = `
+                        ${icon} <strong>${transition.ticker}</strong>: 
+                        ${transition.from_level} → ${transition.to_level} 
+                        (${transition.alert_count} alerts)
+                        <span style="float: right; font-size: 11px;">${transition.timestamp}</span>
+                    `;
+                    transitionsList.appendChild(alert);
+                });
+            }
+            
+            // Update ticker tables
+            updateTickerTable('extreme-tbody', data.categories['Extreme'] || []);
+            updateTickerTable('very-high-tbody', data.categories['Very High'] || []);
+            updateTickerTable('high-tbody', data.categories['High'] || []);
+            
+            // Combine Medium and Low for other table
+            const otherTickers = [
+                ...(data.categories['Medium'] || []).slice(0, 10),
+                ...(data.categories['Low'] || []).slice(0, 5)
+            ];
+            updateTickerTable('other-tbody', otherTickers, 'other');
+        }
+        
+        function updateTickerTable(tbodyId, tickers, tableType = 'extreme') {
+            const tbody = document.getElementById(tbodyId);
+            tbody.innerHTML = '';
+            
+            if (tickers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">No tickers in this category</td></tr>';
+                return;
+            }
+            
+            tickers.forEach(ticker => {
+                tbody.innerHTML += createTickerRow(ticker, tableType);
+            });
+        }
+        
+        function getPriorityLevel(level) {
+            const priorities = {
+                'Extreme': 5,
+                'Very High': 4,
+                'High': 3,
+                'Medium': 2,
+                'Low': 1
+            };
+            return priorities[level] || 0;
+        }
+        
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/trending-tickers');
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+        
+        // Countdown timer
+        setInterval(() => {
+            countdownValue--;
+            document.getElementById('countdown').textContent = countdownValue;
+            
+            if (countdownValue <= 0) {
+                countdownValue = 30;
+                fetchData();
+            }
+        }, 1000);
+        
+        // Initial fetch
+        fetchData();
+    </script>
+</body>
+</html>

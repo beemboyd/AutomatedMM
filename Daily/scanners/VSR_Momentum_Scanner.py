@@ -369,7 +369,8 @@ def fetch_data_kite(ticker, interval, from_date, to_date):
 # -----------------------------
 def calculate_vsr_indicators(hourly_data):
     """Calculate Volume Spread Ratio and momentum indicators for hourly data"""
-    if hourly_data.empty or len(hourly_data) < 50:
+    # Reduced minimum requirement from 50 to 20 for minute data
+    if hourly_data.empty or len(hourly_data) < 20:
         logger.warning(f"Insufficient data points for {hourly_data['Ticker'].iloc[0] if not hourly_data.empty else 'unknown ticker'}")
         return None
         
@@ -384,29 +385,33 @@ def calculate_vsr_indicators(hourly_data):
     # VSR = Volume * Spread (normalized by average)
     df['VSR'] = df['Volume'] * df['Spread']
     
-    # Calculate moving averages of VSR
-    df['VSR_MA20'] = df['VSR'].rolling(window=20).mean()
-    df['VSR_MA50'] = df['VSR'].rolling(window=50).mean()
+    # Calculate moving averages of VSR - adjust windows based on available data
+    window_20 = min(20, max(5, len(df) // 2))  # Use smaller window if less data
+    window_50 = min(50, max(10, len(df) - 5))  # Use smaller window if less data
+    
+    df['VSR_MA20'] = df['VSR'].rolling(window=window_20).mean()
+    df['VSR_MA50'] = df['VSR'].rolling(window=window_50).mean()
     
     # VSR expansion ratio
     df['VSR_Ratio'] = df['VSR'] / df['VSR_MA20']
     
     # Calculate VSR momentum
-    df['VSR_ROC'] = ((df['VSR'] - df['VSR'].shift(10)) / df['VSR'].shift(10)) * 100
+    shift_10 = min(10, max(3, len(df) // 4))
+    df['VSR_ROC'] = ((df['VSR'] - df['VSR'].shift(shift_10)) / df['VSR'].shift(shift_10)) * 100
     
     # Price EMAs for trend
-    df['EMA9'] = df['Close'].ewm(span=9, adjust=False).mean()
-    df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
-    df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
+    df['EMA9'] = df['Close'].ewm(span=min(9, len(df)-1), adjust=False).mean()
+    df['EMA21'] = df['Close'].ewm(span=min(21, len(df)-1), adjust=False).mean()
+    df['EMA50'] = df['Close'].ewm(span=min(50, len(df)-1), adjust=False).mean()
     
     # Volume analysis
-    df['AvgVolume20'] = df['Volume'].rolling(window=20).mean()
+    df['AvgVolume20'] = df['Volume'].rolling(window=window_20).mean()
     df['VolumeRatio'] = df['Volume'] / df['AvgVolume20']
     
     # Momentum indicators
-    df['ROC5'] = ((df['Close'] - df['Close'].shift(5)) / df['Close'].shift(5)) * 100
-    df['ROC10'] = ((df['Close'] - df['Close'].shift(10)) / df['Close'].shift(10)) * 100
-    df['ROC20'] = ((df['Close'] - df['Close'].shift(20)) / df['Close'].shift(20)) * 100
+    df['ROC5'] = ((df['Close'] - df['Close'].shift(min(5, len(df)//4))) / df['Close'].shift(min(5, len(df)//4))) * 100
+    df['ROC10'] = ((df['Close'] - df['Close'].shift(min(10, len(df)//3))) / df['Close'].shift(min(10, len(df)//3))) * 100
+    df['ROC20'] = ((df['Close'] - df['Close'].shift(min(20, len(df)//2))) / df['Close'].shift(min(20, len(df)//2))) * 100
     
     # ATR for volatility
     high_low = df['High'] - df['Low']
@@ -414,7 +419,7 @@ def calculate_vsr_indicators(hourly_data):
     low_close = (df['Low'] - df['Close'].shift(1)).abs()
     ranges = pd.concat([high_low, high_close, low_close], axis=1)
     df['TR'] = ranges.max(axis=1)
-    df['ATR'] = df['TR'].rolling(window=14).mean()
+    df['ATR'] = df['TR'].rolling(window=min(14, max(3, len(df)//3))).mean()
     df['ATR_Pct'] = (df['ATR'] / df['Close']) * 100
     
     # Keltner Channel for context

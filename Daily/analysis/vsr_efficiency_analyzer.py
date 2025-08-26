@@ -393,7 +393,14 @@ class VSREfficiencyAnalyzer:
 
 def main():
     """Main entry point"""
-    analyzer = VSREfficiencyAnalyzer(lookback_days=10)
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='VSR Efficiency Analyzer')
+    parser.add_argument('--days', type=int, default=10, 
+                       help='Number of business days to analyze (default: 10)')
+    args = parser.parse_args()
+    
+    analyzer = VSREfficiencyAnalyzer(lookback_days=args.days)
     long_report, short_report = analyzer.run_analysis()
     
     if long_report or short_report:

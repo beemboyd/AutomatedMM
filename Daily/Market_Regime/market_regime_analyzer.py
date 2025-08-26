@@ -21,7 +21,7 @@ import glob
 # Import local modules
 # from reversal_trend_scanner import ReversalTrendScanner  # No longer needed - we load existing results
 from trend_strength_calculator import TrendStrengthCalculator
-from market_regime_predictor import MarketRegimePredictor
+from market_regime_predictor_fixed import MarketRegimePredictor  # Use fixed version with normalization
 from trend_dashboard import TrendDashboard
 from confidence_calculator import ConfidenceCalculator
 from kelly_position_recommender import KellyPositionRecommender

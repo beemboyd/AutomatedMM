@@ -153,11 +153,16 @@ class TelegramNotifier:
         days_tracked = ticker_data.get('days_tracked', 0)
         building = ticker_data.get('building', False)
         trend = ticker_data.get('trend', '')
+        occurrences = ticker_data.get('occurrences', 0)  # Alert count/persistence
         
         # Create emoji indicators
         score_emoji = "🔥" if score >= 80 else "⚡" if score >= 60 else "📈"
         trend_emoji = "🚀" if trend == "UP" else "⬆️" if trend == "up" else "➡️"
         building_emoji = "🏗️" if building else ""
+        
+        # Persistence indicator
+        persistence_emoji = "🔥🔥🔥" if occurrences > 50 else "🔥🔥" if occurrences > 30 else "🔥" if occurrences > 10 else ""
+        persistence_text = "HIGH PERSISTENCE" if occurrences > 30 else "MODERATE" if occurrences > 10 else "NEW"
         
         # Format the message
         message = f"""
@@ -165,6 +170,7 @@ class TelegramNotifier:
 
 *Ticker:* `{ticker}`
 *Score:* {score}/100 {building_emoji}
+*Persistence:* {persistence_text} ({occurrences} alerts) {persistence_emoji}
 *VSR:* {vsr:.2f}
 *Price:* ₹{price:.2f}
 *Momentum:* {momentum:.1f}% {trend_emoji}
@@ -196,10 +202,12 @@ _Found {len(high_momentum_tickers)} high momentum tickers_
             score = ticker_data.get('score', 0)
             momentum = ticker_data.get('momentum', 0)
             trend = ticker_data.get('trend', '')
+            occurrences = ticker_data.get('occurrences', 0)
             
             trend_emoji = "🚀" if trend == "UP" else "⬆️" if trend == "up" else "➡️"
+            persistence_icon = "🔥" if occurrences > 30 else "📊" if occurrences > 10 else ""
             
-            message += f"{i}. `{ticker}` - Score: {score} | Momentum: {momentum:.1f}% {trend_emoji}\n"
+            message += f"{i}. `{ticker}` - Score: {score} | Mom: {momentum:.1f}% | Alerts: {occurrences} {persistence_icon} {trend_emoji}\n"
         
         message += f"\n_Alert from {self.bot_name} at {datetime.now(self.IST).strftime('%H:%M IST')}_"
         

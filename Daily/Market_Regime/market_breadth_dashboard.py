@@ -26,7 +26,7 @@ app = Flask(__name__,
 # Configuration
 BREADTH_DATA_DIR = os.path.join(os.path.dirname(__file__), 'breadth_data')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PORT = 5001
+PORT = int(os.environ.get('DASHBOARD_PORT', 8080))
 IST = pytz.timezone('Asia/Kolkata')
 
 def get_latest_breadth_data():

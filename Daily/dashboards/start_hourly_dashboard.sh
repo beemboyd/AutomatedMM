@@ -10,7 +10,7 @@ cd /Users/maverick/PycharmProjects/India-TS/Daily/dashboards
 lsof -ti:3002 | xargs kill -9 2>/dev/null
 
 # Start the dashboard in the background
-nohup python3 hourly_tracker_dashboard.py > hourly_dashboard.log 2>&1 &
+nohup python3 hourly_tracker_dashboard_enhanced.py > hourly_dashboard.log 2>&1 &
 
 # Save the PID
 echo $! > hourly_dashboard.pid

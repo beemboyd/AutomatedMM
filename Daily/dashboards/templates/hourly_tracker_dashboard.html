@@ -290,6 +290,44 @@
         </div>
         
         <div id="contentContainer" style="display: none;">
+            <!-- Persistence Tiers -->
+            <div class="category-section" id="extremePersistenceSection" style="border: 2px solid #ff4444;">
+                <div class="category-header" style="color: #ff4444;">
+                    <span>🔥 EXTREME Persistence (75+ alerts) - Scale to Full Position</span>
+                </div>
+                <div class="ticker-grid" id="extremePersistenceGrid"></div>
+            </div>
+            
+            <div class="category-section" id="veryHighPersistenceSection" style="border: 2px solid #ff8844;">
+                <div class="category-header" style="color: #ff8844;">
+                    <span>⚡ VERY HIGH Persistence (51-75 alerts) - 75% Position</span>
+                </div>
+                <div class="ticker-grid" id="veryHighPersistenceGrid"></div>
+            </div>
+            
+            <div class="category-section" id="highPersistenceSection" style="border: 2px solid #ffaa44;">
+                <div class="category-header" style="color: #ffaa44;">
+                    <span>📈 HIGH Persistence (26-50 alerts) - 50% Position</span>
+                </div>
+                <div class="ticker-grid" id="highPersistenceGrid"></div>
+            </div>
+            
+            <div class="category-section" id="mediumPersistenceSection" style="border: 1px solid #44ff44;">
+                <div class="category-header" style="color: #44ff44;">
+                    <span>📊 MEDIUM Persistence (11-25 alerts) - 25% Position</span>
+                </div>
+                <div class="ticker-grid" id="mediumPersistenceGrid"></div>
+            </div>
+            
+            <div class="category-section" id="lowPersistenceSection">
+                <div class="category-header">
+                    <span>📉 LOW Persistence (1-10 alerts) - Monitor Only</span>
+                </div>
+                <div class="ticker-grid" id="lowPersistenceGrid"></div>
+            </div>
+            
+            <hr style="margin: 30px 0; border-color: #333;">
+            
             <!-- Perfect Scores Section -->
             <div class="category-section" id="perfectScoresSection">
                 <div class="category-header">
@@ -357,6 +395,36 @@
             const momentumClass = ticker.momentum >= 0 ? 'positive' : 'negative';
             const vsrClass = ticker.vsr >= 10 ? 'high-value' : '';
             
+            // Add persistence indicator
+            let persistenceIndicator = '';
+            if (ticker.persistence_alerts) {
+                let persistenceColor = '#888';
+                let persistenceLabel = '';
+                if (ticker.persistence_alerts >= 75) {
+                    persistenceColor = '#ff4444';
+                    persistenceLabel = 'EXTREME';
+                } else if (ticker.persistence_alerts >= 51) {
+                    persistenceColor = '#ff8844';
+                    persistenceLabel = 'VERY HIGH';
+                } else if (ticker.persistence_alerts >= 26) {
+                    persistenceColor = '#ffaa44';
+                    persistenceLabel = 'HIGH';
+                } else if (ticker.persistence_alerts >= 11) {
+                    persistenceColor = '#44ff44';
+                    persistenceLabel = 'MEDIUM';
+                } else {
+                    persistenceColor = '#888';
+                    persistenceLabel = 'LOW';
+                }
+                persistenceIndicator = `
+                    <div style="margin-top: 10px; padding: 5px; background: ${persistenceColor}22; border-radius: 5px; border: 1px solid ${persistenceColor};">
+                        <span style="color: ${persistenceColor}; font-weight: bold;">📍 ${persistenceLabel} Persistence</span>
+                        <span style="color: #ccc; margin-left: 10px;">Alerts: ${ticker.persistence_alerts}</span>
+                        ${ticker.avg_score ? `<span style="color: #ccc; margin-left: 10px;">Avg: ${ticker.avg_score.toFixed(1)}</span>` : ''}
+                    </div>
+                `;
+            }
+            
             return `
                 <div class="ticker-card" onclick="showTickerDetails('${ticker.ticker}')">
                     <div class="ticker-header">
@@ -383,6 +451,7 @@
                     </div>
                     ${ticker.sector !== 'Unknown' ? `<span class="sector-tag">${ticker.sector}</span>` : ''}
                     ${ticker.appearances > 1 ? `<span class="appearances-badge" style="margin-left: 5px;">${ticker.appearances}x</span>` : ''}
+                    ${persistenceIndicator}
                     <div class="timestamp">Last seen: ${ticker.last_seen || ticker.timestamp}</div>
                 </div>
             `;
@@ -396,6 +465,28 @@
             
             // Update timestamp
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            
+            // Update persistence tiers
+            const persistenceTiers = [
+                { id: 'extremePersistence', category: 'extreme_persistence' },
+                { id: 'veryHighPersistence', category: 'very_high_persistence' },
+                { id: 'highPersistence', category: 'high_persistence' },
+                { id: 'mediumPersistence', category: 'medium_persistence' },
+                { id: 'lowPersistence', category: 'low_persistence' }
+            ];
+            
+            persistenceTiers.forEach(tier => {
+                const grid = document.getElementById(tier.id + 'Grid');
+                const section = document.getElementById(tier.id + 'Section');
+                if (data.categories[tier.category] && data.categories[tier.category].length > 0) {
+                    grid.innerHTML = data.categories[tier.category]
+                        .map(ticker => createTickerCard(ticker))
+                        .join('');
+                    section.style.display = 'block';
+                } else {
+                    section.style.display = 'none';
+                }
+            });
             
             // Update perfect scores
             const perfectScoresGrid = document.getElementById('perfectScoresGrid');

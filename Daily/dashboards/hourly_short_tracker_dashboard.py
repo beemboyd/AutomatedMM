@@ -149,7 +149,7 @@ def get_latest_ticker_data(trending_tickers):
     return latest_data
 
 def categorize_tickers(latest_data):
-    """Categorize tickers based on criteria"""
+    """Categorize tickers based on criteria - ONLY NEGATIVE MOMENTUM"""
     categories = {
         'perfect_scores': [],
         'high_vsr': [],
@@ -159,10 +159,14 @@ def categorize_tickers(latest_data):
     }
     
     for ticker, data in latest_data.items():
-        # Add to all tickers
+        # FILTER: Only include tickers with negative momentum
+        if data.get('momentum', 0) >= 0:
+            continue
+            
+        # Add to all tickers (only negative momentum)
         categories['all_tickers'].append(data)
         
-        # Categorize
+        # Categorize (only negative momentum tickers)
         if data['score'] == 100:
             categories['perfect_scores'].append(data)
         
@@ -176,7 +180,7 @@ def categorize_tickers(latest_data):
         if data['build'] >= 10:
             categories['strong_build'].append(data)
     
-    # Sort each category
+    # Sort each category by score (descending)
     for category in categories:
         categories[category].sort(key=lambda x: x['score'], reverse=True)
     
@@ -212,10 +216,14 @@ def get_trending_tickers():
         # Also load state file for additional data
         state = load_state_file()
         
+        # Count only negative momentum tickers
+        negative_momentum_count = len(categories.get('all_tickers', []))
+        
         response = {
             'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S IST'),
             'categories': categories,
-            'total_tickers': len(latest_data),
+            'total_tickers': negative_momentum_count,
+            'filter_mode': 'NEGATIVE_MOMENTUM_ONLY',
             'state_data': state
         }
         

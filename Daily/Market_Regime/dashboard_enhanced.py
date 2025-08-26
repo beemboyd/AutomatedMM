@@ -3512,6 +3512,7 @@ def get_reversal_patterns():
                     # Remove rows with NaN scores
                     df = df.dropna(subset=['Score'])
                     # Get top 10 by Score (descending)
+                    top_long = []
                     if len(df) > 0:
                         top_long = df.nlargest(10, 'Score')[['Ticker', 'Score', 'Entry_Price', 'Stop_Loss', 'Target1']].to_dict('records')
                     for item in top_long:
@@ -3555,6 +3556,7 @@ def get_reversal_patterns():
                     # Remove rows with NaN scores
                     df = df.dropna(subset=['Score'])
                     # Get top 10 by Score (descending)
+                    top_short = []
                     if len(df) > 0:
                         top_short = df.nlargest(10, 'Score')[['Ticker', 'Score', 'Entry_Price', 'Stop_Loss', 'Target1']].to_dict('records')
                     for item in top_short:

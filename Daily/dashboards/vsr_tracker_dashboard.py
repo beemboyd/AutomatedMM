@@ -220,8 +220,8 @@ def get_trending_tickers():
                 tickers_data[ticker]['momentum'] = rt_data['change_percent']
                 tickers_data[ticker]['real_time'] = True  # Mark as real-time data
     
-    # Convert to list and filter for positive momentum only
-    tickers_list = [ticker for ticker in tickers_data.values() if ticker['momentum'] > 0]
+    # Convert to list - keep ALL tickers for persistence tracking
+    tickers_list = list(tickers_data.values())
     
     # Sort by score, then VSR, then momentum
     tickers_list.sort(key=lambda x: (x['score'], x['vsr'], x['momentum']), reverse=True)
@@ -232,27 +232,30 @@ def get_trending_tickers():
         'high_vsr': [],     # VSR >= 1.0
         'positive_momentum': [],  # Momentum > 0
         'strong_build': [],
-        'persistence_leaders': [],  # 3-day tracked tickers
+        'persistence_leaders': [],  # High occurrences (>30 alerts) regardless of momentum
         'new_entries': [],  # Days tracked = 1
         'all_tickers': []
     }
     
     for ticker in tickers_list:
-        # All tickers already have positive momentum due to filtering above
         categories['all_tickers'].append(ticker)
-        categories['positive_momentum'].append(ticker)
         
-        if ticker['score'] >= 50:
-            categories['high_scores'].append(ticker)
-        
-        if ticker['vsr'] >= 1.0:
-            categories['high_vsr'].append(ticker)
-        
-        if ticker['build'] >= 10:
-            categories['strong_build'].append(ticker)
-        
-        if ticker['days_tracked'] >= 3:
+        # High persistence leaders - show ALL with >30 alerts regardless of momentum
+        if ticker['occurrences'] > 30:
             categories['persistence_leaders'].append(ticker)
+        
+        # Other categories still require positive momentum
+        if ticker['momentum'] > 0:
+            categories['positive_momentum'].append(ticker)
+            
+            if ticker['score'] >= 50:
+                categories['high_scores'].append(ticker)
+            
+            if ticker['vsr'] >= 1.0:
+                categories['high_vsr'].append(ticker)
+            
+            if ticker['build'] >= 10:
+                categories['strong_build'].append(ticker)
         
         if ticker['days_tracked'] == 1 and ticker['trend'] == 'NEW':
             categories['new_entries'].append(ticker)
@@ -266,7 +269,8 @@ def get_trending_tickers():
         elif category == 'strong_build':
             categories[category].sort(key=lambda x: x['build'], reverse=True)
         elif category == 'persistence_leaders':
-            categories[category].sort(key=lambda x: (x['days_tracked'], x['score']), reverse=True)
+            # Sort by occurrences (alert count) first, then score
+            categories[category].sort(key=lambda x: (x['occurrences'], x['score']), reverse=True)
         elif category == 'high_scores':
             categories[category].sort(key=lambda x: x['score'], reverse=True)
     

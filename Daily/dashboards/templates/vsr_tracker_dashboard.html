@@ -212,6 +212,12 @@
         <div id="error" class="error" style="display: none;"></div>
         
         <div id="categories" class="categories" style="display: none;">
+            <!-- Persistence Leaders - NEW PRIORITY SECTION -->
+            <div class="category-card" style="border: 2px solid #10b981;">
+                <h2 class="category-title" style="color: #10b981;">🔥 High Persistence (>30 alerts)</h2>
+                <div id="persistenceLeaders" class="ticker-list"></div>
+            </div>
+            
             <!-- High Scores -->
             <div class="category-card">
                 <h2 class="category-title icon-perfect">High Scores (≥50)</h2>
@@ -282,6 +288,11 @@
         }
         
         function createTickerElement(ticker) {
+            // Calculate persistence indicator
+            const persistenceLevel = ticker.occurrences > 30 ? 'high' : ticker.occurrences > 10 ? 'medium' : 'low';
+            const persistenceColor = persistenceLevel === 'high' ? '#10b981' : persistenceLevel === 'medium' ? '#f59e0b' : '#6b7280';
+            const persistenceIcon = persistenceLevel === 'high' ? '🔥' : persistenceLevel === 'medium' ? '📊' : '';
+            
             return `
                 <div class="ticker-item" onclick="showTickerDetails('${ticker.ticker}')">
                     <div class="ticker-symbol">${ticker.ticker}</div>
@@ -297,6 +308,12 @@
                         <div class="detail-item">
                             <span class="detail-label">Momentum</span>
                             <span class="detail-value ${getMomentumClass(ticker.momentum)}">${ticker.momentum.toFixed(1)}%</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Persistence</span>
+                            <span class="detail-value" style="color: ${persistenceColor}; font-weight: bold;">
+                                ${persistenceIcon} ${ticker.occurrences} alerts
+                            </span>
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Price</span>
@@ -325,6 +342,35 @@
         
         function updateCategories(data) {
             const categories = data.categories;
+            
+            // Update persistence leaders (HIGH PRIORITY)
+            const persistenceEl = document.getElementById('persistenceLeaders');
+            if (categories.persistence_leaders && categories.persistence_leaders.length > 0) {
+                persistenceEl.innerHTML = categories.persistence_leaders
+                    .filter(ticker => ticker.occurrences > 30)  // Only show high persistence
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                // Show all tickers with >30 alerts from other categories
+                const highPersistence = [];
+                Object.values(categories).forEach(category => {
+                    if (Array.isArray(category)) {
+                        category.forEach(ticker => {
+                            if (ticker.occurrences > 30 && !highPersistence.find(t => t.ticker === ticker.ticker)) {
+                                highPersistence.push(ticker);
+                            }
+                        });
+                    }
+                });
+                if (highPersistence.length > 0) {
+                    persistenceEl.innerHTML = highPersistence
+                        .sort((a, b) => b.occurrences - a.occurrences)
+                        .map(ticker => createTickerElement(ticker))
+                        .join('');
+                } else {
+                    persistenceEl.innerHTML = '<div class="empty-state">No tickers with high persistence (>30 alerts)</div>';
+                }
+            }
             
             // Update high scores
             const highScoresEl = document.getElementById('highScores');

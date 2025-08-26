@@ -155,7 +155,7 @@ class TrendStrengthCalculator:
             
         if short_count == 0:
             # All long signals
-            return 'strong_bullish', float('inf'), 'Only bullish reversal patterns detected'
+            return 'strong_bullish', 100.0, 'Only bullish reversal patterns detected'  # Use 100 instead of inf
             
         # Calculate ratio
         ratio = long_count / short_count
@@ -296,7 +296,7 @@ class TrendStrengthCalculator:
             },
             'trend_strength': {
                 'trend': trend,
-                'ratio': ratio if ratio != float('inf') else 'inf',
+                'ratio': ratio if ratio != float('inf') else 100.0,  # Cap at 100 instead of 'inf'
                 'description': description,
                 'market_score': market_score,
                 'trend_score': trend_score,

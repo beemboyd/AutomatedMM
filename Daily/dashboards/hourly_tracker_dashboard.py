@@ -148,21 +148,55 @@ def get_latest_ticker_data(trending_tickers):
     
     return latest_data
 
-def categorize_tickers(latest_data):
-    """Categorize tickers based on criteria"""
+def categorize_tickers(latest_data, persistence_data=None):
+    """Categorize tickers based on criteria and persistence tiers"""
     categories = {
         'perfect_scores': [],
         'high_vsr': [],
         'high_momentum': [],
         'strong_build': [],
-        'all_tickers': []
+        'all_tickers': [],
+        # Persistence tiers
+        'extreme_persistence': [],  # 75+ alerts
+        'very_high_persistence': [],  # 51-75 alerts  
+        'high_persistence': [],  # 26-50 alerts
+        'medium_persistence': [],  # 11-25 alerts
+        'low_persistence': []  # 1-10 alerts
     }
     
     for ticker, data in latest_data.items():
-        # Add to all tickers
+        # FILTER: Only include tickers with positive momentum
+        if data.get('momentum', 0) <= 0:
+            continue
+            
+        # Add persistence info if available
+        if persistence_data and 'tickers' in persistence_data:
+            ticker_persistence = persistence_data['tickers'].get(ticker, {})
+            if ticker_persistence:
+                # Calculate total alerts (sum of all scores > 0)
+                scores = ticker_persistence.get('scores', [])
+                total_alerts = len([s for s in scores if s > 0])
+                data['persistence_alerts'] = total_alerts
+                data['persistence_days'] = ticker_persistence.get('days_tracked', 0)
+                data['avg_score'] = ticker_persistence.get('avg_score', 0)
+                data['max_score'] = ticker_persistence.get('max_score', 0)
+                
+                # Categorize by persistence tier
+                if total_alerts >= 75:
+                    categories['extreme_persistence'].append(data)
+                elif total_alerts >= 51:
+                    categories['very_high_persistence'].append(data)
+                elif total_alerts >= 26:
+                    categories['high_persistence'].append(data)
+                elif total_alerts >= 11:
+                    categories['medium_persistence'].append(data)
+                elif total_alerts >= 1:
+                    categories['low_persistence'].append(data)
+        
+        # Add to all tickers (only positive momentum)
         categories['all_tickers'].append(data)
         
-        # Categorize
+        # Categorize (only positive momentum tickers)
         if data['score'] == 100:
             categories['perfect_scores'].append(data)
         
@@ -172,12 +206,16 @@ def categorize_tickers(latest_data):
         if data['momentum'] >= 5:
             categories['high_momentum'].append(data)
             
-        if data['build'] >= 10:
+        if data.get('build', 0) >= 10:
             categories['strong_build'].append(data)
     
-    # Sort each category
+    # Sort each category by score (descending), persistence tiers by alerts count
     for category in categories:
-        categories[category].sort(key=lambda x: x['score'], reverse=True)
+        if 'persistence' in category:
+            # Sort persistence tiers by number of alerts
+            categories[category].sort(key=lambda x: x.get('persistence_alerts', 0), reverse=True)
+        else:
+            categories[category].sort(key=lambda x: x['score'], reverse=True)
     
     return categories
 
@@ -203,18 +241,29 @@ def index():
 def get_trending_tickers():
     """API endpoint to get trending tickers"""
     try:
+        # Load persistence data
+        persistence_data = None
+        persistence_file = os.path.join(DATA_DIR, 'vsr_ticker_persistence_hourly_long.json')
+        if os.path.exists(persistence_file):
+            with open(persistence_file, 'r') as f:
+                persistence_data = json.load(f)
+        
         # Parse logs
         trending_tickers = parse_hourly_logs(hours=2)
         latest_data = get_latest_ticker_data(trending_tickers)
-        categories = categorize_tickers(latest_data)
+        categories = categorize_tickers(latest_data, persistence_data)
         
         # Also load state file for additional data
         state = load_state_file()
         
+        # Count only positive momentum tickers
+        positive_momentum_count = len(categories.get('all_tickers', []))
+        
         response = {
             'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S IST'),
             'categories': categories,
-            'total_tickers': len(latest_data),
+            'total_tickers': positive_momentum_count,
+            'filter_mode': 'POSITIVE_MOMENTUM_ONLY',
             'state_data': state
         }
         

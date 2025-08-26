@@ -179,11 +179,17 @@ class HourlyTrackerServiceFixed:
         try:
             # Use fetch_data_kite from VSR_Momentum_Scanner
             now = datetime.datetime.now()
-            from_date = (now - datetime.timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+            # Fetch data from last 3 days to ensure we have enough points (covers weekend)
+            from_date = (now - datetime.timedelta(days=3)).strftime('%Y-%m-%d %H:%M:%S')
             to_date = now.strftime('%Y-%m-%d %H:%M:%S')
             
             # Fetch data using the imported function
             df = fetch_data_kite(ticker, 'minute', from_date, to_date)
+            
+            if df is None:
+                self.logger.warning(f"fetch_data_kite returned None for {ticker}")
+            elif df.empty:
+                self.logger.warning(f"fetch_data_kite returned empty DataFrame for {ticker}")
             
             return df
             
@@ -207,7 +213,11 @@ class HourlyTrackerServiceFixed:
             
             # Add technical indicators
             minute_with_indicators = calculate_vsr_indicators(minute_data)
-            if minute_with_indicators is None or minute_with_indicators.empty:
+            if minute_with_indicators is None:
+                self.logger.warning(f"calculate_vsr_indicators returned None for {ticker}")
+                return None
+            if minute_with_indicators.empty:
+                self.logger.warning(f"calculate_vsr_indicators returned empty DataFrame for {ticker}")
                 return None
             
             # Calculate 5-minute momentum
