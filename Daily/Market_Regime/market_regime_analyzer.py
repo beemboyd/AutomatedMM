@@ -21,7 +21,7 @@ import glob
 # Import local modules
 # from reversal_trend_scanner import ReversalTrendScanner  # No longer needed - we load existing results
 from trend_strength_calculator import TrendStrengthCalculator
-from market_regime_predictor_fixed import MarketRegimePredictor  # Use fixed version with normalization
+from market_regime_predictor import MarketRegimePredictor  # Use original version with full methods
 from trend_dashboard import TrendDashboard
 from confidence_calculator import ConfidenceCalculator
 from kelly_position_recommender import KellyPositionRecommender
@@ -522,8 +522,7 @@ class MarketRegimeAnalyzer:
             position_recommendations['avoid'] = "Trading against breadth divergence"
         
         # Update predictor with actual regime
-        # Commented out - method not available in current predictor
-        # self.predictor.update_actual_regime(datetime.datetime.now().isoformat(), regime)
+        self.predictor.update_actual_regime(datetime.datetime.now().isoformat(), regime)
         
         # Get scan history for prediction
         scan_history = self.calculator.get_scan_history()
@@ -618,9 +617,7 @@ class MarketRegimeAnalyzer:
             'position_recommendations': position_recommendations,
             'enhanced_strategy_recommendation': enhanced_score_result['strategy_recommendation'] if enhanced_score_result else None,
             'prediction': prediction,
-            # Commented out - method not available in current predictor
-            # 'model_performance': self.predictor.get_model_insights(),
-            'model_performance': {},
+            'model_performance': self.predictor.get_model_insights(),
             'historical_context': self.history_tracker.get_performance_summary(),
             'insights': insights,
             'scan_files': {
@@ -867,10 +864,9 @@ class MarketRegimeAnalyzer:
                 insights.append("⚠️ Warning: All indices above SMA20 despite bearish patterns")
                 
         # Model performance insights
-        # Commented out - method not available in current predictor
-        # model_insights = self.predictor.get_model_insights()
-        # if model_insights['performance']['accuracy'] > 0:
-        #     insights.append(f"\n🤖 Model Performance: {model_insights['performance']['accuracy']:.1%} accuracy over {model_insights['performance']['total_predictions']} predictions")
+        model_insights = self.predictor.get_model_insights()
+        if model_insights['performance']['accuracy'] > 0:
+            insights.append(f"\n🤖 Model Performance: {model_insights['performance']['accuracy']:.1%} accuracy over {model_insights['performance']['total_predictions']} predictions")
             
         return insights
         
