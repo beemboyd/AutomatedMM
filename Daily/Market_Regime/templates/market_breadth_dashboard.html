@@ -630,6 +630,7 @@
             </div>
         </div>
         
+        
         <div class="sector-performance">
             <h2>Sector Performance</h2>
             <div class="sector-grid" id="sector-grid">
@@ -688,6 +689,11 @@
         let refreshInterval;
         let sma20BreadthChart;
         let sma50BreadthChart;
+        // Hourly chart variables removed - section archived on 2025-08-28
+        // let sma20BreadthHourlyChart;
+        // let sma50BreadthHourlyChart;
+        // let volumeBreadthHourlyChart;
+        // let volumeParticipationHourlyChart;
         
         // Initialize SMA breadth charts
         function initializeCharts() {
@@ -833,6 +839,316 @@
                 }
             });
         }
+        
+        // ARCHIVED: Hourly charts functions - removed on 2025-08-28
+        // The hourly SMA breadth analysis section was removed to simplify the dashboard
+        /*
+        function initializeHourlyCharts() {
+            // SMA20 Hourly Chart
+            const ctxSMA20Hourly = document.getElementById('sma20-breadth-hourly-chart').getContext('2d');
+            sma20BreadthHourlyChart = new Chart(ctxSMA20Hourly, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'SMA20 Breadth % (Hourly)',
+                        data: [],
+                        borderColor: '#4ade80',
+                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].label);
+                                    return date.toLocaleString('en-IN', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        hour: '2-digit', 
+                                        minute: '2-digit' 
+                                    });
+                                },
+                                label: function(context) {
+                                    return 'Above SMA20: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                },
+                                color: '#8892b0'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#8892b0',
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12,
+                                callback: function(value, index, values) {
+                                    const date = new Date(this.getLabelForValue(value));
+                                    return date.toLocaleTimeString('en-IN', { hour: '2-digit' });
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // SMA50 Hourly Chart
+            const ctxSMA50Hourly = document.getElementById('sma50-breadth-hourly-chart').getContext('2d');
+            sma50BreadthHourlyChart = new Chart(ctxSMA50Hourly, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'SMA50 Breadth % (Hourly)',
+                        data: [],
+                        borderColor: '#60a5fa',
+                        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].label);
+                                    return date.toLocaleString('en-IN', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        hour: '2-digit', 
+                                        minute: '2-digit' 
+                                    });
+                                },
+                                label: function(context) {
+                                    return 'Above SMA50: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                },
+                                color: '#8892b0'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#8892b0',
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12,
+                                callback: function(value, index, values) {
+                                    const date = new Date(this.getLabelForValue(value));
+                                    return date.toLocaleTimeString('en-IN', { hour: '2-digit' });
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Volume Breadth Hourly Chart
+            const ctxVolumeBreadthHourly = document.getElementById('volume-breadth-hourly-chart').getContext('2d');
+            volumeBreadthHourlyChart = new Chart(ctxVolumeBreadthHourly, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Volume Breadth % (Hourly)',
+                        data: [],
+                        borderColor: '#fbbf24',
+                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].label);
+                                    return date.toLocaleString('en-IN', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        hour: '2-digit', 
+                                        minute: '2-digit' 
+                                    });
+                                },
+                                label: function(context) {
+                                    return 'Volume Breadth: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                },
+                                color: '#8892b0'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#8892b0',
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12,
+                                callback: function(value, index, values) {
+                                    const date = new Date(this.getLabelForValue(value));
+                                    return date.toLocaleTimeString('en-IN', { hour: '2-digit' });
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Volume Participation Hourly Chart
+            const ctxVolumeParticipationHourly = document.getElementById('volume-participation-hourly-chart').getContext('2d');
+            volumeParticipationHourlyChart = new Chart(ctxVolumeParticipationHourly, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Volume Participation (Hourly)',
+                        data: [],
+                        borderColor: '#a78bfa',
+                        backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].label);
+                                    return date.toLocaleString('en-IN', { 
+                                        month: 'short', 
+                                        day: 'numeric', 
+                                        hour: '2-digit', 
+                                        minute: '2-digit' 
+                                    });
+                                },
+                                label: function(context) {
+                                    return 'Participation: ' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#8892b0'
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#8892b0',
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12,
+                                callback: function(value, index, values) {
+                                    const date = new Date(this.getLabelForValue(value));
+                                    return date.toLocaleTimeString('en-IN', { hour: '2-digit' });
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(136, 146, 176, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        */
         
         async function fetchBreadthData() {
             try {
@@ -1142,38 +1458,138 @@
                 
                 console.log(`Updated charts with ${data.labels.length} daily data points from ${data.labels[0]} to ${data.labels[data.labels.length-1]}`);
                 
-                // Update current values and trends
-                if (data.sma20_values.length > 0) {
-                    const currentSMA20 = data.sma20_values[data.sma20_values.length - 1];
-                    const previousSMA20 = data.sma20_values.length > 1 ? data.sma20_values[data.sma20_values.length - 2] : currentSMA20;
+                // Update current values and trends (compare to yesterday)
+                if (data.current_sma20 !== undefined) {
+                    const currentSMA20 = data.current_sma20;
+                    const changeSMA20 = data.sma20_1d_change || 0;
+                    
                     document.getElementById('current-sma20-breadth').textContent = currentSMA20.toFixed(1) + '%';
                     
-                    // Calculate trend
-                    const sma20Trend = currentSMA20 > previousSMA20 ? '↑ Improving' : 
-                                     currentSMA20 < previousSMA20 ? '↓ Declining' : '→ Stable';
+                    // Calculate trend vs yesterday
+                    let sma20Trend;
+                    if (Math.abs(changeSMA20) < 0.5) {
+                        sma20Trend = '→ Stable vs yesterday';
+                    } else if (changeSMA20 > 0) {
+                        sma20Trend = `↑ Improving (+${changeSMA20.toFixed(1)}%)`;
+                    } else {
+                        sma20Trend = `↓ Declining (${changeSMA20.toFixed(1)}%)`;
+                    }
+                    
                     const sma20TrendElement = document.getElementById('sma20-trend');
                     sma20TrendElement.textContent = sma20Trend;
-                    sma20TrendElement.style.color = currentSMA20 > previousSMA20 ? '#4ade80' : 
-                                                   currentSMA20 < previousSMA20 ? '#f87171' : '#8892b0';
+                    sma20TrendElement.style.color = changeSMA20 > 0.5 ? '#4ade80' : 
+                                                   changeSMA20 < -0.5 ? '#f87171' : '#8892b0';
                 }
                 
-                if (data.sma50_values.length > 0) {
-                    const currentSMA50 = data.sma50_values[data.sma50_values.length - 1];
-                    const previousSMA50 = data.sma50_values.length > 1 ? data.sma50_values[data.sma50_values.length - 2] : currentSMA50;
+                if (data.current_sma50 !== undefined) {
+                    const currentSMA50 = data.current_sma50;
+                    const changeSMA50 = data.sma50_1d_change || 0;
+                    
                     document.getElementById('current-sma50-breadth').textContent = currentSMA50.toFixed(1) + '%';
                     
-                    // Calculate trend
-                    const sma50Trend = currentSMA50 > previousSMA50 ? '↑ Improving' : 
-                                     currentSMA50 < previousSMA50 ? '↓ Declining' : '→ Stable';
+                    // Calculate trend vs yesterday
+                    let sma50Trend;
+                    if (Math.abs(changeSMA50) < 0.5) {
+                        sma50Trend = '→ Stable vs yesterday';
+                    } else if (changeSMA50 > 0) {
+                        sma50Trend = `↑ Improving (+${changeSMA50.toFixed(1)}%)`;
+                    } else {
+                        sma50Trend = `↓ Declining (${changeSMA50.toFixed(1)}%)`;
+                    }
+                    
                     const sma50TrendElement = document.getElementById('sma50-trend');
                     sma50TrendElement.textContent = sma50Trend;
-                    sma50TrendElement.style.color = currentSMA50 > previousSMA50 ? '#60a5fa' : 
-                                                   currentSMA50 < previousSMA50 ? '#f87171' : '#8892b0';
+                    sma50TrendElement.style.color = changeSMA50 > 0.5 ? '#60a5fa' : 
+                                                   changeSMA50 < -0.5 ? '#f87171' : '#8892b0';
                 }
             } catch (error) {
                 console.error('Error updating SMA breadth charts:', error);
             }
         }
+        
+        /* Archived: updateHourlySMABreadthCharts - removed on 2025-08-28
+        async function updateHourlySMABreadthCharts() {
+            try {
+                const response = await fetch('/api/sma-breadth-hourly');
+                if (!response.ok) throw new Error('Failed to fetch hourly SMA breadth data');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('Error fetching hourly SMA breadth data:', data.error);
+                    return;
+                }
+                
+                console.log('Hourly SMA Breadth Data:', {
+                    data_points: data.data_points,
+                    date_range: data.date_range,
+                    latest_update: data.latest_update
+                });
+                
+                // Update SMA20 Hourly chart
+                if (sma20BreadthHourlyChart) {
+                    sma20BreadthHourlyChart.data.labels = data.labels;
+                    sma20BreadthHourlyChart.data.datasets[0].data = data.sma20_values;
+                    sma20BreadthHourlyChart.update('active');
+                }
+                
+                // Update SMA50 Hourly chart
+                if (sma50BreadthHourlyChart) {
+                    sma50BreadthHourlyChart.data.labels = data.labels;
+                    sma50BreadthHourlyChart.data.datasets[0].data = data.sma50_values;
+                    sma50BreadthHourlyChart.update('active');
+                }
+                
+                // Update Volume Breadth Hourly chart
+                if (volumeBreadthHourlyChart) {
+                    volumeBreadthHourlyChart.data.labels = data.labels;
+                    volumeBreadthHourlyChart.data.datasets[0].data = data.volume_breadth_values;
+                    volumeBreadthHourlyChart.update('active');
+                }
+                
+                // Update Volume Participation Hourly chart
+                if (volumeParticipationHourlyChart) {
+                    volumeParticipationHourlyChart.data.labels = data.labels;
+                    volumeParticipationHourlyChart.data.datasets[0].data = data.volume_participation_values;
+                    volumeParticipationHourlyChart.update('active');
+                }
+                
+                // Update current values
+                if (data.current_sma20) {
+                    document.getElementById('hourly-sma20-breadth').textContent = data.current_sma20.toFixed(1) + '%';
+                }
+                if (data.current_sma50) {
+                    document.getElementById('hourly-sma50-breadth').textContent = data.current_sma50.toFixed(1) + '%';
+                }
+                if (data.current_volume_breadth) {
+                    document.getElementById('hourly-volume-breadth').textContent = data.current_volume_breadth.toFixed(1) + '%';
+                }
+                
+                // Update intraday trend
+                if (data.intraday_trend) {
+                    const trendElement = document.getElementById('hourly-intraday-trend');
+                    trendElement.textContent = data.intraday_trend;
+                    if (data.intraday_change) {
+                        const changeSign = data.intraday_change > 0 ? '+' : '';
+                        trendElement.textContent += ` (${changeSign}${data.intraday_change.toFixed(1)}%)`;
+                    }
+                    trendElement.style.color = data.intraday_trend === 'Improving' ? '#4ade80' : 
+                                              data.intraday_trend === 'Weakening' ? '#f87171' : '#8892b0';
+                }
+                
+                // Update last update time
+                if (data.latest_update) {
+                    const updateTime = new Date(data.latest_update);
+                    document.getElementById('hourly-last-update').textContent = 
+                        updateTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                }
+                
+                console.log(`Updated hourly charts with ${data.data_points} data points`);
+                
+            } catch (error) {
+                console.error('Error updating hourly SMA breadth charts:', error);
+            }
+        }
+        */
         
         async function refreshData() {
             const breadthData = await fetchBreadthData();
@@ -1191,7 +1607,7 @@
             // const earlyBirdData = await fetchEarlyBirdData();
             // updateEarlyBirdDisplay(earlyBirdData);
             
-            // Update SMA breadth charts
+            // Update SMA breadth charts (daily)
             updateSMABreadthCharts();
         }
         

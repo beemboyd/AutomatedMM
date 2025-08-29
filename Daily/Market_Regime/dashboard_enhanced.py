@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import pytz
 from collections import deque
 import pandas as pd
+import numpy as np
 import re
 import logging
 import sys
@@ -724,13 +725,13 @@ ENHANCED_DASHBOARD_HTML = '''
                         <!-- Separate Charts for SMA20 and SMA50 -->
                         <div class="row">
                             <div class="col-md-6">
-                                <div class="chart-container" style="height: 500px; position: relative;">
+                                <div class="breadth-chart-container" style="height: 500px; position: relative;">
                                     <h6 class="text-center mb-3">SMA20 Breadth History</h6>
                                     <canvas id="sma20-breadth-chart"></canvas>
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="chart-container" style="height: 500px; position: relative;">
+                                <div class="breadth-chart-container" style="height: 500px; position: relative;">
                                     <h6 class="text-center mb-3">SMA50 Breadth History</h6>
                                     <canvas id="sma50-breadth-chart"></canvas>
                                 </div>
@@ -816,6 +817,85 @@ ENHANCED_DASHBOARD_HTML = '''
                                             <div>Stocks Tracked: <span id="sma-stocks-tracked">-</span></div>
                                             <div>Last Update: <span id="sma-last-update">-</span></div>
                                         </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SMA Breadth Hourly Analysis Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📈 SMA Breadth Historical Analysis - Hourly</h5>
+                        
+                        <!-- Hourly Charts Grid -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="breadth-chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">SMA20 Breadth (Hourly)</h6>
+                                    <canvas id="sma20-breadth-hourly-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="breadth-chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">SMA50 Breadth (Hourly)</h6>
+                                    <canvas id="sma50-breadth-hourly-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="breadth-chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">Volume Breadth (Hourly)</h6>
+                                    <canvas id="volume-breadth-hourly-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="breadth-chart-container" style="height: 500px; position: relative;">
+                                    <h6 class="text-center mb-3">Volume Participation (Hourly)</h6>
+                                    <canvas id="volume-participation-hourly-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Hourly Stats Summary -->
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-subtitle mb-2 text-muted">Hourly Breadth Statistics</h6>
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <strong>Current Hour</strong>
+                                                <div id="hourly-current-values" class="small">
+                                                    <div>SMA20: <span id="hourly-sma20-current">-</span>%</div>
+                                                    <div>SMA50: <span id="hourly-sma50-current">-</span>%</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <strong>Intraday Range</strong>
+                                                <div id="hourly-range" class="small">
+                                                    <div>SMA20: <span id="hourly-sma20-range">-</span></div>
+                                                    <div>SMA50: <span id="hourly-sma50-range">-</span></div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <strong>Intraday Trend</strong>
+                                                <div id="hourly-trend" class="small">-</div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <strong>Data Info</strong>
+                                                <div class="small">
+                                                    <div>Hours: <span id="hourly-data-points">-</span></div>
+                                                    <div>Period: <span id="hourly-date-range">-</span></div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1617,6 +1697,307 @@ ENHANCED_DASHBOARD_HTML = '''
                         }
                     }
                 });
+            }
+            
+            // Initialize Hourly SMA Breadth Charts
+            initializeHourlyCharts();
+        }
+        
+        // Initialize Hourly Charts
+        let sma20BreadthHourlyChart = null;
+        let sma50BreadthHourlyChart = null;
+        let volumeBreadthHourlyChart = null;
+        let volumeParticipationHourlyChart = null;
+        
+        function initializeHourlyCharts() {
+            // SMA20 Hourly Chart
+            const ctxSMA20Hourly = document.getElementById('sma20-breadth-hourly-chart');
+            if (ctxSMA20Hourly) {
+                sma20BreadthHourlyChart = new Chart(ctxSMA20Hourly, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'SMA20 Breadth %',
+                            data: [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        // Show full date/time in tooltip
+                                        return context[0].label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 24,  // Show max 24 labels (roughly one per day for 30 days)
+                                    callback: function(value, index) {
+                                        // Show only date portion for cleaner display
+                                        const label = this.getLabelForValue(value);
+                                        if (label) {
+                                            const parts = label.split(' ');
+                                            if (index % 6 === 0) {  // Show every 6th hour
+                                                return parts[0] + ' ' + parts[1].split(':')[0] + ':00';
+                                            }
+                                        }
+                                        return '';
+                                    }
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: { display: true, text: 'Breadth %' }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // SMA50 Hourly Chart
+            const ctxSMA50Hourly = document.getElementById('sma50-breadth-hourly-chart');
+            if (ctxSMA50Hourly) {
+                sma50BreadthHourlyChart = new Chart(ctxSMA50Hourly, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'SMA50 Breadth %',
+                            data: [],
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        // Show full date/time in tooltip
+                                        return context[0].label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 24,  // Show max 24 labels (roughly one per day for 30 days)
+                                    callback: function(value, index) {
+                                        // Show only date portion for cleaner display
+                                        const label = this.getLabelForValue(value);
+                                        if (label) {
+                                            const parts = label.split(' ');
+                                            if (index % 6 === 0) {  // Show every 6th hour
+                                                return parts[0] + ' ' + parts[1].split(':')[0] + ':00';
+                                            }
+                                        }
+                                        return '';
+                                    }
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: { display: true, text: 'Breadth %' }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Volume Breadth Hourly Chart
+            const ctxVolumeHourly = document.getElementById('volume-breadth-hourly-chart');
+            if (ctxVolumeHourly) {
+                volumeBreadthHourlyChart = new Chart(ctxVolumeHourly, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Volume Breadth %',
+                            data: [],
+                            borderColor: 'rgb(255, 206, 86)',
+                            backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        // Show full date/time in tooltip
+                                        return context[0].label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 24,  // Show max 24 labels (roughly one per day for 30 days)
+                                    callback: function(value, index) {
+                                        // Show only date portion for cleaner display
+                                        const label = this.getLabelForValue(value);
+                                        if (label) {
+                                            const parts = label.split(' ');
+                                            if (index % 6 === 0) {  // Show every 6th hour
+                                                return parts[0] + ' ' + parts[1].split(':')[0] + ':00';
+                                            }
+                                        }
+                                        return '';
+                                    }
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: { display: true, text: 'Breadth %' }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Volume Participation Hourly Chart
+            const ctxParticipationHourly = document.getElementById('volume-participation-hourly-chart');
+            if (ctxParticipationHourly) {
+                volumeParticipationHourlyChart = new Chart(ctxParticipationHourly, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Volume Participation',
+                            data: [],
+                            borderColor: 'rgb(153, 102, 255)',
+                            backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        // Show full date/time in tooltip
+                                        return context[0].label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 24,  // Show max 24 labels
+                                    callback: function(value, index) {
+                                        // Show only date portion for cleaner display
+                                        const label = this.getLabelForValue(value);
+                                        if (label) {
+                                            const parts = label.split(' ');
+                                            if (index % 6 === 0) {  // Show every 6th hour
+                                                return parts[0] + ' ' + parts[1].split(':')[0] + ':00';
+                                            }
+                                        }
+                                        return '';
+                                    }
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Participation Score' }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Update hourly charts after initialization
+            updateHourlySMABreadthCharts();
+        }
+        
+        // Update Hourly SMA Breadth Charts
+        async function updateHourlySMABreadthCharts() {
+            try {
+                const response = await fetch('/api/sma-breadth-hourly');
+                if (!response.ok) throw new Error('Failed to fetch hourly SMA breadth data');
+                const data = await response.json();
+                
+                // Update charts
+                if (sma20BreadthHourlyChart) {
+                    sma20BreadthHourlyChart.data.labels = data.labels;
+                    sma20BreadthHourlyChart.data.datasets[0].data = data.sma20_values;
+                    sma20BreadthHourlyChart.update();
+                }
+                
+                if (sma50BreadthHourlyChart) {
+                    sma50BreadthHourlyChart.data.labels = data.labels;
+                    sma50BreadthHourlyChart.data.datasets[0].data = data.sma50_values;
+                    sma50BreadthHourlyChart.update();
+                }
+                
+                if (volumeBreadthHourlyChart) {
+                    volumeBreadthHourlyChart.data.labels = data.labels;
+                    volumeBreadthHourlyChart.data.datasets[0].data = data.volume_breadth_values;
+                    volumeBreadthHourlyChart.update();
+                }
+                
+                if (volumeParticipationHourlyChart) {
+                    volumeParticipationHourlyChart.data.labels = data.labels;
+                    volumeParticipationHourlyChart.data.datasets[0].data = data.volume_participation_values;
+                    volumeParticipationHourlyChart.update();
+                }
+                
+                // Update statistics
+                document.getElementById('hourly-sma20-current').textContent = data.current_sma20?.toFixed(1) || '-';
+                document.getElementById('hourly-sma50-current').textContent = data.current_sma50?.toFixed(1) || '-';
+                document.getElementById('hourly-sma20-range').textContent = 
+                    `${Math.min(...data.sma20_values).toFixed(1)}% - ${Math.max(...data.sma20_values).toFixed(1)}%`;
+                document.getElementById('hourly-sma50-range').textContent = 
+                    `${Math.min(...data.sma50_values).toFixed(1)}% - ${Math.max(...data.sma50_values).toFixed(1)}%`;
+                document.getElementById('hourly-trend').textContent = data.intraday_trend || '-';
+                document.getElementById('hourly-data-points').textContent = data.data_points || '-';
+                document.getElementById('hourly-date-range').textContent = data.date_range || '-';
+                
+            } catch (error) {
+                console.error('Error updating hourly SMA breadth charts:', error);
             }
         }
         
@@ -2757,6 +3138,7 @@ ENHANCED_DASHBOARD_HTML = '''
             setInterval(function() {
                 try {
                     fetchSMABreadthData();
+                    updateHourlySMABreadthCharts();
                 } catch (error) {
                     console.error('Error updating SMA breadth data:', error);
                 }
@@ -3616,6 +3998,13 @@ def get_sma_breadth_historical():
         sma20_20d_change = current_sma20 - twenty_ago_sma20
         sma50_20d_change = current_sma50 - twenty_ago_sma50
         
+        # Get yesterday's data for day-over-day comparison
+        yesterday = data[-2] if len(data) >= 2 else data[0]
+        yesterday_sma20 = yesterday.get('sma_breadth', {}).get('sma20_percent', 0)
+        yesterday_sma50 = yesterday.get('sma_breadth', {}).get('sma50_percent', 0)
+        sma20_1d_change = current_sma20 - yesterday_sma20
+        sma50_1d_change = current_sma50 - yesterday_sma50
+        
         # Prepare response with safe access to potentially missing fields
         response_data = {
             'labels': [d['date'] for d in data],
@@ -3625,6 +4014,10 @@ def get_sma_breadth_historical():
             'data_points': len(data),
             'current_sma20': current.get('sma_breadth', {}).get('sma20_percent', 0),
             'current_sma50': current.get('sma_breadth', {}).get('sma50_percent', 0),
+            'yesterday_sma20': yesterday_sma20,
+            'yesterday_sma50': yesterday_sma50,
+            'sma20_1d_change': sma20_1d_change,
+            'sma50_1d_change': sma50_1d_change,
             'market_regime': current.get('market_regime', 'Unknown'),
             'market_score': current.get('market_score', 0.5),
             'total_stocks': current.get('total_stocks', 500),  # Default to 500 if not present
@@ -3670,6 +4063,83 @@ def get_sma_breadth_historical():
     except Exception as e:
         app.logger.error(f"Error in get_sma_breadth_historical: {e}")
         return jsonify({'error': str(e)})
+
+@app.route('/api/sma-breadth-hourly')
+def get_sma_breadth_hourly():
+    """Get hourly SMA breadth data for past 30 days"""
+    try:
+        # Load hourly data
+        hourly_file = os.path.join(SCRIPT_DIR, 'historical_breadth_data', 'sma_breadth_hourly_latest.json')
+        
+        if not os.path.exists(hourly_file):
+            # Try alternate location
+            hourly_file = os.path.join(SCRIPT_DIR, 'hourly_breadth_data', 'sma_breadth_hourly_latest.json')
+        
+        if not os.path.exists(hourly_file):
+            return jsonify({
+                'error': 'Hourly data not found',
+                'labels': [],
+                'sma20_values': [],
+                'sma50_values': [],
+                'volume_breadth_values': [],
+                'volume_participation_values': []
+            })
+        
+        with open(hourly_file, 'r') as f:
+            data = json.load(f)
+        
+        if not data:
+            return jsonify({
+                'error': 'No hourly data available',
+                'labels': [],
+                'sma20_values': [],
+                'sma50_values': [],
+                'volume_breadth_values': [],
+                'volume_participation_values': []
+            })
+        
+        # Filter for market hours only and sort by datetime
+        data = sorted(data, key=lambda x: x['datetime'])
+        
+        # Prepare response data
+        response_data = {
+            'labels': [d['datetime'] for d in data],
+            'sma20_values': [d.get('sma20_breadth', 0) for d in data],
+            'sma50_values': [d.get('sma50_breadth', 0) for d in data],
+            'volume_breadth_values': [d.get('volume_breadth', 0) for d in data],
+            'volume_participation_values': [d.get('volume_participation', 0) for d in data],
+            'data_points': len(data),
+            'date_range': f"{data[0]['datetime']} to {data[-1]['datetime']}" if data else "No data",
+            'latest_update': data[-1]['datetime'] if data else None,
+            'current_sma20': data[-1].get('sma20_breadth', 0) if data else 0,
+            'current_sma50': data[-1].get('sma50_breadth', 0) if data else 0,
+            'current_volume_breadth': data[-1].get('volume_breadth', 0) if data else 0,
+            'market_regime': data[-1].get('market_regime', 'Unknown') if data else 'Unknown'
+        }
+        
+        # Calculate intraday trends
+        if len(data) >= 7:  # At least 7 hours of data
+            morning_avg_sma20 = np.mean([d['sma20_breadth'] for d in data[:3]])
+            current_avg_sma20 = np.mean([d['sma20_breadth'] for d in data[-3:]])
+            response_data['intraday_trend'] = 'Improving' if current_avg_sma20 > morning_avg_sma20 else 'Weakening'
+            response_data['intraday_change'] = round(current_avg_sma20 - morning_avg_sma20, 2)
+        else:
+            response_data['intraday_trend'] = 'Insufficient data'
+            response_data['intraday_change'] = 0
+        
+        logger.info(f"Returning {len(data)} hourly data points")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        app.logger.error(f"Error in get_sma_breadth_hourly: {e}")
+        return jsonify({
+            'error': str(e),
+            'labels': [],
+            'sma20_values': [],
+            'sma50_values': [],
+            'volume_breadth_values': [],
+            'volume_participation_values': []
+        })
 
 @app.route('/api/momentum_data')
 def get_momentum_data():

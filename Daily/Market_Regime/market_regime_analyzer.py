@@ -522,7 +522,8 @@ class MarketRegimeAnalyzer:
             position_recommendations['avoid'] = "Trading against breadth divergence"
         
         # Update predictor with actual regime
-        self.predictor.update_actual_regime(datetime.datetime.now().isoformat(), regime)
+        # Commented out - method not available in current predictor
+        # self.predictor.update_actual_regime(datetime.datetime.now().isoformat(), regime)
         
         # Get scan history for prediction
         scan_history = self.calculator.get_scan_history()
@@ -617,7 +618,9 @@ class MarketRegimeAnalyzer:
             'position_recommendations': position_recommendations,
             'enhanced_strategy_recommendation': enhanced_score_result['strategy_recommendation'] if enhanced_score_result else None,
             'prediction': prediction,
-            'model_performance': self.predictor.get_model_insights(),
+            # Commented out - method not available in current predictor
+            # 'model_performance': self.predictor.get_model_insights(),
+            'model_performance': {},
             'historical_context': self.history_tracker.get_performance_summary(),
             'insights': insights,
             'scan_files': {
@@ -864,9 +867,10 @@ class MarketRegimeAnalyzer:
                 insights.append("⚠️ Warning: All indices above SMA20 despite bearish patterns")
                 
         # Model performance insights
-        model_insights = self.predictor.get_model_insights()
-        if model_insights['performance']['accuracy'] > 0:
-            insights.append(f"\n🤖 Model Performance: {model_insights['performance']['accuracy']:.1%} accuracy over {model_insights['performance']['total_predictions']} predictions")
+        # Commented out - method not available in current predictor
+        # model_insights = self.predictor.get_model_insights()
+        # if model_insights['performance']['accuracy'] > 0:
+        #     insights.append(f"\n🤖 Model Performance: {model_insights['performance']['accuracy']:.1%} accuracy over {model_insights['performance']['total_predictions']} predictions")
             
         return insights
         

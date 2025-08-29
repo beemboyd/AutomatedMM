@@ -1,337 +1,262 @@
-# India-TS TODO List & System Improvements
+# India-TS Market Regime ML System - Development Roadmap
 
-## 🚨 CRITICAL: Market Regime ML System Recovery
+## 🎯 Mission
+Build a robust, self-improving ML system for market regime prediction using best practices.
 
-### Current Status (as of 2025-08-24)
-**System Failure Detected**: Market Regime ML predictions stuck at 97.86% single regime (choppy_bullish)
-- Model accuracy degraded from 94% to 90.74%
-- No actual regime feedback being recorded
-- Market scores exceeding valid range (up to 14.0 when max should be 1.0)
-- Self-reinforcing bias causing prediction monoculture
-
-### Phase 1: Emergency Fixes ✅ COMPLETED (2025-08-24)
-**Status**: Implemented and verified
-- [x] Disabled automatic retraining (prevents further degradation)
-- [x] Restored baseline model v_20250702_094009 (94% accuracy)
-- [x] Fixed data normalization (enforced -1 to 1 range)
-- [x] Created emergency backup of corrupted state
-- [x] Implemented monitoring configuration
-- [x] Added to pre-market setup script for daily loading
-
-**Files Modified**:
-- `/Daily/Market_Regime/emergency_fix_phase1.py` - Emergency fix implementation
-- `/Daily/Market_Regime/market_regime_predictor_fixed.py` - Fixed predictor with normalization
-- `/Daily/Market_Regime/ml_config.json` - Emergency configuration
-- `/Daily/Market_Regime/monitoring_config.json` - Drift monitoring setup
-- `/Daily/pre_market_setup.sh` - Added Step 11 for loading Market Regime Analyzer
-
-**Monitoring Period**: 2025-08-25 (24 hours)
-- Check regime diversity improves (no single regime >70%)
-- Verify market scores stay within [-1, 1] range
-- Confirm system stability (no crashes)
-- Run verification script: `python3 verify_phase1_fixes.py`
+## 📁 Project Location
+`/Users/maverick/PycharmProjects/India-TS/Daily/New_Market_Regime/`
 
 ---
 
-### Phase 2: Restore Learning ❌ FAILED (2025-08-26)
-**Status**: Service failed due to technical issues
-**Started**: 2025-08-25 11:30 IST
-**Failed**: 2025-08-26 12:00 IST
+## Phase 1: Data Pipeline Foundation 🔄
+**Timeline**: Days 1-3 (Starting 2025-08-26)
+**Status**: ✅ COMPLETED
 
-#### Implementation Completed:
-1. **✅ Actual Regime Calculator** (`actual_regime_calculator.py`)
-   - Calculates regime 45 minutes after predictions
-   - Uses NIFTY price data with thresholds:
-     - Strong trend: >1.5% move
-     - Moderate trend: 0.75-1.5% move  
-     - Weak trend: 0.3-0.75% move
-   - Incorporates volume ratio and volatility
+### Day 1 (2025-08-26)
+- [x] Create project structure
+- [x] Design implementation phases
+- [x] Build Data Ingestor module
+- [x] Test with sample data
+- [x] Add market hours validation
+- [x] Save data in parquet format
 
-2. **✅ Feedback Database Created** (`regime_feedback.db`)
-   - Table: `regime_feedback` with full schema implemented
-   - Table: `accuracy_metrics` for daily statistics
-   - Unique constraint on prediction_id to prevent duplicates
+### Day 2
+- [ ] Implement Data Validator
+- [ ] Add schema enforcement
+- [ ] Create validation reports
 
-3. **✅ Validation Pipeline Built** (`regime_validation_pipeline.py`)
-   - Validates feedback coverage (target: >80%)
-   - Checks regime distribution balance
-   - Calculates confusion matrix
-   - Determines retraining readiness
+### Day 3
+- [ ] Set up automated scheduling
+- [ ] Add logging system
+- [ ] Complete Phase 1 testing
 
-4. **✅ Automated Collection Service** 
-   - Feedback collector runs every 5 minutes via launchctl
-   - Validation monitor runs hourly (10 AM - 4 PM)
-   - Integrated into pre-market setup script (Step 14)
-   - Market hours wrapper ensures weekday-only operation
+### Components to Build:
+1. **Data Ingestor** (`src/ingestion/data_ingestor.py`)
+   - Collect scanner results every 5 minutes
+   - Gather market data (indices, breadth)
+   - Store in structured format
 
-**Monitoring Commands**:
-```bash
-# Quick status check
-./Market_Regime/check_phase2_status.sh
+2. **Data Validator** (`src/validation/data_validator.py`)
+   - Remove outliers (inf, NaN, zeros from token errors)
+   - Enforce consistent schema
+   - Generate data quality reports
 
-# Detailed monitoring
-python3 Market_Regime/monitor_phase2.py
-
-# Stop services if needed
-./Market_Regime/stop_feedback_services.sh
-```
-
-**Issues Discovered** (2025-08-26 12:30 IST):
-- ❌ Missing Python module dependencies (`schedule`)
-- ❌ Incompatible UserContextManager API usage
-- ❌ Database schema mismatch
-- ❌ Time module import conflict
-- ❌ **CRITICAL: 100% regime monoculture persists (all predictions are choppy_bullish)**
-
-**Alternative Approach Implemented**:
-- Created `load_historical_from_db.py` to extract existing predictions
-- Attempting to calculate actual regimes from NIFTY market data
-- This approach doesn't impact existing dashboards or services
-- Preserves historical data for future training
-
-**Next Steps**:
-1. Let the system collect feedback for 24 hours
-2. Check back on 2025-08-26 at 12:00 PM IST
-3. Run `python3 Market_Regime/monitor_phase2.py` to assess readiness
-4. If criteria met (>80% coverage, >70% accuracy, balanced distribution):
-   - Proceed to Phase 3: Smart Retraining
-5. If not ready:
-   - Continue collecting data
-   - Investigate any issues with feedback collection
-   - May need to adjust thresholds or calculation timing
+### Deliverables:
+- [ ] Working data pipeline
+- [ ] Clean, validated datasets
+- [ ] Data quality documentation
 
 ---
 
-### Phase 3: Smart Retraining 📅 SCHEDULED (Target: Week of 2025-08-26)
-**Prerequisite**: 100+ validated predictions from Phase 2
+## Phase 2: Feature Engineering 🔧
+**Timeline**: Days 4-7
+**Status**: ✅ COMPLETED (Accelerated on Day 1)
 
-#### Implementation Tasks:
-1. **Quality Gates**
-   - Minimum 100 validated predictions
-   - All regimes represented (no regime <10%)
-   - New model must beat baseline by 2%
+### Day 1 (2025-08-26) - COMPLETED EARLY
+- [x] Build Feature Builder module
+- [x] Implement 21 market breadth features
+- [x] Create Feature Store with SQLite metadata tracking
+- [x] Implement versioning and schema validation
+- [x] Build Regime Labeler with 7 regime types
+- [x] Label data and create transition features
+- [x] Validate labels and save to parquet
+- [x] Complete end-to-end pipeline test
 
-2. **A/B Testing Framework**
-   ```python
-   class ABTestFramework:
-       def shadow_run(new_model, hours=24):
-           # Run new model in parallel
-           # Compare predictions without deploying
-           # Calculate performance delta
-   ```
+### Components:
+1. **Feature Builder** - 30+ engineered features
+2. **Feature Store** - Centralized storage with versioning
+3. **Regime Labeler** - Define and label market regimes
 
-3. **Rollback Triggers**
-   - Auto-revert if accuracy drops >5%
-   - Alert on regime monoculture
-   - Emergency restore capability
-
-4. **Balanced Training**
-   - Use SMOTE for underrepresented regimes
-   - Cross-validation with regime stratification
-   - Feature importance analysis
-
-**Success Criteria**:
-- Safe model updates without degradation
-- Maintain >92% accuracy
-- No single regime dominance
+### Deliverables:
+- [ ] Feature pipeline
+- [ ] Feature documentation
+- [ ] Labeled training data
 
 ---
 
-### Phase 4: Continuous Improvement 🚀 FUTURE (Target: 2025-09-01+)
-**Prerequisite**: Stable Phase 3 with successful retraining cycles
+## Phase 3: Model Training & Registry 🤖
+**Timeline**: Days 8-10
+**Status**: 📅 SCHEDULED
 
-#### Implementation Tasks:
-1. **Drift Detection System**
-   - Real-time monitoring every 30 minutes
-   - Alert if any regime >40% of daily predictions
-   - Auto-correction mechanisms
+### Day 8
+- [ ] Implement Model Trainer
+- [ ] Create baseline model
+- [ ] Add cross-validation
 
-2. **Ensemble Models**
-   - 3 models with different architectures
-   - Voting mechanism for final prediction
-   - Diversity enforcement
+### Day 9
+- [ ] Build Model Evaluator
+- [ ] Compare with baseline
+- [ ] Generate metrics
 
-3. **Human Oversight Dashboard**
-   - Real-time metrics visualization
-   - Manual intervention capability
-   - Performance trending
+### Day 10
+- [ ] Create Model Registry
+- [ ] Add versioning system
+- [ ] Test rollback capability
 
-4. **Advanced Features**
-   - Option chain analysis integration
-   - Market microstructure features
-   - Cross-market correlations
+### Components:
+1. **Model Trainer** - Random Forest with proper validation
+2. **Model Evaluator** - Performance metrics and comparison
+3. **Model Registry** - Version control and metadata
 
----
-
-## 📊 Key Metrics to Monitor
-
-### Daily Checks
-```bash
-# Check regime diversity
-sqlite3 /Users/maverick/PycharmProjects/India-TS/data/regime_learning.db \
-"SELECT regime, COUNT(*) as count, 
-ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM predictions WHERE DATE(timestamp) = DATE('now')), 2) as pct 
-FROM predictions WHERE DATE(timestamp) = DATE('now') GROUP BY regime;"
-
-# Verify market scores in range
-grep "Market score normalized" /Users/maverick/PycharmProjects/India-TS/Daily/logs/market_regime_analyzer_5min.log
-
-# Check prediction frequency
-tail -f /Users/maverick/PycharmProjects/India-TS/Daily/logs/market_regime_analyzer_5min.log
-```
-
-### Success Thresholds
-- **Regime Diversity**: No single regime >40% daily
-- **Model Accuracy**: Maintain >92% on validated predictions  
-- **Market Scores**: 100% within [-1, 1] range
-- **Prediction Frequency**: ~78 predictions/day (every 5 min during market hours)
-- **Feedback Coverage**: >80% predictions get actual regime validation
+### Deliverables:
+- [ ] Trained model
+- [ ] Model registry
+- [ ] Performance reports
 
 ---
 
-## 🔧 Technical Context for Implementation
+## Phase 4: Model Serving 🚀
+**Timeline**: Days 11-14
+**Status**: 📅 SCHEDULED
 
-### System Architecture
-```
-Scanner Results → Feature Extraction → ML Prediction → Regime Smoothing → Dashboard
-                                            ↓
-                                    SQLite Database (Learning)
-                                            ↓
-                                    Feedback Loop (BROKEN - needs Phase 2)
-```
+### Day 11-12
+- [ ] Build Batch Predictor
+- [ ] Implement hourly jobs
+- [ ] Test predictions
 
-### File Structure
-```
-Daily/Market_Regime/
-├── market_regime_predictor.py       # Main predictor (needs replacing with _fixed version)
-├── market_regime_predictor_fixed.py # Fixed version with normalization
-├── model_manager.py                 # Handles model versioning
-├── regime_smoother.py               # Prevents rapid regime changes
-├── models/                          # Model versions
-│   ├── v_20250702_094009/          # Best baseline model (94% accuracy)
-│   └── regime_predictor_model.pkl  # Current active model
-├── predictions/                     # Prediction history
-├── emergency_backup/                # Backup of corrupted state
-└── ml_config.json                  # Emergency configuration
-```
+### Day 13-14
+- [ ] Create API Server
+- [ ] Build web dashboard
+- [ ] Deploy on port 8080
 
-### Database Schema
-```sql
--- Current tables
-predictions (id, timestamp, regime, confidence, market_score, indicators)
-regime_changes (id, timestamp, from_regime, to_regime, confidence)
+### Components:
+1. **Batch Predictor** - Hourly prediction jobs
+2. **API Server** - REST API for real-time predictions
+3. **Web Dashboard** - Visual interface on port 8080
 
--- Needed for Phase 2
-regime_feedback (prediction_id, actual_regime, feedback_timestamp, accuracy)
-```
-
-### Key Functions to Modify (Phase 2)
-1. `update_actual_regime()` - Currently broken, needs price-based calculation
-2. `retrain_model()` - Currently disabled, needs quality gates
-3. `_save_prediction_to_db()` - Works but needs feedback integration
-4. `optimize_thresholds()` - Needs balanced data before running
+### Deliverables:
+- [ ] Working API
+- [ ] Prediction pipeline
+- [ ] Web dashboard
 
 ---
 
-## 🎯 Other System TODOs
+## Phase 5: Monitoring & Auto-Adaptation 🔄
+**Timeline**: Days 15-20
+**Status**: 📅 SCHEDULED
 
-### High Priority
-- [ ] Fix VSR scanner early market data requirements (currently needs 50 points, reduced to 20)
-- [ ] Implement position size recommendations based on regime
-- [ ] Add PnL tracking for regime-based trades
+### Day 15-17
+- [ ] Build Drift Detector
+- [ ] Implement monitoring
+- [ ] Create alerts
 
-### Medium Priority  
-- [ ] Create unified error handling for all scanners
-- [ ] Implement scanner result caching (reduce API calls)
-- [ ] Add regime-aware stop loss adjustments
+### Day 18-20
+- [ ] Build Auto Retrainer
+- [ ] Add A/B testing
+- [ ] Complete feedback loop
 
-### Low Priority
-- [ ] Dashboard UI improvements
-- [ ] Historical backtesting with regime filters
-- [ ] Documentation updates
+### Components:
+1. **Drift Detector** - Monitor feature and prediction drift
+2. **Performance Monitor** - Track accuracy over time
+3. **Auto Retrainer** - Automated retraining with validation
 
----
-
-## 📝 Notes for Future Sessions
-
-1. **CRITICAL**: Do NOT enable auto-retraining until Phase 3 quality gates are implemented
-2. **Market Hours Only**: System runs 9:00 AM - 3:30 PM IST, Monday-Friday
-3. **Emergency Restore**: Backup at `/Daily/Market_Regime/emergency_backup/backup_20250824_213039`
-4. **Best Model**: v_20250702_094009 with 94% accuracy (currently active)
-5. **Monitoring Dashboard**: Open `/Daily/Market_Regime/emergency_monitoring.html`
-
-### Quick Commands
-```bash
-# Run Phase 1 verification
-cd /Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime
-python3 verify_phase1_fixes.py
-
-# Check if Market Regime Analyzer is running
-launchctl list | grep market_regime
-
-# View real-time predictions
-tail -f /Users/maverick/PycharmProjects/India-TS/Daily/logs/market_regime_analyzer_5min.log
-
-# Emergency restore if needed
-python3 emergency_fix_phase1.py
-```
+### Deliverables:
+- [ ] Monitoring system
+- [ ] Alert pipeline
+- [ ] Auto-retraining capability
 
 ---
 
-*Last Updated: 2025-08-26 12:35 IST*
-*Status: Phase 2 FAILED - Critical regime monoculture issue persists*
-*Next Action: Need to address root cause of 100% choppy_bullish predictions before proceeding*
+## 📊 Success Metrics
 
-## 🚨 CRITICAL ISSUE SUMMARY (2025-08-26)
+### Phase 1
+- Data validation rate: >95%
+- Schema consistency: 100%
+- Ingestion uptime: >99%
 
-### The Problem:
-1. **100% Regime Monoculture**: All 780 recent predictions are `choppy_bullish`
-2. **Phase 1 fixes were ineffective**: Despite normalization, predictions still show no diversity
-3. **Phase 2 feedback collection failed**: Multiple technical issues prevented automatic feedback
-4. **Model is not learning**: Without diverse predictions, feedback won't help
+### Phase 2
+- Feature computation: <1 second
+- Feature coverage: >90%
+- Label accuracy: Manual validation
 
-### Root Cause Analysis:
-- The model appears to be stuck in a local minimum
-- Market score normalization alone isn't enough
-- The predictor may not be using the fixed version properly
-- Possible issues with feature extraction or model weights
+### Phase 3
+- Model accuracy: >85%
+- Beats baseline by: >10%
+- Training time: <5 minutes
 
-### Recommended Immediate Actions:
-1. **Verify the fixed predictor is actually being used** in production
-2. **Check if market_regime_predictor_fixed.py is loaded** by the analyzer
-3. **Consider forcing regime diversity** through threshold adjustments
-4. **Manual intervention may be needed** to break the monoculture
+### Phase 4
+- API latency: <100ms
+- Prediction availability: >99%
+- Dashboard uptime: >99%
 
-### Impact on System:
-- ✅ **Dashboards remain functional** - No impact on existing services  
-- ✅ **Trading operations unaffected** - Position sizing still works
-- ❌ **ML predictions unreliable** - All predictions are the same regime
-- ❌ **Cannot proceed to Phase 3** - Retraining would reinforce the problem
+### Phase 5
+- Drift detection lag: <1 hour
+- Auto-retrain success: >90%
+- No single regime >40%
 
-## Quick Status Check Commands
+---
+
+## 🔑 Key Principles
+1. **Modularity** - Each component is independent
+2. **Reusability** - Shared code between training and serving
+3. **Observability** - Comprehensive logging
+4. **Safety** - Rollback capability
+5. **Simplicity** - Clear, understandable code
+
+---
+
+## 📝 Daily Progress Log
+
+### 2025-08-26 (Day 1)
+- ✅ Created project structure at `/Daily/New_Market_Regime/`
+- ✅ Designed 5-phase implementation plan
+- ✅ Created detailed documentation
+- ✅ **Phase 1 COMPLETE**: Built Data Ingestor that reuses existing scanner data
+  - Scanner results: 14 long, 47 short stocks (L/S Ratio: 0.30)
+  - Regime predictions: 81 predictions (still showing diversity issues)
+  - Market breadth: Bearish sentiment (23% bullish)
+  - Data saved in parquet format for efficient processing
+  - Market hours check implemented (weekdays 9:15 AM - 3:30 PM only)
+- ✅ **Phase 2 COMPLETE**: Feature Engineering Pipeline
+  - Built Feature Builder with 21 market breadth features
+  - Created Feature Store with SQLite metadata and versioning
+  - Implemented Regime Labeler with 7 regime types
+  - Labeled data as "choppy_bearish" with 70% confidence
+  - Complete pipeline tested end-to-end
+  - Features saved to parquet with full metadata tracking
+
+**Progress**: Completed Phase 1 & 2 on Day 1 (40% of project) 🚀
+
+---
+
+## 🚀 Quick Commands
 
 ```bash
-# Check Phase 2 feedback collection status
-cd /Users/maverick/PycharmProjects/India-TS/Daily
-./Market_Regime/check_phase2_status.sh
+# Navigate to project
+cd /Users/maverick/PycharmProjects/India-TS/Daily/New_Market_Regime
 
-# Detailed monitoring with metrics
-python3 Market_Regime/monitor_phase2.py
+# Run data ingestion
+python src/ingestion/data_ingestor.py
 
-# View recent feedback collection logs
-tail -20 logs/regime_feedback_collector.log
+# Run validation
+python src/validation/data_validator.py
 
-# Check if services are running
-launchctl list | grep -E "regime-feedback|regime-validation"
+# Check data quality
+python src/validation/generate_report.py
 ```
 
-## Expected by Tomorrow (2025-08-26 12:00 IST)
+---
 
-After ~78 predictions (every 5 min during 6.5 market hours):
-- [ ] Feedback coverage should be >60% (allowing for 45-min delay)
-- [ ] At least 40-50 validated predictions
-- [ ] Some diversity in regime distribution
-- [ ] Initial accuracy metrics available
-- [ ] Ready to assess if we can proceed to Phase 3
+## ⚠️ Important Notes
 
-If system meets criteria tomorrow, we'll implement Phase 3: Smart Retraining with quality gates and A/B testing.
+1. **Current System Issues**:
+   - Old system has 100% regime monoculture
+   - Feedback collection failed due to technical issues
+   - This new system addresses all these problems
+
+2. **Key Improvements**:
+   - Proper data validation
+   - Feature store for consistency
+   - Model registry with versioning
+   - Automated drift detection
+   - Self-healing capabilities
+
+3. **Migration Plan**:
+   - New system runs parallel to old
+   - No disruption to existing dashboards
+   - Gradual transition once stable
+
+---
+
+*Last Updated: 2025-08-26 13:15 IST*
+*Next Review: 2025-08-26 EOD - Phase 1 Progress Check*
