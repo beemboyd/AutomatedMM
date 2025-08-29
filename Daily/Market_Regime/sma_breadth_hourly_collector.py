@@ -16,7 +16,7 @@ from pathlib import Path
 import configparser
 import time
 from kiteconnect import KiteConnect
-import yfinance as yf
+# import yfinance as yf  # Commented out - not installed
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -134,33 +134,9 @@ class SMABreadthHourlyCollector:
         ]
     
     def fetch_hourly_data_yfinance(self, ticker, days=30):
-        """Fetch hourly data using yfinance"""
-        try:
-            # Convert NSE ticker to Yahoo format
-            yahoo_ticker = f"{ticker}.NS"
-            
-            stock = yf.Ticker(yahoo_ticker)
-            # Fetch hourly data for the past month
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
-            
-            data = stock.history(start=start_date, end=end_date, interval='1h')
-            
-            if data.empty:
-                return None
-                
-            # Convert to required format
-            data = data.reset_index()
-            data['DateTime'] = data['Datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
-            
-            return {
-                'ticker': ticker,
-                'data': data[['DateTime', 'Open', 'High', 'Low', 'Close', 'Volume']].to_dict('records')
-            }
-            
-        except Exception as e:
-            logger.error(f"Error fetching hourly data for {ticker}: {e}")
-            return None
+        """Fetch hourly data using yfinance - DISABLED (module not installed)"""
+        logger.warning(f"yfinance not available, skipping {ticker}")
+        return None
     
     def fetch_hourly_data_zerodha(self, ticker, days=30):
         """Fetch hourly data using Zerodha API"""
