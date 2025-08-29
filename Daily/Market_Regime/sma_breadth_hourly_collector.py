@@ -133,24 +133,22 @@ class SMABreadthHourlyCollector:
             'TATACONSUM', 'APOLLOHOSP', 'ADANIENT', 'HEROMOTOCO', 'HINDALCO'
         ]
     
-    def fetch_hourly_data_yfinance(self, ticker, days=30):
-        """Fetch hourly data using yfinance - DISABLED (module not installed)"""
-        logger.warning(f"yfinance not available, skipping {ticker}")
-        return None
+    # Removed yfinance function - using only Zerodha API
     
     def fetch_hourly_data_zerodha(self, ticker, days=30):
         """Fetch hourly data using Zerodha API"""
         try:
             if not self.use_zerodha:
-                return self.fetch_hourly_data_yfinance(ticker, days)
+                logger.error(f"Zerodha API not available for {ticker}")
+                return None
                 
             # Get instrument token for ticker
             instruments = self.kite.instruments("NSE")
             instrument = next((inst for inst in instruments if inst['tradingsymbol'] == ticker), None)
             
             if not instrument:
-                logger.warning(f"Instrument not found for {ticker}, trying yfinance")
-                return self.fetch_hourly_data_yfinance(ticker, days)
+                logger.warning(f"Instrument not found for {ticker} in NSE")
+                return None
                 
             # Calculate date range
             end_date = datetime.now()
@@ -186,8 +184,7 @@ class SMABreadthHourlyCollector:
             
         except Exception as e:
             logger.error(f"Error fetching Zerodha hourly data for {ticker}: {e}")
-            # Fallback to yfinance
-            return self.fetch_hourly_data_yfinance(ticker, days)
+            return None
     
     def calculate_hourly_sma_metrics(self, ticker_data):
         """Calculate SMA metrics and volume analysis for hourly data"""
