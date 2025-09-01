@@ -1,5 +1,42 @@
 # Activity Log
 
+## 2025-09-01 13:38 IST - Claude
+**Market Regime Dashboard Fixes**
+
+**Fixed Issues:**
+1. **Index SMA20 Analysis showing N/A:**
+   - Fixed `index_sma_analyzer.py` to fetch 40 days of data (instead of 30) for proper SMA20 calculation
+   - Added robust error handling for NaN SMA values
+   - Improved cache handling for index data
+
+2. **Volatility Score Normalization:**
+   - Updated volatility score calculation in `market_regime_analyzer.py`
+   - Changed from US market thresholds (2-6 ATR) to Indian market thresholds (20-80 ATR)
+   - Now uses median ATR for more robust calculation (less affected by outliers)
+   - Score range: 0-20 ATR = 0-0.5, 20-40 = 0.5-0.75, 40-60 = 0.75-0.875, >60 = 0.875-1.0
+   - Added percentile-based analysis and ATR spread measurement
+
+3. **SMA Breadth 100% Issue:**
+   - Identified root cause: Hourly collector limited to 100 stocks, but only getting data for 38 stocks on Sept 1
+   - This creates misleading 100% breadth readings when all 38 stocks are above SMA
+   - Normal breadth data has 474-505 stocks tracked
+
+4. **Multi-Timeframe Analysis:**
+   - Issue: All timeframes showing identical data because historical_scan_data.json is stale (ends July 30)
+   - Current scan_history.json only has Sept 1 data (94 records, single day)
+   - Needs continuous historical data collection for proper multi-timeframe analysis
+
+**Files Modified:**
+- `/Daily/Market_Regime/index_sma_analyzer.py` - Fixed SMA calculation logic
+- `/Daily/Market_Regime/market_regime_analyzer.py` - Improved volatility scoring for Indian markets
+
+**Impact:**
+- Dashboard now shows more accurate volatility scores (0.573 instead of 1.0)
+- Index SMA analysis will work once market reopens and data is available
+- Multi-timeframe analysis requires historical data accumulation over time
+
+---
+
 ## 2025-08-26 10:20 IST - Claude
 **PERMANENT FIX: Dashboard Port Configuration**
 

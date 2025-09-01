@@ -76,12 +76,12 @@ class IndexSMAAnalyzer:
             logger.error(f"Error initializing KiteConnect: {e}")
             return None
     
-    def fetch_index_data(self, days=30):
+    def fetch_index_data(self, days=40):
         """
         Fetch historical data for indices
         
         Args:
-            days: Number of days of historical data to fetch
+            days: Number of days of historical data to fetch (increased to 40 for proper SMA20)
             
         Returns:
             Dictionary with index data and SMA calculations
@@ -91,6 +91,7 @@ class IndexSMAAnalyzer:
             return self._load_cached_data()
         
         try:
+            # Need extra days for SMA calculation
             from_date = (datetime.now() - timedelta(days=days)).date()
             to_date = datetime.now().date()
             
@@ -106,27 +107,40 @@ class IndexSMAAnalyzer:
                         interval="day"
                     )
                     
-                    if historical_data:
+                    if historical_data and len(historical_data) >= 20:
                         df = pd.DataFrame(historical_data)
                         
                         # Calculate SMA20
-                        df['sma20'] = df['close'].rolling(window=20).mean()
+                        df['sma20'] = df['close'].rolling(window=20, min_periods=20).mean()
                         
-                        # Get latest values
+                        # Get latest values (ensure SMA20 is not NaN)
                         latest = df.iloc[-1]
                         
+                        # Check if SMA20 is valid
+                        if pd.isna(latest['sma20']):
+                            logger.warning(f"{index_name}: SMA20 is NaN, need more historical data")
+                            # Try to get the last valid SMA20
+                            valid_sma_df = df[df['sma20'].notna()]
+                            if not valid_sma_df.empty:
+                                latest = valid_sma_df.iloc[-1]
+                            else:
+                                logger.error(f"{index_name}: No valid SMA20 values found")
+                                continue
+                        
                         # Calculate position relative to SMA20
-                        sma_position = (latest['close'] - latest['sma20']) / latest['sma20'] * 100
+                        sma_position = (latest['close'] - latest['sma20']) / latest['sma20'] * 100 if latest['sma20'] > 0 else 0
                         
                         index_data[index_name] = {
                             'close': float(latest['close']),
-                            'sma20': float(latest['sma20']),
-                            'above_sma20': bool(latest['close'] > latest['sma20']),
-                            'sma_position_pct': float(sma_position),
+                            'sma20': float(latest['sma20']) if not pd.isna(latest['sma20']) else None,
+                            'above_sma20': bool(latest['close'] > latest['sma20']) if not pd.isna(latest['sma20']) else False,
+                            'sma_position_pct': float(sma_position) if not pd.isna(latest['sma20']) else 0,
                             'timestamp': latest['date'].isoformat() if hasattr(latest['date'], 'isoformat') else str(latest['date'])
                         }
                         
-                        logger.info(f"{index_name}: Close={latest['close']:.2f}, SMA20={latest['sma20']:.2f}, Position={sma_position:.2f}%")
+                        logger.info(f"{index_name}: Close={latest['close']:.2f}, SMA20={latest['sma20']:.2f if not pd.isna(latest['sma20']) else 0:.2f}, Position={sma_position:.2f}%")
+                    else:
+                        logger.warning(f"{index_name}: Insufficient data for SMA20 calculation (got {len(historical_data)} days)")
                         
                 except Exception as e:
                     logger.error(f"Error fetching data for {index_name}: {e}")
@@ -159,10 +173,13 @@ class IndexSMAAnalyzer:
             logger.warning("No index data available")
             return {
                 'trend': 'neutral',
-                'strength': 0,
+                'strength': 0.5,
                 'indices_above_sma20': 0,
+                'total_indices': 0,
                 'avg_position': 0,
-                'analysis': 'Unable to analyze - no data'
+                'weighted_position': 0,
+                'analysis': 'Unable to analyze - no data',
+                'index_details': {}
             }
         
         # Count indices above SMA20

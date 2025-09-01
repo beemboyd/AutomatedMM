@@ -14,6 +14,7 @@ import numpy as np
 from pathlib import Path
 import sqlite3
 import glob
+import math
 
 # Add parent directories to path
 # sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -476,22 +477,43 @@ class MarketRegimeAnalyzer:
                 median_atr = atr_values.median()
                 p75_atr = np.percentile(atr_values, 75)
                 
-                # Normalize volatility score (0-1 scale)
-                # 0 = Low volatility, 0.5 = Normal, 1.0 = High volatility
-                if avg_atr < 2.0:
-                    volatility_score = avg_atr / 4.0  # 0 to 0.5 for ATR 0-2%
-                elif avg_atr < 4.0:
-                    volatility_score = 0.5 + (avg_atr - 2.0) / 4.0  # 0.5 to 0.75 for ATR 2-4%
+                # Use median ATR for more robust calculation (less affected by outliers)
+                # Normalize volatility score (0-1 scale) based on percentile ranges
+                # Indian market typically has ATR of 20-80, not 2-6 like US markets
+                
+                # Calculate percentile-based volatility score
+                percentile_25 = np.percentile(atr_values, 25)
+                percentile_75 = np.percentile(atr_values, 75)
+                
+                # Use median for scoring (more stable than mean)
+                if median_atr < 20:
+                    volatility_score = median_atr / 40.0  # 0 to 0.5 for ATR 0-20
+                elif median_atr < 40:
+                    volatility_score = 0.5 + (median_atr - 20) / 40.0  # 0.5 to 0.75 for ATR 20-40
+                elif median_atr < 60:
+                    volatility_score = 0.75 + (median_atr - 40) / 80.0  # 0.75 to 0.875 for ATR 40-60
                 else:
-                    volatility_score = min(0.75 + (avg_atr - 4.0) / 8.0, 1.0)  # 0.75 to 1.0 for ATR > 4%
+                    volatility_score = min(0.875 + (median_atr - 60) / 160.0, 1.0)  # 0.875 to 1.0 for ATR > 60
+                
+                # Determine volatility regime based on thresholds appropriate for Indian markets
+                if median_atr < 25:
+                    volatility_regime = 'low'
+                elif median_atr < 35:
+                    volatility_regime = 'normal'
+                elif median_atr < 50:
+                    volatility_regime = 'high'
+                else:
+                    volatility_regime = 'extreme'
                 
                 volatility_data = {
-                    'volatility_score': round(volatility_score, 2),
+                    'volatility_score': round(volatility_score, 3),
                     'avg_atr': round(avg_atr, 2),
                     'median_atr': round(median_atr, 2),
+                    'p25_atr': round(percentile_25, 2),
                     'p75_atr': round(p75_atr, 2),
                     'max_atr': round(atr_values.max(), 2),
-                    'volatility_regime': 'low' if avg_atr < 2.0 else 'normal' if avg_atr < 4.0 else 'high' if avg_atr < 6.0 else 'extreme'
+                    'volatility_regime': volatility_regime,
+                    'atr_spread': round(p75_atr - percentile_25, 2)  # Measure of volatility dispersion
                 }
         
         # Get position recommendations using Kelly Criterion
@@ -654,15 +676,18 @@ class MarketRegimeAnalyzer:
         output_file = os.path.join(self.output_dir, 
                                  f"regime_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
         
+        # Clean NaN values before saving
+        cleaned_report = self._clean_nan_values(report)
+        
         with open(output_file, 'w') as f:
-            json.dump(report, f, indent=2)
+            json.dump(cleaned_report, f, indent=2)
             
         logger.info(f"Market regime report saved to {output_file}")
         
         # Also save a summary file that always has the same name for easy access
         summary_file = os.path.join(self.output_dir, "latest_regime_summary.json")
         with open(summary_file, 'w') as f:
-            json.dump(report, f, indent=2)
+            json.dump(cleaned_report, f, indent=2)
             
         # Save to central database
         self._save_report_to_db(report)
@@ -674,6 +699,30 @@ class MarketRegimeAnalyzer:
             logger.error(f"Error checking regime change: {e}")
             
         return report
+    
+    def _clean_nan_values(self, obj):
+        """Recursively clean NaN values from nested dictionaries and lists"""
+        if isinstance(obj, dict):
+            return {k: self._clean_nan_values(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._clean_nan_values(item) for item in obj]
+        elif isinstance(obj, float):
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+            return obj
+        elif isinstance(obj, np.float64) or isinstance(obj, np.float32):
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+            return float(obj)
+        elif isinstance(obj, np.int64) or isinstance(obj, np.int32):
+            return int(obj)
+        elif hasattr(obj, 'item'):  # numpy scalar
+            val = obj.item()
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                return None
+            return val
+        else:
+            return obj
     
     def _save_report_to_db(self, report):
         """Save report summary to central database"""
