@@ -1,5 +1,30 @@
 # Activity Log
 
+## 2025-09-01 13:45 IST - Claude
+**Additional Dashboard Fixes & Optimizations**
+
+**Updates:**
+1. **Removed Multi-Timeframe Analysis Section:**
+   - Disabled from dashboard as it needs historical data accumulation
+   - All timeframes showing identical data due to only having Sept 1 data
+   - Will re-enable once sufficient multi-day data is collected
+
+2. **Increased Hourly Breadth Stock Coverage:**
+   - Changed from 100 to 200 stocks for better market representation
+   - Rate limiting already in place (0.5s delay = 2 TPS compliance)
+   - Will provide more accurate breadth percentages
+
+3. **Fixed Hourly Breadth Data Collection:**
+   - Collector is working properly, fetching data for 87 stocks successfully
+   - Data shows proper variation throughout trading hours
+   - Sept 1 (Monday) data now being collected correctly
+
+**Files Modified:**
+- `/Daily/Market_Regime/sma_breadth_hourly_collector.py` - Increased stock limit to 200
+- `/Daily/Market_Regime/dashboard_enhanced.py` - Removed Multi-Timeframe Analysis section
+
+---
+
 ## 2025-09-01 13:38 IST - Claude
 **Market Regime Dashboard Fixes**
 

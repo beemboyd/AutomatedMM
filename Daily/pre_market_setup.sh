@@ -147,7 +147,27 @@ echo "✓ ICT continuous monitor started (updates every 5 minutes)"
 cd ..
 
 echo ""
-echo "Step 9: Initialize Market Breadth Dashboard"
+echo "Step 9: Clean Breadth Data (if needed)"
+echo "Checking and cleaning any bad breadth data from access token issues..."
+cd Market_Regime
+# Run breadth data validator to clean any bad data
+if [ -f "breadth_data_validator.py" ]; then
+    # Check for bad data from last 24 hours and clean if found
+    python3 breadth_data_validator.py --recent 24 2>&1 | grep -q "bad_entries_found\": 0"
+    if [ $? -ne 0 ]; then
+        echo "Found bad breadth data, cleaning..."
+        python3 breadth_data_validator.py > /dev/null 2>&1
+        echo "✓ Bad breadth data cleaned"
+    else
+        echo "✓ Breadth data is clean"
+    fi
+else
+    echo "⚠ Breadth data validator not found, skipping cleanup"
+fi
+cd ..
+
+echo ""
+echo "Step 10: Initialize Market Breadth Dashboard"
 # Kill any existing instances
 pkill -f "market_breadth_dashboard.py" 2>/dev/null
 pkill -f "dashboard_enhanced.py" 2>/dev/null  # Kill the enhanced dashboard on 8080 if running
@@ -160,21 +180,22 @@ elif [ ! -f "Market_Regime/breadth_data/market_breadth_latest.json" ]; then
 fi
 # Start dashboards
 cd Market_Regime
-# Start Market Breadth Dashboard on port 5001 (default port in the script)
-nohup python3 market_breadth_dashboard.py > market_breadth_5001.log 2>&1 &
+# Start Market Breadth Dashboard on port 5001 (explicitly set the port)
+DASHBOARD_PORT=5001 nohup python3 market_breadth_dashboard.py > market_breadth_5001.log 2>&1 &
 echo "✓ Market Breadth Dashboard initialized on port 5001"
+sleep 2  # Give it time to start before starting the next dashboard
 # Start Enhanced Dashboard on port 8080
 nohup python3 dashboard_enhanced.py > dashboard_enhanced.log 2>&1 &
 cd ..
-echo "✓ Market Regime Dashboard running on port 8080"
+echo "✓ Market Regime Dashboard (with Kelly Criterion) running on port 8080"
 echo "  Note: Full breadth scan will run at 9:30 AM when market opens"
 
 echo ""
-echo "Step 10: Check system status"
+echo "Step 11: Check system status"
 ./check_all_systems.sh
 
 echo ""
-echo "Step 11: Load Market Regime Analyzer (5-min schedule)"
+echo "Step 12: Load Market Regime Analyzer (5-min schedule)"
 echo "Loading market regime analyzer to run every 5 minutes during market hours..."
 # Unload first in case it's already loaded
 launchctl unload ~/Library/LaunchAgents/com.india-ts.market_regime_analyzer_5min.plist 2>/dev/null
@@ -195,7 +216,7 @@ else
 fi
 
 echo ""
-echo "Step 12: Run ICT SL Analysis"
+echo "Step 13: Run ICT SL Analysis"
 echo "Running ICT stop loss analysis for all CNC positions..."
 cd portfolio
 python3 ict_analysis_runner.py -u Sai 2>/dev/null

@@ -993,99 +993,8 @@ ENHANCED_DASHBOARD_HTML = '''
         </div>
         {% endif %}
         
-        <!-- Multi-Timeframe Analysis Section -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">📊 Multi-Timeframe Analysis</h5>
-                        
-                        <!-- Individual Timeframes -->
-                        <div class="row mb-3">
-                            <div class="col-md-3 mb-3">
-                                <div class="card timeframe-card" id="daily-tf-card">
-                                    <div class="card-body text-center">
-                                        <h6 class="text-muted">DAILY</h6>
-                                        <div class="tf-regime fw-bold mb-2" id="daily-regime">-</div>
-                                        <div class="small">
-                                            <div>L/S: <span id="daily-ls">-</span></div>
-                                            <div>Ratio: <span id="daily-ratio">-</span></div>
-                                            <div>Conf: <span id="daily-conf">-</span></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-3 mb-3">
-                                <div class="card timeframe-card" id="weekly-tf-card">
-                                    <div class="card-body text-center">
-                                        <h6 class="text-muted">WEEKLY</h6>
-                                        <div class="tf-regime fw-bold mb-2" id="weekly-regime">-</div>
-                                        <div class="small">
-                                            <div>L/S: <span id="weekly-ls">-</span></div>
-                                            <div>Ratio: <span id="weekly-ratio">-</span></div>
-                                            <div>Conf: <span id="weekly-conf">-</span></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-3 mb-3">
-                                <div class="card timeframe-card" id="biweekly-tf-card">
-                                    <div class="card-body text-center">
-                                        <h6 class="text-muted">BI-WEEKLY</h6>
-                                        <div class="tf-regime fw-bold mb-2" id="biweekly-regime">-</div>
-                                        <div class="small">
-                                            <div>L/S: <span id="biweekly-ls">-</span></div>
-                                            <div>Ratio: <span id="biweekly-ratio">-</span></div>
-                                            <div>Conf: <span id="biweekly-conf">-</span></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-3 mb-3">
-                                <div class="card timeframe-card" id="monthly-tf-card">
-                                    <div class="card-body text-center">
-                                        <h6 class="text-muted">MONTHLY</h6>
-                                        <div class="tf-regime fw-bold mb-2" id="monthly-regime">-</div>
-                                        <div class="small">
-                                            <div>L/S: <span id="monthly-ls">-</span></div>
-                                            <div>Ratio: <span id="monthly-ratio">-</span></div>
-                                            <div>Conf: <span id="monthly-conf">-</span></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Combined Analysis -->
-                        <div class="alert alert-info">
-                            <div class="row align-items-center">
-                                <div class="col-md-4 text-center">
-                                    <h4 class="mb-0">Alignment: <span id="mtf-alignment" class="fw-bold">-</span></h4>
-                                    <small id="mtf-alignment-status">-</small>
-                                </div>
-                                <div class="col-md-4 text-center">
-                                    <h4 class="mb-0">Combined: <span id="mtf-combined-regime" class="fw-bold">-</span></h4>
-                                    <small>Confidence: <span id="mtf-confidence">-</span></small>
-                                </div>
-                                <div class="col-md-4">
-                                    <strong>Recommendation:</strong>
-                                    <div id="mtf-recommendation" class="mt-1">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Divergence Alert (if any) -->
-                        <div id="mtf-divergence-alert" class="alert alert-warning d-none">
-                            <strong>⚠️ Timeframe Divergences Detected:</strong>
-                            <div id="mtf-divergences"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Multi-Timeframe Analysis Section Removed - Needs more historical data -->
+        <!-- Section will be re-enabled once sufficient historical data is accumulated -->
         
         <!-- Reversal Patterns Section -->
         <div class="row mt-4">
@@ -2331,33 +2240,45 @@ ENHANCED_DASHBOARD_HTML = '''
                         if (idx.index_details && idx.index_details['NIFTY 50']) {
                             const nifty = idx.index_details['NIFTY 50'];
                             document.getElementById('nifty-position').textContent = 
-                                nifty.sma_position_pct.toFixed(1) + '%';
+                                nifty.sma_position_pct !== null && nifty.sma_position_pct !== undefined 
+                                    ? nifty.sma_position_pct.toFixed(1) + '%' 
+                                    : 'N/A';
                             document.getElementById('nifty-position').style.color = 
                                 nifty.above_sma20 ? '#27ae60' : '#e74c3c';
                             document.getElementById('nifty-status').textContent = 
-                                nifty.above_sma20 ? 'Above SMA20' : 'Below SMA20';
+                                nifty.sma_position_pct !== null && nifty.sma_position_pct !== undefined
+                                    ? (nifty.above_sma20 ? 'Above SMA20' : 'Below SMA20')
+                                    : 'SMA Data Unavailable';
                         }
                         
                         // Update MIDCAP
                         if (idx.index_details && idx.index_details['NIFTY MIDCAP 100']) {
                             const midcap = idx.index_details['NIFTY MIDCAP 100'];
                             document.getElementById('midcap-position').textContent = 
-                                midcap.sma_position_pct.toFixed(1) + '%';
+                                midcap.sma_position_pct !== null && midcap.sma_position_pct !== undefined
+                                    ? midcap.sma_position_pct.toFixed(1) + '%'
+                                    : 'N/A';
                             document.getElementById('midcap-position').style.color = 
                                 midcap.above_sma20 ? '#27ae60' : '#e74c3c';
                             document.getElementById('midcap-status').textContent = 
-                                midcap.above_sma20 ? 'Above SMA20' : 'Below SMA20';
+                                midcap.sma_position_pct !== null && midcap.sma_position_pct !== undefined
+                                    ? (midcap.above_sma20 ? 'Above SMA20' : 'Below SMA20')
+                                    : 'SMA Data Unavailable';
                         }
                         
                         // Update SMALLCAP
                         if (idx.index_details && idx.index_details['NIFTY SMLCAP 100']) {
                             const smallcap = idx.index_details['NIFTY SMLCAP 100'];
                             document.getElementById('smallcap-position').textContent = 
-                                smallcap.sma_position_pct.toFixed(1) + '%';
+                                smallcap.sma_position_pct !== null && smallcap.sma_position_pct !== undefined
+                                    ? smallcap.sma_position_pct.toFixed(1) + '%'
+                                    : 'N/A';
                             document.getElementById('smallcap-position').style.color = 
                                 smallcap.above_sma20 ? '#27ae60' : '#e74c3c';
                             document.getElementById('smallcap-status').textContent = 
-                                smallcap.above_sma20 ? 'Above SMA20' : 'Below SMA20';
+                                smallcap.sma_position_pct !== null && smallcap.sma_position_pct !== undefined
+                                    ? (smallcap.above_sma20 ? 'Above SMA20' : 'Below SMA20')
+                                    : 'SMA Data Unavailable';
                         }
                         
                         // Update overall trend
@@ -2403,8 +2324,8 @@ ENHANCED_DASHBOARD_HTML = '''
                     // Update Macro/Micro View
                     updateMacroMicroView(data);
                     
-                    // Update Multi-Timeframe Analysis
-                    updateMultiTimeframeAnalysis(data);
+                    // Multi-Timeframe Analysis disabled - needs more historical data
+                    // updateMultiTimeframeAnalysis(data);
                     
                     previousData = data;
                 })

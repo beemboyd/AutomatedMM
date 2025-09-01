@@ -97,16 +97,16 @@ class SMABreadthHourlyCollector:
             fno_file = os.path.join(self.daily_dir, 'data', 'Ticker.xlsx')
             if os.path.exists(fno_file):
                 df = pd.read_excel(fno_file)
-                # For hourly data, limit to top 100 most liquid stocks
-                tickers = df['Ticker'].dropna().unique().tolist()[:100]
+                # For hourly data, use top 200 most liquid stocks for better representation
+                tickers = df['Ticker'].dropna().unique().tolist()[:200]
                 logger.info(f"Loaded {len(tickers)} FNO tickers for hourly breadth analysis")
                 return tickers
             
             # Fallback to regular ticker file
             if os.path.exists(self.ticker_file):
                 df = pd.read_excel(self.ticker_file)
-                # Limit to first 100 most liquid stocks for hourly data
-                tickers = df['Ticker'].dropna().unique().tolist()[:100]
+                # Limit to first 200 most liquid stocks for hourly data
+                tickers = df['Ticker'].dropna().unique().tolist()[:200]
                 logger.info(f"Loaded {len(tickers)} tickers from {self.ticker_file}")
                 return tickers
             else:
@@ -240,6 +240,36 @@ class SMABreadthHourlyCollector:
             logger.error(f"Error calculating hourly SMA metrics for {ticker_data['ticker']}: {e}")
             return []
     
+    def validate_breadth_entry(self, entry):
+        """Validate a breadth entry for data quality issues"""
+        # Check for suspicious patterns
+        if entry['total_stocks'] < 10:
+            logger.warning(f"Low stock count ({entry['total_stocks']}) for {entry['datetime']}")
+            return False
+            
+        # Check for impossible 100% values with low stock count
+        if (entry['sma20_breadth'] == 100.0 and 
+            entry['sma50_breadth'] == 100.0 and 
+            entry['volume_breadth'] == 100.0):
+            logger.warning(f"Suspicious 100% values for {entry['datetime']}")
+            return False
+            
+        # Check for weekend data
+        dt = pd.to_datetime(entry['datetime'])
+        if dt.weekday() in [5, 6]:
+            logger.warning(f"Weekend data detected for {entry['datetime']}")
+            return False
+            
+        # Check for outside market hours
+        if dt.hour < 9 or (dt.hour == 9 and dt.minute < 15):
+            logger.warning(f"Before market hours data for {entry['datetime']}")
+            return False
+        if dt.hour > 15 or (dt.hour == 15 and dt.minute > 30):
+            logger.warning(f"After market hours data for {entry['datetime']}")
+            return False
+            
+        return True
+    
     def aggregate_hourly_breadth(self, all_metrics):
         """Aggregate individual ticker metrics into hourly breadth data"""
         try:
@@ -260,8 +290,11 @@ class SMABreadthHourlyCollector:
                 sma50_percent = (above_sma50 / total_stocks) * 100
                 volume_breadth_percent = (above_avg_volume / total_stocks) * 100
                 
-                # Calculate average volume ratio
-                avg_volume_ratio = group['volume_ratio'].mean()
+                # Calculate average volume ratio (with fallback if field missing)
+                if 'volume_ratio' in group.columns:
+                    avg_volume_ratio = group['volume_ratio'].mean()
+                else:
+                    avg_volume_ratio = 1.0  # Default to 1.0 if not available
                 
                 # Volume participation score
                 volume_participation = volume_breadth_percent * avg_volume_ratio / 100
@@ -278,7 +311,7 @@ class SMABreadthHourlyCollector:
                 else:
                     regime = "Neutral"
                 
-                hourly_breadth.append({
+                entry = {
                     'datetime': datetime_val.strftime('%Y-%m-%d %H:%M:%S'),
                     'date': datetime_val.strftime('%Y-%m-%d'),
                     'hour': datetime_val.hour,
@@ -289,7 +322,13 @@ class SMABreadthHourlyCollector:
                     'volume_breadth': round(float(volume_breadth_percent), 2),
                     'volume_participation': round(float(volume_participation), 2),
                     'market_regime': regime
-                })
+                }
+                
+                # Validate entry before adding
+                if self.validate_breadth_entry(entry):
+                    hourly_breadth.append(entry)
+                else:
+                    logger.warning(f"Skipping invalid entry: {entry['datetime']}")
             
             return sorted(hourly_breadth, key=lambda x: x['datetime'])
             
