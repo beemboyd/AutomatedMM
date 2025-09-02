@@ -413,8 +413,8 @@ def calculate_indicators(daily_data):
     df['SwingLow'] = df['Low'][(df['Low'].shift(1) > df['Low']) & (df['Low'].shift(-1) > df['Low'])]
     
     # Forward fill swing highs and lows for resistance/support levels
-    df['LastSwingHigh'] = df['SwingHigh'].fillna(method='ffill')
-    df['LastSwingLow'] = df['SwingLow'].fillna(method='ffill')
+    df['LastSwingHigh'] = df['SwingHigh'].ffill()
+    df['LastSwingLow'] = df['SwingLow'].ffill()
     
     # Calculate trend direction based on SMA alignment
     df['TrendUp'] = (df['SMA20'] > df['SMA50']) & (df['SMA50'] > df['SMA200'])
