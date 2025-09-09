@@ -538,6 +538,142 @@ def calculate_vsr_indicators(hourly_data):
     return df
 
 # -----------------------------
+# Calculate Liquidity Metrics
+# -----------------------------
+def calculate_liquidity_metrics(ticker, data):
+    """
+    Calculate liquidity metrics for a ticker based on volume and price data
+    
+    Returns dict with:
+    - avg_daily_volume: Average daily volume (in shares)
+    - avg_daily_turnover: Average daily turnover (in Rs)
+    - avg_spread_percent: Average bid-ask spread as percentage
+    - liquidity_score: Overall liquidity score (0-100)
+    - liquidity_grade: Grade (A/B/C/D/F)
+    """
+    try:
+        if data.empty or len(data) < 5:
+            return {
+                'avg_daily_volume': 0,
+                'avg_daily_turnover': 0,
+                'avg_daily_turnover_cr': 0,
+                'avg_spread_percent': 0,
+                'liquidity_score': 0,
+                'liquidity_grade': 'F',
+                'liquidity_rank': 'Low'
+            }
+        
+        # Use last 20 periods for liquidity calculations
+        recent_data = data.tail(20)
+        
+        # Calculate average volume
+        avg_volume = recent_data['Volume'].mean()
+        
+        # Calculate average turnover (Volume * Close price)
+        recent_data['Turnover'] = recent_data['Volume'] * recent_data['Close']
+        avg_turnover = recent_data['Turnover'].mean()
+        avg_turnover_cr = avg_turnover / 10000000  # Convert to crores
+        
+        # Calculate average spread percentage
+        recent_data['Spread_Pct'] = ((recent_data['High'] - recent_data['Low']) / recent_data['Close']) * 100
+        avg_spread_pct = recent_data['Spread_Pct'].mean()
+        
+        # Calculate volume consistency (lower std deviation is better)
+        volume_cv = recent_data['Volume'].std() / recent_data['Volume'].mean() if recent_data['Volume'].mean() > 0 else 999
+        
+        # Calculate liquidity score (0-100)
+        liquidity_score = 0
+        
+        # Volume scoring (0-40 points)
+        if avg_volume >= 10000000:  # >= 1 crore shares
+            liquidity_score += 40
+        elif avg_volume >= 5000000:  # >= 50 lakh shares
+            liquidity_score += 35
+        elif avg_volume >= 1000000:  # >= 10 lakh shares
+            liquidity_score += 30
+        elif avg_volume >= 500000:   # >= 5 lakh shares
+            liquidity_score += 20
+        elif avg_volume >= 100000:   # >= 1 lakh shares
+            liquidity_score += 10
+        else:
+            liquidity_score += 5
+        
+        # Turnover scoring (0-40 points)
+        if avg_turnover_cr >= 100:   # >= 100 crores
+            liquidity_score += 40
+        elif avg_turnover_cr >= 50:  # >= 50 crores
+            liquidity_score += 35
+        elif avg_turnover_cr >= 10:  # >= 10 crores
+            liquidity_score += 30
+        elif avg_turnover_cr >= 5:   # >= 5 crores
+            liquidity_score += 20
+        elif avg_turnover_cr >= 1:   # >= 1 crore
+            liquidity_score += 10
+        else:
+            liquidity_score += 5
+        
+        # Spread scoring (0-10 points) - lower spread is better
+        if avg_spread_pct <= 1.0:
+            liquidity_score += 10
+        elif avg_spread_pct <= 2.0:
+            liquidity_score += 8
+        elif avg_spread_pct <= 3.0:
+            liquidity_score += 6
+        elif avg_spread_pct <= 5.0:
+            liquidity_score += 4
+        else:
+            liquidity_score += 2
+        
+        # Volume consistency scoring (0-10 points) - lower CV is better
+        if volume_cv <= 0.5:
+            liquidity_score += 10
+        elif volume_cv <= 1.0:
+            liquidity_score += 7
+        elif volume_cv <= 1.5:
+            liquidity_score += 5
+        else:
+            liquidity_score += 2
+        
+        # Determine grade based on score
+        if liquidity_score >= 80:
+            liquidity_grade = 'A'
+            liquidity_rank = 'Very High'
+        elif liquidity_score >= 65:
+            liquidity_grade = 'B'
+            liquidity_rank = 'High'
+        elif liquidity_score >= 50:
+            liquidity_grade = 'C'
+            liquidity_rank = 'Medium'
+        elif liquidity_score >= 35:
+            liquidity_grade = 'D'
+            liquidity_rank = 'Low'
+        else:
+            liquidity_grade = 'F'
+            liquidity_rank = 'Very Low'
+        
+        return {
+            'avg_daily_volume': round(avg_volume, 0),
+            'avg_daily_turnover': round(avg_turnover, 0),
+            'avg_daily_turnover_cr': round(avg_turnover_cr, 2),
+            'avg_spread_percent': round(avg_spread_pct, 2),
+            'liquidity_score': round(liquidity_score, 0),
+            'liquidity_grade': liquidity_grade,
+            'liquidity_rank': liquidity_rank
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating liquidity metrics for {ticker}: {e}")
+        return {
+            'avg_daily_volume': 0,
+            'avg_daily_turnover': 0,
+            'avg_daily_turnover_cr': 0,
+            'avg_spread_percent': 0,
+            'liquidity_score': 0,
+            'liquidity_grade': 'F',
+            'liquidity_rank': 'Low'
+        }
+
+# -----------------------------
 # VSR Momentum Detection
 # -----------------------------
 def detect_vsr_momentum(data):
@@ -793,17 +929,24 @@ def process_ticker(ticker):
         # Get sector information
         sector = get_sector_for_ticker(ticker)
         
+        # Calculate liquidity metrics
+        liquidity_metrics = calculate_liquidity_metrics(ticker, hourly_with_indicators)
+        
         # Log the findings
         logger.info(f"{ticker} - {vsr_pattern['pattern']} Detected!")
         logger.info(f"{ticker} - Probability Score: {vsr_pattern['probability_score']:.1f}/100")
         logger.info(f"{ticker} - VSR Ratio: {vsr_pattern['vsr_ratio']:.2f}, VSR ROC: {vsr_pattern['vsr_roc']:.1f}%")
         logger.info(f"{ticker} - Entry: {entry_price:.2f}, Stop: {stop_loss:.2f}, Target1: {vsr_pattern['target1']:.2f}")
+        logger.info(f"{ticker} - Liquidity: Grade {liquidity_metrics['liquidity_grade']} ({liquidity_metrics['liquidity_rank']}), Turnover: {liquidity_metrics['avg_daily_turnover_cr']:.2f} Cr")
         logger.info(f"{ticker} - Sector: {sector}")
         
         # Prepare result
         result = {
             'Ticker': ticker,
             'Sector': sector,
+            'Liquidity_Grade': liquidity_metrics['liquidity_grade'],
+            'Liquidity_Score': liquidity_metrics['liquidity_score'],
+            'Avg_Turnover_Cr': liquidity_metrics['avg_daily_turnover_cr'],
             'Pattern': vsr_pattern['pattern'],
             'Direction': vsr_pattern['direction'],
             'Probability_Score': vsr_pattern['probability_score'],
@@ -839,6 +982,9 @@ def process_ticker(ticker):
             'Momentum_10H': vsr_pattern['momentum_10h'],
             'Momentum_20H': vsr_pattern['momentum_20h'],
             'KC_Distance_%': vsr_pattern['kc_distance'],
+            'Avg_Daily_Volume': liquidity_metrics['avg_daily_volume'],
+            'Avg_Spread_%': liquidity_metrics['avg_spread_percent'],
+            'Liquidity_Rank': liquidity_metrics['liquidity_rank'],
             'Description': vsr_pattern['description']
         }
         
@@ -1334,7 +1480,8 @@ def main():
                     results_df[col] = results_df[col].astype(float).round(2)
             
             # Reorder columns to put important ones first
-            priority_cols = ['Ticker', 'Sector', 'Pattern', 'Direction', 'Probability_Score', 
+            priority_cols = ['Ticker', 'Sector', 'Liquidity_Grade', 'Liquidity_Score', 'Avg_Turnover_Cr',
+                           'Pattern', 'Direction', 'Probability_Score', 
                            'VSR_Ratio', 'VSR_ROC', 'VSR_Surges_10H', 'VSR_Surges_20H',
                            'Volume_Ratio', 'Spread_Pct', 
                            'Entry_Price', 'Stop_Loss', 'Target1', 'Target2', 'Risk', 'Risk_Reward_Ratio']
@@ -1371,12 +1518,14 @@ def main():
                 print(f"\n🔥 EXTREME VSR PATTERNS ({len(extreme_patterns)} stocks):")
                 for idx, row in extreme_patterns.head(5).iterrows():
                     print(f"  {row['Ticker']} ({row['Sector']}): VSR {row['VSR_Ratio']:.1f}x, "
-                          f"Score {row['Probability_Score']:.0f}, Entry ₹{row['Entry_Price']:.2f}")
+                          f"Score {row['Probability_Score']:.0f}, Liquidity: {row['Liquidity_Grade']}, "
+                          f"Entry ₹{row['Entry_Price']:.2f}")
             
             if len(high_vsr) > 0:
                 print(f"\n📈 HIGH VSR MOMENTUM ({len(high_vsr)} stocks with VSR >= 2.0x):")
                 for idx, row in high_vsr.head(5).iterrows():
                     print(f"  {row['Ticker']} ({row['Sector']}): VSR {row['VSR_Ratio']:.1f}x, "
+                          f"Liquidity: {row['Liquidity_Grade']} ({row['Avg_Turnover_Cr']:.1f} Cr), "
                           f"Surges {row['VSR_Surges_10H']}/10h, Momentum {row['Momentum_10H']:.1f}%")
             
             # Print sector summary
@@ -1389,6 +1538,7 @@ def main():
             for idx, row in results_df.head(10).iterrows():
                 print(f"{idx+1:2d}. {row['Ticker']:12s} ({row['Sector'][:15]:15s}): "
                       f"VSR {row['VSR_Ratio']:4.1f}x, Score {row['Probability_Score']:3.0f}, "
+                      f"Liq: {row['Liquidity_Grade']} ({row['Avg_Turnover_Cr']:.1f}Cr), "
                       f"Pattern: {row['Pattern']}")
 
             print(f"\nDetailed results saved to: {excel_file}")

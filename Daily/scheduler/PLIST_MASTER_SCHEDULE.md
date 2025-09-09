@@ -1,7 +1,7 @@
 # Master Plist Schedule Documentation
 
 Generated on: 2025-07-23 08:11:44  
-Last Updated: 2025-07-31 14:42:00
+Last Updated: 2025-09-07 12:40:00
 
 ## Overview
 
@@ -28,7 +28,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 
 ## India-TS Jobs
 
-**Total Jobs:** 33
+**Total Jobs:** 34
 
 **Timezone:** Asia/Kolkata
 
@@ -46,6 +46,7 @@ organized by project. This helps manage plist changes and avoid conflicts betwee
 | market_regime_analyzer_5min | Every 300 seconds | run_regime_analyzer_5min.sh | ⏸️ On Schedule |
 | market_regime_daily_metrics |  | calculate_daily_metrics.py | ⏸️ On Schedule |
 | market_regime_dashboard | Unknown | dashboard_enhanced.py | ✅ Active |
+| new_market_regime_collector | Every 300 seconds (9:15-15:30, Mon-Fri) | run_data_collection.sh | ✅ Active |
 | outcome_resolver |  | outcome_resolver.py | ⏸️ On Schedule |
 | short_reversal_daily | 09:00 (Mon-Fri), 09:30 (Mon-Fri), 10:00 (Mon-Fri), 10:30 (Mon-Fri), 11:00 (Mon-Fri), 11:30 (Mon-Fri), 12:00 (Mon-Fri), 12:30 (Mon-Fri), 13:00 (Mon-Fri), 13:30 (Mon-Fri), 14:00 (Mon-Fri), 14:30 (Mon-Fri), 15:00 (Mon-Fri), 15:30 (Mon-Fri) | Short_Reversal_Daily.py | ⏸️ On Schedule |
 | sl_watchdog_start | 09:15 (Mon-Fri) | start_all_sl_watchdogs.py | ⏸️ On Schedule |

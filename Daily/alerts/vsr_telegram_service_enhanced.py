@@ -264,7 +264,10 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
                         'pattern': pattern,
                         'score': score,
                         'type': 'hourly',
-                        'time': datetime.now().strftime('%I:%M %p')
+                        'time': datetime.now().strftime('%I:%M %p'),
+                        'Liquidity_Grade': row.get('Liquidity_Grade', 'N/A'),
+                        'Liquidity_Score': row.get('Liquidity_Score', 0),
+                        'Avg_Turnover_Cr': row.get('Avg_Turnover_Cr', 0)
                     }
                     
                     high_momentum_tickers.append(alert_data)
@@ -301,12 +304,19 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
             urgency = "🔥"
             alert_type = "VSR SURGE"
         
+        # Add liquidity info if available
+        liquidity_info = ""
+        if 'liquidity_grade' in ticker_data:
+            liquidity_info = f"💧 Liquidity: {ticker_data.get('liquidity_grade', 'N/A')} ({ticker_data.get('avg_turnover_cr', 0):.1f} Cr)\n"
+        elif 'Liquidity_Grade' in ticker_data:
+            liquidity_info = f"💧 Liquidity: {ticker_data.get('Liquidity_Grade', 'N/A')} ({ticker_data.get('Avg_Turnover_Cr', 0):.1f} Cr)\n"
+        
         message = f"""{urgency} <b>Hourly {alert_type}</b>
 
 🎯 <b>{ticker}</b>
 📊 VSR Ratio: {vsr_ratio:.1f}x
 📈 Momentum: {momentum:.1f}%
-🎯 Pattern: {pattern}
+{liquidity_info}🎯 Pattern: {pattern}
 ⏰ Time: {ticker_data['time']}
 
 <i>Hourly VSR Scanner Alert</i>"""
@@ -348,8 +358,9 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
             ticker = ticker_data['ticker']
             vsr_ratio = ticker_data['vsr_ratio']
             momentum = ticker_data['momentum']
+            liq_grade = ticker_data.get('liquidity_grade', ticker_data.get('Liquidity_Grade', 'N/A'))
             
-            message += f"• <b>{ticker}</b> - VSR: {vsr_ratio:.1f}x, Mom: {momentum:.1f}%\n"
+            message += f"• <b>{ticker}</b> - VSR: {vsr_ratio:.1f}x, Mom: {momentum:.1f}%, Liq: {liq_grade}\n"
         
         if len(sorted_batch) > 10:
             message += f"\n<i>...and {len(sorted_batch) - 10} more signals</i>"
@@ -425,8 +436,10 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
             ticker = result['ticker']
             score = result['score']
             momentum = result['momentum']
+            liq_grade = result.get('liquidity_grade', result.get('Liquidity_Grade', 'N/A'))
+            turnover = result.get('avg_turnover_cr', result.get('Avg_Turnover_Cr', 0))
             
-            message += f"• <b>{ticker}</b> - Score: {score}, Mom: {momentum:.1f}%\n"
+            message += f"• <b>{ticker}</b> - Score: {score}, Mom: {momentum:.1f}%, Liq: {liq_grade} ({turnover:.1f}Cr)\n"
         
         if len(sorted_batch) > 10:
             message += f"\n<i>...and {len(sorted_batch) - 10} more signals</i>"

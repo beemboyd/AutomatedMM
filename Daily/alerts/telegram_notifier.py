@@ -155,6 +155,11 @@ class TelegramNotifier:
         trend = ticker_data.get('trend', '')
         occurrences = ticker_data.get('occurrences', 0)  # Alert count/persistence
         
+        # Liquidity information
+        liquidity_grade = ticker_data.get('liquidity_grade', ticker_data.get('Liquidity_Grade', 'N/A'))
+        liquidity_score = ticker_data.get('liquidity_score', ticker_data.get('Liquidity_Score', 0))
+        avg_turnover_cr = ticker_data.get('avg_turnover_cr', ticker_data.get('Avg_Turnover_Cr', 0))
+        
         # Create emoji indicators
         score_emoji = "🔥" if score >= 80 else "⚡" if score >= 60 else "📈"
         trend_emoji = "🚀" if trend == "UP" else "⬆️" if trend == "up" else "➡️"
@@ -163,6 +168,12 @@ class TelegramNotifier:
         # Persistence indicator
         persistence_emoji = "🔥🔥🔥" if occurrences > 50 else "🔥🔥" if occurrences > 30 else "🔥" if occurrences > 10 else ""
         persistence_text = "HIGH PERSISTENCE" if occurrences > 30 else "MODERATE" if occurrences > 10 else "NEW"
+        
+        # Liquidity emoji and text
+        liquidity_emoji = "💎" if liquidity_grade == 'A' else "💧" if liquidity_grade == 'B' else "💦" if liquidity_grade == 'C' else "⚠️"
+        liquidity_text = f"Grade {liquidity_grade}" if liquidity_grade != 'N/A' else "N/A"
+        if avg_turnover_cr > 0:
+            liquidity_text += f" ({avg_turnover_cr:.1f} Cr)"
         
         # Format the message
         message = f"""
@@ -174,6 +185,7 @@ class TelegramNotifier:
 *VSR:* {vsr:.2f}
 *Price:* ₹{price:.2f}
 *Momentum:* {momentum:.1f}% {trend_emoji}
+*Liquidity:* {liquidity_text} {liquidity_emoji}
 *Volume:* {volume:,}
 *Sector:* {sector}
 *Days Tracked:* {days_tracked}
@@ -203,11 +215,13 @@ _Found {len(high_momentum_tickers)} high momentum tickers_
             momentum = ticker_data.get('momentum', 0)
             trend = ticker_data.get('trend', '')
             occurrences = ticker_data.get('occurrences', 0)
+            liquidity_grade = ticker_data.get('liquidity_grade', ticker_data.get('Liquidity_Grade', ''))
             
             trend_emoji = "🚀" if trend == "UP" else "⬆️" if trend == "up" else "➡️"
             persistence_icon = "🔥" if occurrences > 30 else "📊" if occurrences > 10 else ""
+            liq_icon = "💎" if liquidity_grade == 'A' else "💧" if liquidity_grade == 'B' else ""
             
-            message += f"{i}. `{ticker}` - Score: {score} | Mom: {momentum:.1f}% | Alerts: {occurrences} {persistence_icon} {trend_emoji}\n"
+            message += f"{i}. `{ticker}` - Score: {score} | Mom: {momentum:.1f}% | Liq: {liquidity_grade} {liq_icon} | Alerts: {occurrences} {persistence_icon} {trend_emoji}\n"
         
         message += f"\n_Alert from {self.bot_name} at {datetime.now(self.IST).strftime('%H:%M IST')}_"
         

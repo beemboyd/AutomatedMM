@@ -368,7 +368,7 @@ if [ ! -f "Market_Regime/breadth_data/market_breadth_latest.json" ]; then
     echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"overall\":{\"total_tickers\":603,\"above_sma20\":300,\"below_sma20\":303,\"percentage_above\":49.8}}" > Market_Regime/breadth_data/market_breadth_latest.json
 fi
 
-cd Market_Regime && nohup python3 market_breadth_dashboard.py > /dev/null 2>&1 & && cd ..
+(cd Market_Regime && nohup python3 market_breadth_dashboard.py > /dev/null 2>&1 &)
 log_message "✓ Market Breadth Dashboard started on port 8080"
 
 # Step 13: Wait for services to stabilize

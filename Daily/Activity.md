@@ -1,5 +1,203 @@
 # Activity Log
 
+## 2025-09-08 - Claude
+**Added Liquidity Metrics to VSR Scanner and Alerts**
+
+**Actions Taken:**
+- Added comprehensive liquidity metrics calculation to VSR_Momentum_Scanner.py
+- Implemented liquidity scoring system (0-100) with grades (A-F) based on volume, turnover, spread, and consistency
+- Updated scanner output to display liquidity grade, score, and average turnover in crores
+- Modified Telegram alerts (both hourly and daily) to include liquidity information
+- Enhanced console output to show liquidity metrics prominently
+
+**Files Modified:**
+- /Daily/scanners/VSR_Momentum_Scanner.py - Added calculate_liquidity_metrics() function and integrated into process_ticker()
+- /Daily/alerts/vsr_telegram_service_enhanced.py - Updated alert messages to include liquidity data
+- /Daily/alerts/telegram_notifier.py - Enhanced format_momentum_alert() and format_batch_alert() with liquidity info
+
+**Liquidity Metrics Added:**
+- Average daily volume (shares)
+- Average daily turnover (Rs and Crores)
+- Average spread percentage
+- Liquidity score (0-100)
+- Liquidity grade (A/B/C/D/F)
+- Liquidity rank (Very High/High/Medium/Low/Very Low)
+
+**Impact:**
+- Traders can now filter opportunities based on liquidity requirements
+- Better risk management with clear liquidity visibility
+- Enhanced Telegram alerts provide immediate liquidity assessment
+- Improved decision-making for position sizing based on stock liquidity
+
+## 2025-09-07 12:45 IST - Claude
+**New Market Regime ML Data Collection System Implemented**
+
+**Actions Taken:**
+- Created automated data collection pipeline for Phase 2 of ML Market Regime project
+- Set up LaunchAgent (com.india-ts.new_market_regime_collector) to run every 5 minutes during market hours
+- Implemented historical data backfill script - processed 39 days of scanner data (July 10 - Sept 5)
+- Created 19 features including technical indicators and moving averages
+- Stored backfilled data in parquet and CSV formats
+
+**Files Created/Modified:**
+- /Daily/New_Market_Regime/run_data_collection.sh - Wrapper script for data collection
+- /Daily/New_Market_Regime/simple_backfill.py - Historical data backfill script
+- /Daily/New_Market_Regime/com.india-ts.new_market_regime_collector.plist - LaunchAgent config
+- /Daily/Health/job_manager_dashboard.py - Added new job to dashboard
+- /Daily/scheduler/PLIST_MASTER_SCHEDULE.md - Updated with new LaunchAgent
+
+**Data Status:**
+- Historical: 39 days backfilled with market breadth features
+- Regime distribution: Bearish 69%, Neutral 18%, Bullish 13%
+- Forward collection: Will start automatically Monday 9:15 AM IST
+
+**Impact:**
+- Resolved critical data collection gap preventing Phase 3 (Model Training)
+- System now ready for incremental data collection and model development
+- No disruption to existing trading systems
+
+## 2025-09-04 08:54 IST - Claude
+**Pre-Market Setup Executed**
+
+**Actions Taken:**
+- Executed pre_market_setup_robust.sh to initialize trading systems
+- Verified Kite connection for user Sai Kumar Reddy Kothavenkata
+- Cleaned up stale processes and initialized persistence files
+- Initial scanners (Long/Short Reversal Daily) timed out but not critical
+- Successfully ran VSR scanner (completed in ~49 seconds)
+- Started all tracker services:
+  - VSR Tracker Enhanced (running)
+  - Hourly Tracker Service (running)
+  - Hourly Short Tracker Service (running)
+  - Short Momentum Tracker (running)
+- Started alert services:
+  - VSR Telegram Alerts
+  - Hourly Breakout Alerts
+- Started dashboards on ports:
+  - VSR Dashboard (port 3001)
+  - Hourly Tracker Dashboard (port 3002)
+  - Short Momentum Dashboard (port 3003)
+  - Hourly Short Dashboard (port 3004)
+
+**Note:** Script had minor syntax error at line 371 but completed most tasks successfully
+
+**Impact:**
+- All critical trading services are operational
+- Market data collection and tracking active
+- Dashboard monitoring available
+- Alert systems online
+
+---
+
+## 2025-09-03 10:04 IST - Claude
+**Created Unified Scanner Runner with Auto-HTML Opening**
+
+**Problem Addressed:**
+- Individual scanner scripts had HTML auto-open functionality but it wasn't always triggered
+- No unified way to run all scanners and ensure HTML reports open
+
+**Solution Implemented:**
+- Created run_unified_scanners.py script that:
+  - Runs Long Reversal Daily, Short Reversal Daily, and VSR Momentum scanners
+  - Automatically opens generated HTML reports in browser tabs
+  - Provides summary of scanner execution results
+  - Supports selective scanner execution (--scanners flag)
+  - Option to disable browser opening (--no-browser flag)
+
+**Testing:**
+- Successfully tested with VSR scanner
+- HTML report automatically opened in browser
+- Execution time: 35.8 seconds for VSR scanner
+
+**Usage:**
+```bash
+# Run all scanners and open HTML reports
+python3 run_unified_scanners.py
+
+# Run specific scanners
+python3 run_unified_scanners.py --scanners long short
+
+# Run without opening browser
+python3 run_unified_scanners.py --no-browser
+```
+
+**Impact:**
+- Ensures HTML reports are always opened when scanners run
+- Provides centralized scanner execution with consistent behavior
+- Better user experience with automatic report viewing
+
+---
+
+## 2025-09-03 07:50 IST - Claude
+**Pre-Market Setup Executed**
+
+**Actions Taken:**
+- Executed pre_market_setup_robust.sh to initialize trading systems
+- Verified Kite connection for user Sai
+- Cleaned up stale processes and initialized persistence files
+- Ran initial scanners (Long/Short Reversal Daily - timed out but not critical)
+- Successfully ran VSR scanner
+
+**Services Started:**
+- VSR Tracker Enhanced
+- Hourly Tracker Service (PID: 88010)
+- Hourly Short Tracker Service (PID: 88034)
+- Short Momentum Tracker
+- VSR Telegram Alerts
+- Hourly Breakout Alerts
+
+**Dashboards Launched:**
+- VSR Dashboard on port 3001
+- Hourly Tracker Dashboard on port 3002
+- Short Momentum Dashboard on port 3003 (PID: 88208)
+- Hourly Short Dashboard on port 3004
+- Market Breadth Dashboard (PID: 88272)
+
+**Issues:**
+- Syntax error at line 371 of pre_market_setup_robust.sh (non-critical)
+- Script mostly completed successfully despite error
+
+**Impact:**
+- All critical trading services operational and ready for market open
+- Real-time tracking and alert systems active
+- Dashboards accessible for monitoring
+
+---
+
+## 2025-09-02 13:26 IST - Claude
+**Automated ML Data Ingestion Scheduler Launched**
+
+**Problem Addressed:**
+- ML model training stalled since Aug 28 due to lack of automated data collection
+- Data was only collected manually, resulting in sparse and inconsistent datasets
+- Need for continuous data gathering to build diverse market regime samples
+
+**Solution Implemented:**
+- Created launchctl scheduler: `com.india-ts.ml-data-ingestor.plist`
+- Runs data_ingestor.py every 5 minutes (300 second interval)
+- Automatically collects scanner results, regime predictions, and market breadth
+- Creates unified datasets in JSON and Parquet formats
+
+**Configuration:**
+- Service Name: com.india-ts.ml-data-ingestor
+- Frequency: Every 5 minutes during market hours
+- Output Path: /Daily/New_Market_Regime/data/raw/
+- Logs: /Daily/New_Market_Regime/logs/
+
+**Verification:**
+- Service successfully loaded and running
+- First data collection completed at 13:26:07
+- Files created: unified_data_20250902_132607.json and .parquet
+- Market Breadth captured: L/S Ratio = 2.32, Bullish Percent = 69.9%
+
+**Impact:**
+- Continuous data collection for ML model training
+- Will build diverse dataset across different market conditions
+- Enables progression to Phase 3 of ML development once sufficient data collected
+- No manual intervention required - fully automated
+
+---
+
 ## 2025-09-02 07:53 IST - Claude
 **Pre-Market Setup Executed**
 

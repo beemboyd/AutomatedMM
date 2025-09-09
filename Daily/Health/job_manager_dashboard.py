@@ -97,6 +97,12 @@ JOBS = {
         'schedule': 'Every 5 min (9:00-15:30, Mon-Fri)',
         'path': '/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime'
     },
+    'com.india-ts.new_market_regime_collector': {
+        'name': 'New Market Regime ML Data Collector',
+        'script': 'run_data_collection.sh',
+        'schedule': 'Every 5 min (9:15-15:30, Mon-Fri)',
+        'path': '/Users/maverick/PycharmProjects/India-TS/Daily/New_Market_Regime'
+    },
     'com.india-ts.sl_watchdog_stop': {
         'name': 'SL Watchdog Stop',
         'script': 'pkill -f "SL_watchdog.py.*India-TS"',
