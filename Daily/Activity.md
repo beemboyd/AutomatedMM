@@ -1,5 +1,32 @@
 # Activity Log
 
+## 2025-09-24 14:35 IST - Claude
+**Modified Long_Reversal_Daily_Improved.py for Multi-Timeframe Support**
+
+**Changes Requested:**
+1. Remove Target, SL and Risk/Rewards columns from output
+2. Add sections for daily, weekly and monthly timeframes
+3. Restore market regime analysis in Long_Reversal_Daily.py and Short_Reversal_Daily.py (incorrectly removed)
+
+**Implementation:**
+1. **Restored market regime analysis** in Long_Reversal_Daily.py and Short_Reversal_Daily.py
+2. **Removed columns** from output: Entry_Price, Stop_Loss, Target1, Target2, Risk, Risk_Reward_Ratio
+3. **Added multi-timeframe support**:
+   - Modified `process_ticker()` to accept timeframe parameter
+   - Added support for weekly (12 months) and monthly (24 months) data
+   - Created new `main()` function that runs all three timeframes sequentially
+   - Updated file naming to include timeframe (e.g., Long_Reversal_Daily_*, Long_Reversal_Weekly_*, etc.)
+4. **Updated output format**:
+   - Added Timeframe column
+   - Kept only Volume_Ratio, Momentum_5D, ATR as numeric columns
+   - Updated HTML table headers and row data
+5. **Fixed import** for TelegramNotifier
+
+**Files Modified:**
+- `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Long_Reversal_Daily_Improved.py`
+- `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Long_Reversal_Daily.py` (restored market regime)
+- `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Short_Reversal_Daily.py` (restored market regime)
+
 ## 2025-09-24 12:36 IST - Claude
 **Disabled Market Regime Analysis in Scanners**
 

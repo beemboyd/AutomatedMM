@@ -26,6 +26,13 @@ from dateutil.relativedelta import relativedelta
 from kiteconnect import KiteConnect
 import webbrowser
 
+# Try to import TelegramNotifier
+try:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from alerts.telegram_notifier import TelegramNotifier
+except ImportError:
+    TelegramNotifier = None
+
 # Add parent directories to path
 # sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -109,7 +116,8 @@ interval_mapping = {
     '5m': '5minute',
     '1h': '60minute',
     '1d': 'day',
-    '1w': 'week'
+    '1w': 'week',
+    'month': 'month'
 }
 
 # -----------------------------
@@ -738,19 +746,31 @@ def detect_bearish_confirmation_pattern(data, last_3_bars, last_bar, prev_bar):
 # -----------------------------
 # Process Single Ticker
 # -----------------------------
-def process_ticker(ticker):
+def process_ticker(ticker, timeframe='daily'):
     """Process a single ticker for higher probability reversal patterns"""
-    logger.info(f"Processing {ticker}")
+    logger.info(f"Processing {ticker} - Timeframe: {timeframe}")
     
     try:
         now = datetime.datetime.now()
         
-        # Extended date range for better pattern recognition
-        from_date_daily = (now - relativedelta(months=6)).strftime('%Y-%m-%d')
+        # Extended date range based on timeframe
+        if timeframe == 'weekly':
+            # Weekly data for pattern detection (12 months)
+            from_date = (now - relativedelta(months=12)).strftime('%Y-%m-%d')
+            interval = interval_mapping['1w']
+        elif timeframe == 'monthly':
+            # Monthly data for pattern detection (24 months)
+            from_date = (now - relativedelta(months=24)).strftime('%Y-%m-%d')
+            interval = 'month'
+        else:  # default to daily
+            # Daily data for pattern detection (6 months)
+            from_date = (now - relativedelta(months=6)).strftime('%Y-%m-%d')
+            interval = interval_mapping['1d']
+
         to_date = now.strftime('%Y-%m-%d')
-        
-        # Fetch daily data for pattern detection
-        daily_data = fetch_data_kite(ticker, interval_mapping['1d'], from_date_daily, to_date)
+
+        # Fetch data for pattern detection
+        daily_data = fetch_data_kite(ticker, interval, from_date, to_date)
         if daily_data.empty:
             logger.warning(f"No daily data available for {ticker}, skipping")
             return None
@@ -806,12 +826,7 @@ def process_ticker(ticker):
             'Base_Score': f"{reversal_pattern.get('base_score', reversal_pattern['score'])}/7",
             'Historical_Bonus': f"+{reversal_pattern.get('historical_bonus', 0):.1f}",
             'Pattern_History': reversal_pattern.get('pattern_history', 'None')[:50] + '...' if len(reversal_pattern.get('pattern_history', '')) > 50 else reversal_pattern.get('pattern_history', 'None'),
-            'Entry_Price': entry_price,
-            'Stop_Loss': stop_loss,
-            'Target1': target1,
-            'Target2': target2,
-            'Risk': risk,
-            'Risk_Reward_Ratio': risk_reward_ratio,
+            'Timeframe': timeframe.upper(),
             'Volume_Ratio': reversal_pattern['volume_ratio'],
             'Momentum_5D': reversal_pattern['momentum_5d'],
             'ATR': reversal_pattern['atr'],
@@ -1019,16 +1034,14 @@ def generate_html_report(filtered_df, output_file, scanner_file):
                 <tr>
                     <th>Ticker</th>
                     <th>Sector</th>
+                    <th>Timeframe</th>
                     <th>Direction</th>
                     <th>Score</th>
                     <th>Base</th>
                     <th>Bonus</th>
                     <th>Pattern History</th>
-                    <th>Entry Price</th>
-                    <th>Stop Loss</th>
-                    <th>Target 1</th>
-                    <th>Risk:Reward</th>
                     <th>Volume Ratio</th>
+                    <th>Momentum</th>
                 </tr>
             </thead>
             <tbody>
@@ -1040,16 +1053,14 @@ def generate_html_report(filtered_df, output_file, scanner_file):
             <tr>
                 <td>{row['Ticker']}</td>
                 <td><span class="sector-badge">{row['Sector']}</span></td>
+                <td><span class="timeframe-badge">{row.get('Timeframe', 'DAILY')}</span></td>
                 <td><span class="ticker-direction">LONG</span></td>
                 <td>{row['Score']}</td>
                 <td>{row.get('Base_Score', 'N/A')}</td>
                 <td>{row.get('Historical_Bonus', '+0.0')}</td>
                 <td title="{row.get('Pattern_History', 'None')}">{row.get('Pattern_History', 'None')[:30]}{'...' if len(row.get('Pattern_History', '')) > 30 else ''}</td>
-                <td>₹{row['Entry_Price']:.2f}</td>
-                <td>₹{row['Stop_Loss']:.2f}</td>
-                <td>₹{row['Target1']:.2f}</td>
-                <td>{row['Risk_Reward_Ratio']:.2f}</td>
                 <td>{row['Volume_Ratio']:.2f}x</td>
+                <td>{row['Momentum_5D']:.2f}%</td>
             </tr>
         """
 
@@ -1147,9 +1158,9 @@ def generate_html_report(filtered_df, output_file, scanner_file):
 # -----------------------------
 # Main Function
 # -----------------------------
-def main():
-    """Main function to filter tickers for higher probability LONG reversals with sector information"""
-    logger.info("Long Reversal Daily filter with Sector Information")
+def scan_timeframe(timeframe='daily'):
+    """Scan all tickers for higher probability LONG reversals in a specific timeframe"""
+    logger.info(f"Long Reversal {timeframe.capitalize()} filter with Sector Information")
     
     start_time = time.time()
     
@@ -1176,7 +1187,7 @@ def main():
         # Process each ticker
         results = []
         for ticker in tickers:
-            result = process_ticker(ticker)
+            result = process_ticker(ticker, timeframe)
             if result:
                 results.append(result)
         
@@ -1184,18 +1195,18 @@ def main():
         today = datetime.datetime.now()
         formatted_date = today.strftime("%Y%m%d")
         formatted_time = today.strftime("%H%M%S")
-        excel_file = os.path.join(RESULTS_DIR, f"Long_Reversal_Daily_{formatted_date}_{formatted_time}.xlsx")
-        html_file = os.path.join(HTML_DIR, f"Long_Reversal_Daily_{formatted_date}_{formatted_time.replace('_', '-')}.html")
+        excel_file = os.path.join(RESULTS_DIR, f"Long_Reversal_{timeframe.capitalize()}_{formatted_date}_{formatted_time}.xlsx")
+        html_file = os.path.join(HTML_DIR, f"Long_Reversal_{timeframe.capitalize()}_{formatted_date}_{formatted_time.replace('_', '-')}.html")
         
         if results:
             # Convert to DataFrame
             results_df = pd.DataFrame(results)
             
-            # Sort by Score (descending) then by Risk-Reward ratio (descending)
-            results_df = results_df.sort_values(by=['Score', 'Risk_Reward_Ratio'], ascending=[False, False])
+            # Sort by Score (descending) then by Volume Ratio (descending)
+            results_df = results_df.sort_values(by=['Score', 'Volume_Ratio'], ascending=[False, False])
             
             # Round numeric columns for better readability
-            numeric_cols = ['Entry_Price', 'Stop_Loss', 'Target1', 'Target2', 'Risk', 'Risk_Reward_Ratio', 'Volume_Ratio', 'Momentum_5D', 'ATR']
+            numeric_cols = ['Volume_Ratio', 'Momentum_5D', 'ATR']
             for col in numeric_cols:
                 if col in results_df.columns:
                     results_df[col] = results_df[col].astype(float).round(2)
@@ -1233,7 +1244,7 @@ def main():
             
             print("\nTop 5 LONG patterns by score:")
             for idx, row in results_df.head(5).iterrows():
-                print(f"{row['Ticker']} ({row['Sector']}): Score {row['Score']}, Entry ₹{row['Entry_Price']:.2f}, SL ₹{row['Stop_Loss']:.2f}, R:R {row['Risk_Reward_Ratio']:.2f}")
+                print(f"{row['Ticker']} ({row['Sector']}): Score {row['Score']}, Volume {row['Volume_Ratio']:.2f}x, Momentum {row['Momentum_5D']:.2f}%")
 
             print(f"\nDetailed results saved to: {excel_file}")
             print(f"HTML report opened in browser: {html_file}")
@@ -1264,8 +1275,7 @@ def main():
                             logger.warning(f"Failed to send Telegram alert for {row['Ticker']}")
         else:
             # Create empty Excel with columns
-            empty_cols = ['Ticker', 'Sector', 'Pattern', 'Direction', 'Score', 'Base_Score', 'Historical_Bonus', 'Pattern_History',
-                          'Entry_Price', 'Stop_Loss', 'Target1', 'Target2', 'Risk', 'Risk_Reward_Ratio',
+            empty_cols = ['Ticker', 'Sector', 'Timeframe', 'Pattern', 'Direction', 'Score', 'Base_Score', 'Historical_Bonus', 'Pattern_History',
                           'Volume_Ratio', 'Momentum_5D', 'ATR', 'Description', 'Conditions_Met']
             pd.DataFrame(columns=empty_cols).to_excel(excel_file, index=False)
             
@@ -1364,6 +1374,43 @@ if __name__ == "__main__":
     print("===================================")
     print(f"Using credentials for user: {user_name}")
     print("===================================\n")
+
+
+def main():
+    """Main function to run scans across all timeframes"""
+    print("\n" + "="*80)
+    print("MULTI-TIMEFRAME LONG REVERSAL SCANNER")
+    print("="*80)
+
+    overall_start = time.time()
+    all_results = {}
+
+    # Run scans for each timeframe
+    for timeframe in ['daily', 'weekly', 'monthly']:
+        print(f"\n{'='*60}")
+        print(f"Starting {timeframe.upper()} scan...")
+        print(f"{'='*60}")
+
+        result = scan_timeframe(timeframe)
+        all_results[timeframe] = result
+
+        # Brief pause between scans to avoid API rate limits
+        if timeframe != 'monthly':
+            time.sleep(2)
+
+    # Summary
+    print("\n" + "="*80)
+    print("SCAN SUMMARY")
+    print("="*80)
+
+    for timeframe, result in all_results.items():
+        status = "Success" if result == 0 else "Failed"
+        print(f"{timeframe.upper()}: {status}")
+
+    overall_time = time.time() - overall_start
+    print(f"\nTotal execution time: {overall_time:.2f} seconds")
+
+    return 0 if all(r == 0 for r in all_results.values()) else 1
 
     result = main()
 
