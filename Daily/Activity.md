@@ -1,5 +1,25 @@
 # Activity Log
 
+## 2025-09-24 12:36 IST - Claude
+**Disabled Market Regime Analysis in Scanners**
+
+**Problem:**
+- User requested removal of market regime analysis from scanner code
+- Market regime analysis was automatically triggered after successful scans
+- Was causing additional processing time and complexity
+
+**Solution:**
+- Commented out market regime analysis triggers in all affected scanners
+- Code remains in place but disabled for easy re-enabling if needed later
+- Added clear comments indicating the code was disabled per user request
+
+**Files Modified:**
+- `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Long_Reversal_Daily_Improved.py`
+- `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Long_Reversal_Daily.py`
+- `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Short_Reversal_Daily.py`
+
+**Note:** To re-enable market regime analysis, simply uncomment the marked code blocks in each scanner.
+
 ## 2025-09-24 12:25 IST - Claude
 **Enhanced Long_Reversal_Daily_Improved.py with Historical H2 Pattern Weighting**
 
