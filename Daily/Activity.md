@@ -1,5 +1,158 @@
 # Activity Log
 
+## 2025-09-24 12:25 IST - Claude
+**Enhanced Long_Reversal_Daily_Improved.py with Historical H2 Pattern Weighting**
+
+**Problem:**
+- User requested adding weightage for stocks showing multiple H2 (Higher High) patterns
+- Stocks like TATAINVEST with repeated resistance clearance should be rated higher
+- Progressive resistance clearance needed additional scoring
+
+**Solution:**
+- Added `detect_historical_h2_patterns()` function to find past H2 patterns in 30-day lookback
+- Implemented `calculate_historical_pattern_bonus()` with time decay weighting:
+  - Recent patterns (< 7 days): 100% weight
+  - 7-14 days: 70% weight
+  - 14-21 days: 50% weight
+  - 21-30 days: 30% weight
+- Added progressive resistance clearance bonus (+0.5 for each higher resistance cleared)
+- Added consistency bonus for multiple H2 patterns (2+ patterns: +0.5, 3+ patterns: +1.0)
+- Maximum historical bonus capped at 3.0 points
+- Increased max score from 7 to 10 to accommodate historical bonus
+- Updated Excel columns and HTML report to show Base Score, Historical Bonus, and Pattern History
+
+**Testing:**
+- TATAINVEST scored 9.0/10 (Base: 6/7, Bonus: +3.0)
+- Confirms multiple H2 patterns with progressive resistance clearance
+
+**Files Modified:**
+- `/Users/maverick/PycharmProjects/India-TS/Daily/scanners/Long_Reversal_Daily_Improved.py`
+
+## 2025-09-18 13:19 IST - Claude
+**Modified pre_market_setup_robust.sh to use refresh_token_services.sh**
+
+**Problem:**
+- Dashboards were not properly restarting with refreshed token
+- Services were being started multiple times causing conflicts
+- Token refresh was not being handled consistently
+
+**Solution:**
+- Modified pre_market_setup_robust.sh to call refresh_token_services.sh in Step 3
+- Removed duplicate service startup code from pre_market_setup_robust.sh
+- Changed Steps 8-11 from starting services to verifying services are running
+- refresh_token_services.sh now handles all service restarts with proper token refresh
+
+**Changes Made:**
+- Step 3: Now runs refresh_token_services.sh to ensure clean restart with current token
+- Steps 8-11: Changed from starting services to verifying they are running
+- Removed restart_service() and start_dashboard() functions as they're handled by refresh_token_services.sh
+
+**Impact:**
+- Consistent token handling across all services
+- No more duplicate service instances
+- All dashboards properly authenticate with refreshed token
+- Dashboards now accessible at:
+  - VSR Dashboard: http://localhost:3001/
+  - Hourly Tracker: http://localhost:3002/
+  - Short Momentum: http://localhost:3003/
+  - Hourly Short: http://localhost:3004/
+  - Alert Volume Tracker: http://localhost:2002/
+
+## 2025-09-16 12:02 IST - Claude
+**Fixed Duplicate Telegram Alerts Issue**
+
+**Problem:** Multiple telegram alerts being sent for same ticker (TTML)
+
+**Root Cause:**
+- Multiple instances of vsr_telegram_service_enhanced.py were running simultaneously
+- Found 3 duplicate processes (PIDs: 56127, 59324, 58585) plus the main service
+
+**Solution:**
+- Killed all duplicate telegram service processes
+- Restarted single instance via LaunchAgent (com.india-ts.vsr-telegram-alerts-enhanced.plist)
+- Verified only one instance now running (PID: 81044)
+
+**Impact:**
+- Duplicate alerts issue resolved
+- Single telegram service instance now handles all alerts properly
+- No more multiple notifications for same ticker
+
+## 2025-09-16 11:42 IST - Claude
+**Fixed Alert Volume Tracker Dashboard**
+
+**Changes:**
+- Fixed Alert Volume Tracker dashboard issue showing 0 alerts
+- Created simplified version (alert_volume_tracker_fixed.py) to properly display yesterday's alerts
+- Dashboard now correctly shows 25 alerts from 2025-09-15
+- Fixed data structure mismatch between JSON data (yesterday_alerts) and template expectations
+- Dashboard accessible at http://localhost:2002/
+
+**Impact:** Dashboard now properly displays all yesterday's trading alerts with statistics
+
+## 2025-09-16 10:54 IST - Claude
+**Created New Tick-Based Scanner**
+
+**Changes:**
+- Created Unified_Reversal_1000T.py scanner using 1000-tick timeframe
+- Aggregates minute data into tick-equivalent bars based on volume
+- Fixed ticker file path issue (now points to data/Ticker.xlsx)
+- Uses same API credentials system as daily scanners
+
+**Impact:** New scanner available for faster signal detection using tick-aggregated data
+
+## 2025-09-16 10:19 IST - Claude
+**Restarted Pre-Market Setup after token refresh**
+
+**Actions Taken:**
+- Ran pre_market_setup_robust.sh to restart all services
+- Verified all dashboards are operational (HTTP 200 status)
+- Confirmed tracker services are running (8 processes active)
+- Unified scanner generated fresh reports with valid token data
+
+**Services Started:**
+- VSR Tracker Enhanced (port 3001)
+- Hourly Tracker Service (port 3002)
+- Short Momentum Tracker (port 3003)
+- Hourly Short Tracker (port 3004)
+- VSR Telegram Alerts
+- Hourly Breakout Alerts
+
+**Impact:**
+- All dashboards now showing real-time data with valid tokens
+- Previous 2 hours of potentially incorrect data will be refreshed
+- Scanner reports updated with latest market data
+
+## 2025-09-10 - Claude
+**Modified Long_Reversal_D_Wyckoff.py to implement Wyckoff Accumulation Analysis**
+
+**Actions Taken:**
+- Replaced SMC (Smart Money Concepts) logic with Wyckoff accumulation patterns
+- Implemented Wyckoff event detection: SC (Selling Climax), ST-A (Secondary Test), SPRING, SOS (Sign of Strength)
+- Added Volume Profile analysis for HVN (High Volume Nodes) and LVN (Low Volume Nodes)
+- Implemented enhanced 10-point scoring system (improved from 7-point requirement)
+- Modified to use Ticker.xlsx as primary source (with optional FNO Liquid filtering)
+- Updated entry/exit logic based on Wyckoff methodology
+- Changed output filenames to Long_Reversal_Daily_*.xlsx/html
+
+**Files Modified:**
+- /Daily/scanners/Long_Reversal_D_Wyckoff.py - Complete rewrite from SMC to Wyckoff methodology
+
+**Key Features Added:**
+- Wyckoff phase detection (Phase A-E)
+- Trading range identification
+- Volume Profile integration (POC, VAH, VAL)
+- LVN confluence with Spring/ST-A events
+- Enhanced scoring with 10 criteria
+- Sector-level reporting for macro bias
+- Risk-reward validation (minimum 1:2)
+
+**Impact:**
+- Scanner now focuses on institutional accumulation patterns
+- Better identification of high-probability long entries
+- Volume-based confirmation for all patterns
+- Improved accuracy with multi-factor scoring
+- Maintains compatibility with existing infrastructure
+
 ## 2025-09-08 - Claude
 **Added Liquidity Metrics to VSR Scanner and Alerts**
 
