@@ -116,8 +116,8 @@ interval_mapping = {
     '5m': '5minute',
     '1h': '60minute',
     '1d': 'day',
-    '1w': 'week',
-    'month': 'month'
+    '1w': 'week'
+    # Note: 'month' is not a valid Kite interval, we'll use daily data and resample
 }
 
 # -----------------------------
@@ -759,9 +759,9 @@ def process_ticker(ticker, timeframe='daily'):
             from_date = (now - relativedelta(months=12)).strftime('%Y-%m-%d')
             interval = interval_mapping['1w']
         elif timeframe == 'monthly':
-            # Monthly data for pattern detection (24 months)
+            # For monthly, fetch daily data and resample (24 months)
             from_date = (now - relativedelta(months=24)).strftime('%Y-%m-%d')
-            interval = 'month'
+            interval = interval_mapping['1d']  # Fetch daily data for resampling
         else:  # default to daily
             # Daily data for pattern detection (6 months)
             from_date = (now - relativedelta(months=6)).strftime('%Y-%m-%d')
@@ -772,8 +772,38 @@ def process_ticker(ticker, timeframe='daily'):
         # Fetch data for pattern detection
         daily_data = fetch_data_kite(ticker, interval, from_date, to_date)
         if daily_data.empty:
-            logger.warning(f"No daily data available for {ticker}, skipping")
+            logger.warning(f"No data available for {ticker}, skipping")
             return None
+
+        # Resample to monthly if needed
+        if timeframe == 'monthly':
+            # Ensure index is DatetimeIndex for resampling
+            if not isinstance(daily_data.index, pd.DatetimeIndex):
+                # If there's a Date column, use it as index
+                if 'Date' in daily_data.columns:
+                    daily_data = daily_data.set_index('Date')
+                else:
+                    # Try to convert index to datetime
+                    daily_data.index = pd.to_datetime(daily_data.index)
+
+            # Resample daily data to monthly (using 'ME' for month end)
+            # Include Ticker if it exists
+            agg_dict = {
+                'Open': 'first',
+                'High': 'max',
+                'Low': 'min',
+                'Close': 'last',
+                'Volume': 'sum'
+            }
+
+            # If Ticker column exists, preserve it
+            if 'Ticker' in daily_data.columns:
+                agg_dict['Ticker'] = 'first'
+
+            daily_data = daily_data.resample('ME').agg(agg_dict).dropna()
+            if daily_data.empty:
+                logger.warning(f"No monthly data after resampling for {ticker}, skipping")
+                return None
             
         # Calculate indicators
         daily_with_indicators = calculate_indicators(daily_data)
@@ -1195,8 +1225,8 @@ def scan_timeframe(timeframe='daily'):
         today = datetime.datetime.now()
         formatted_date = today.strftime("%Y%m%d")
         formatted_time = today.strftime("%H%M%S")
-        excel_file = os.path.join(RESULTS_DIR, f"Long_Reversal_{timeframe.capitalize()}_{formatted_date}_{formatted_time}.xlsx")
-        html_file = os.path.join(HTML_DIR, f"Long_Reversal_{timeframe.capitalize()}_{formatted_date}_{formatted_time.replace('_', '-')}.html")
+        excel_file = os.path.join(RESULTS_DIR, f"Long_Reversal_Improved_{timeframe.capitalize()}_{formatted_date}_{formatted_time}.xlsx")
+        html_file = os.path.join(HTML_DIR, f"Long_Reversal_Improved_{timeframe.capitalize()}_{formatted_date}_{formatted_time.replace('_', '-')}.html")
         
         if results:
             # Convert to DataFrame
