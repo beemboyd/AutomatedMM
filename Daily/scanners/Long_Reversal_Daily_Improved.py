@@ -1359,23 +1359,6 @@ def scan_timeframe(timeframe='daily'):
         logger.error(f"Stack trace: {traceback.format_exc()}")
         return 1
 
-if __name__ == "__main__":
-    # Print banner
-    print("\n===================================")
-    print("Long Reversal Daily Filter with Sector")
-    print("===================================")
-    print("Finding higher probability reversal setups (60%+):")
-    print("1. Strong breakout confirmation in new direction")
-    print("2. Multiple confirmation bars")
-    print("3. Break of significant resistance")
-    print("4. Volume expansion on breakout")
-    print("5. Wider stops for higher probability")
-    print("6. Includes Sector information")
-    print("===================================")
-    print(f"Using credentials for user: {user_name}")
-    print("===================================\n")
-
-
 def main():
     """Main function to run scans across all timeframes"""
     print("\n" + "="*80)
@@ -1411,6 +1394,24 @@ def main():
     print(f"\nTotal execution time: {overall_time:.2f} seconds")
 
     return 0 if all(r == 0 for r in all_results.values()) else 1
+
+
+if __name__ == "__main__":
+    # Print banner
+    print("\n===================================")
+    print("Long Reversal Daily Filter with Sector")
+    print("===================================")
+    print("Finding higher probability reversal setups (60%+):")
+    print("1. Strong breakout confirmation in new direction")
+    print("2. Multiple confirmation bars")
+    print("3. Break of significant resistance")
+    print("4. Volume expansion on breakout")
+    print("5. Wider stops for higher probability")
+    print("6. Includes Sector information")
+    print("7. NOW WITH MULTI-TIMEFRAME SUPPORT!")
+    print("===================================")
+    print(f"Using credentials for user: {user_name}")
+    print("===================================\n")
 
     result = main()
 
