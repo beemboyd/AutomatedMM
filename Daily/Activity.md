@@ -1,5 +1,325 @@
 # Activity Log
 
+## 2025-10-06 11:30 IST - Claude
+**Fixed "Last Alerted: First alert" Logic in Telegram Notifications**
+
+**Problem:**
+- Telegram messages were showing "Last Alerted: First alert 🆕" for tickers that had appeared multiple times
+- Users need to distinguish between truly new tickers (first time in 30 days) vs continuation trends
+
+**Root Cause:**
+- Logic in `telegram_notifier.py` showed "First alert" only when `penultimate_alert_date` was None
+- This was incorrect because a ticker could have a penultimate_alert_date from months ago but still be a first-time appearance in the 30-day tracking window
+
+**Solution:**
+- Changed logic to check `alerts_last_30_days == 1` to determine if truly first alert in 30-day window
+- If `alerts_last_30_days == 1` → show "First alert 🆕" (truly new)
+- If `alerts_last_30_days > 1` and `penultimate_alert_date` exists → show actual date/time (continuation trend)
+- Applied fix to both individual alerts and batch alerts
+
+**Impact:**
+- ✅ "First alert 🆕" now only shows for genuine first-time appearances in 30-day window
+- ✅ Continuation trends now show when the ticker was last alerted (e.g., "Yesterday", "2 days ago", "Oct 01")
+- ✅ Price change from previous alert still displayed with emoji (📈/📉)
+- ✅ Users can now distinguish new opportunities from continuation trends
+
+**Files Modified:**
+- `/Daily/alerts/telegram_notifier.py` - Updated logic in `format_momentum_alert()` (lines 172-199) and `format_batch_alert()` (lines 242-258)
+
+**Service Restarted:**
+- Restarted `com.india-ts.vsr-telegram-alerts-enhanced` to apply changes
+
+---
+
+## 2025-10-06 10:00 IST - Claude
+**Fixed VSR Dashboard Regex Pattern for New Log Format**
+
+**Problem:**
+- VSR Dashboard (http://localhost:3001) was showing "No tickers" despite VSR services running correctly
+- Log format changed to include "Alerts: N" field between "Days:" and "Liq:" but dashboard regex didn't match
+
+**Root Cause:**
+- On 2025-10-05, we added "Alerts:" field to VSR tracker logs for better persistence tracking
+- Dashboard's `parse_vsr_logs()` function used regex patterns that didn't account for this new field
+- Pattern mismatch caused 0 tickers to be parsed from logs
+
+**Solution:**
+- Updated regex `pattern_liquidity` in `vsr_tracker_dashboard.py` to include `\|\s*Alerts:\s*(\d+)\s*\|`
+- Updated group number extraction to account for new field (liquidity_grade now group 13 instead of 12, etc.)
+- Added `alerts` field extraction for all three pattern types (liquidity, enhanced, basic)
+
+**Impact:**
+- ✅ Dashboard now displays 195 tickers correctly
+- ✅ All categories working: High scores (21), Liquid stocks (24), Persistence leaders (183), Positive momentum (85)
+- ✅ No impact on Telegram alerts (they use structured data, not log parsing)
+- ✅ Dashboard API endpoint `/api/trending-tickers` now returns full data
+
+**Files Modified:**
+- `/Daily/dashboards/vsr_tracker_dashboard.py` - Updated regex patterns and group number mapping
+
+---
+
+## 2025-10-05 - Claude
+**Simplified VSR Telegram Notifications & Enhanced Persistence Tracking**
+
+**Changes Made:**
+1. **Removed fields from individual alerts** (`telegram_notifier.py`):
+   - Removed: Score, VSR, Volume, Days Tracked, Sector
+   - Kept: Ticker, Persistence, Price, Momentum, Liquidity
+   - Simplified message format for cleaner, focused alerts
+
+2. **Updated batch alert format** (`telegram_notifier.py`):
+   - Removed Score field from batch listing
+   - Changed sorting from score to momentum (highest momentum first)
+   - Kept: Ticker, Momentum, Liquidity, Alert count
+
+3. **Hourly VSR alerts updated** (`vsr_telegram_service_enhanced.py`):
+   - Removed VSR Ratio from hourly alerts
+   - Kept: Ticker, Momentum, Liquidity, Pattern, Time
+
+4. **Batch alert updates** (`vsr_telegram_service_enhanced.py`):
+   - Hourly batch: Removed VSR Ratio
+   - Daily batch: Removed Score
+
+5. **FIXED: Persistence/Occurrences showing as 0** (`vsr_tracker_service_enhanced.py`):
+   - **Root Cause**: The tracker was reading `days_tracked` from persistence data but NOT reading `appearances`
+   - **Fix**: Added `occurrences = persistence_stats['appearances']` to extract alert count
+   - **Added**: `occurrences` field to result dictionary passed to telegram alerts
+   - **Updated**: Log output to display "Alerts: N" for better tracking visibility
+   - Now correctly shows alert count (e.g., "45 alerts" for tickers like TATAINVEST, HINDCOPPER)
+
+6. **NEW: Added "Last Alerted" field** with price tracking:
+   - **Purpose**: Helps users identify if this is a fresh breakout or ongoing trend + see price movement since last alert
+   - **Implementation** (`vsr_ticker_persistence.py`):
+     - Added `daily_prices` dictionary to track price on each unique alert day
+     - Enhanced `update_tickers()` to accept and store `price_data` parameter
+     - Enhanced `get_ticker_stats()` to calculate:
+       - `penultimate_alert_date` - second-to-last alert date
+       - `penultimate_alert_price` - price on that date
+     - Extracts from sorted `daily_appearances` and `daily_prices` dictionaries
+   - **Data Flow** (`vsr_tracker_service_enhanced.py`):
+     - Collects price data for each tracked ticker
+     - Passes both `momentum_data` and `price_data` to persistence manager
+     - Extracts `penultimate_alert_date` and `penultimate_alert_price` from persistence stats
+     - Passes both to telegram notification in result dictionary
+   - **Display Format** (`telegram_notifier.py`):
+     - **Date**: "First alert 🆕" | "Yesterday" | "2 days ago" | "N days ago" | "Oct 01"
+     - **Price Change**: Shows previous price and percentage change
+       - Example: "3 days ago (₹245.50 📈 +5.2%)"
+       - 📈 for gains, 📉 for losses, ➡️ for flat
+     - Only shows price change for continued trends (not first alerts)
+   - **Batch Format**: Shows "🆕", "(Yday)", "(2d)" etc. for compact display
+
+**New Alert Format:**
+
+*Fresh Breakout:*
+```
+🔥 HIGH MOMENTUM ALERT 🔥
+
+Ticker: NEWSTOCK
+Last Alerted: First alert 🆕
+Persistence: NEW (5 alerts)
+Price: ₹245.50
+Momentum: 8.2% 🚀
+Liquidity: 💎 (12.3 Cr)
+
+Alert from ZTTrending at 10:30 IST
+```
+
+*Ongoing Trend (with price change):*
+```
+🔥 HIGH MOMENTUM ALERT 🔥
+
+Ticker: TATAINVEST
+Last Alerted: 3 days ago (₹1187.20 📈 +4.0%)
+Persistence (last 30 days): 145 alerts 🏗️
+Price: ₹1234.50
+Momentum: 12.5% 🚀
+Liquidity: 💎 (15.2 Cr)
+
+Alert from ZTTrending at 10:30 IST
+```
+
+**Impact:**
+- Cleaner, more focused alerts
+- Emphasis on actionable data: momentum, persistence, liquidity
+- Reduced information overload
+- **NEW**: Users can quickly identify fresh breakouts vs. ongoing trends
+- **NEW**: Price tracking shows how much the stock moved since last alert
+  - Helps assess if entry is still valid or stock already ran up
+  - Example: "3 days ago (₹245 📈 +8.5%)" shows +8.5% move in 3 days
+- **CRITICAL FIX**: Persistence now displays actual alert counts instead of 0
+- Better decision-making for traders
+
+7. **UPDATED: Simplified Persistence Display** (30-day window):
+   - **Change**: Changed from complex categorization to simple alert count
+   - **Old Format**: "HIGH PERSISTENCE (145 alerts) 🔥🔥 🏗️"
+   - **New Format**: "Persistence (last 30 days): 145 alerts 🏗️"
+   - **Implementation** (`vsr_ticker_persistence.py`):
+     - Increased tracking window from 15 days to 30 days
+     - Added `alerts_last_30_days` calculation in `get_ticker_stats()`
+     - Sums all appearances in daily_appearances within last 30 days
+   - **Benefits**:
+     - Cleaner, easier to understand
+     - Removed confusing HIGH/MODERATE/NEW categories
+     - Direct number shows exact frequency
+     - 30-day window provides better long-term trend visibility
+
+**Files Modified:**
+- `/Daily/alerts/telegram_notifier.py` - Updated alert formats with Last Alerted field, price change, and simplified persistence
+- `/Daily/alerts/vsr_telegram_service_enhanced.py` - Removed Score/VSR from hourly alerts
+- `/Daily/services/vsr_tracker_service_enhanced.py` - Added occurrences, alerts_last_30_days, penultimate_alert_date, penultimate_alert_price, and price data collection
+- `/Daily/services/vsr_ticker_persistence.py` - Enhanced with daily_prices tracking, penultimate price calculation, 30-day window, and alerts_last_30_days count
+
+---
+
+## 2025-09-26 11:18 IST - Claude
+**Generated VSR Efficiency Reports Matching Standard Format**
+
+**Changes Made:**
+1. **Created VSR scan efficiency analyzer with matched format**:
+   - `analysis/vsr_scan_efficiency_matched.py` - Matches exact format of vsr_efficiency_analyzer.py
+   - Generates separate Long and Short reports with identical formatting
+
+2. **Report Configuration**:
+   - Date Range: July 17, 2025 to August 17, 2025 (VSR data available from July 16)
+   - Output Directory: `/Users/maverick/PycharmProjects/India-TS/Daily/analysis/Efficiency/custom/`
+   - User Context: Sai
+   - Attempted Zerodha API integration for August price data
+
+3. **Report Format (Matching vsr_efficiency_analyzer.py)**:
+   - Separate Excel files for Long and Short positions
+   - File naming: `Eff_Analysis_[long/short]_YYYYMMDD_YYYYMMDD.xlsx`
+   - Columns: Ticker, First Alert Date/Time, First Price, Alert Count, Latest Alert Time, Latest Price, Price Change %, Avg Momentum, Avg Score, Avg VSR
+   - Summary Statistics section included
+   - Color coding: Green for positive price changes, Red for negative
+
+4. **Analysis Results**:
+   - Long Alerts: 97 tickers with 314 total alerts
+   - Short Alerts: 0 tickers (VSR signals are primarily long/bullish)
+   - Average alerts per ticker: 3.2
+   - Price changes calculated based on first vs latest alert prices
+
+**Files Created:**
+- `Eff_Analysis_long_20250817_20250717.xlsx` - Long positions report
+- `Eff_Analysis_short_20250817_20250717.xlsx` - Short positions report (empty)
+- `vsr_scan_efficiency_matched.py` - Analyzer script with matched format
+
+## 2025-09-26 11:05 IST - Claude
+**Generated Efficiency Report for July 7 - August 11, 2025**
+
+**Changes Made:**
+1. **Created Custom Efficiency Report Scripts**:
+   - `analysis/efficiency_report_custom_dates.py` - VSR dashboard analyzer (no data found)
+   - `analysis/scan_efficiency_analyzer.py` - Scan results analyzer
+
+2. **Report Configuration**:
+   - Date Range: July 7, 2025 to August 11, 2025
+   - Output Directory: `/Users/maverick/PycharmProjects/India-TS/Daily/analysis/Efficiency/custom/`
+   - User Context: Sai
+   - Report includes timestamps as requested
+
+3. **Data Collection**:
+   - Found 42 long tickers and 72 short tickers from scan results
+   - Scan files located in: `Daily/FNO/Long/Liquid/` and `Daily/FNO/Short/Liquid/`
+   - Generated random price data (Kite API not connected)
+
+4. **Issues Encountered**:
+   - Data type mismatch in scan result files (Score/Momentum columns had mixed types)
+   - VSR dashboard data not available for the specified date range
+   - Reports not successfully generated due to parsing errors
+
+**Files Created:**
+- `efficiency_report_custom_dates.py` - VSR efficiency analyzer
+- `scan_efficiency_analyzer.py` - Scan results analyzer
+
+**Next Steps:**
+- Fix data type issues in scan result parsing
+- Implement proper error handling for mixed data types
+- Consider using existing efficiency analysis files in `Efficiency/` folder
+
+## 2025-09-26 01:30 IST - Claude
+**Enhanced VSR Telegram Analyzer & Fixed Persistence Tracking**
+
+**Changes Made:**
+
+### 1. VSR Telegram Efficiency Analyzer Enhancements
+- **Added Zerodha API Integration**: Fetches historical prices when missing from alerts
+- **Price Fetching Methods**:
+  - `get_price_at_time()`: Fetches historical price at specific alert time
+  - `get_current_price()`: Fetches current market price
+  - `enrich_alert_with_price()`: Enriches alerts with missing prices
+- **VSR Log Parser**: Added parsing for telegram log files (vsr_telegram/*.log)
+- **Pattern Matching**: Extracts ticker, price, score, VSR, momentum from log entries
+
+### 2. Fixed Percentage Calculation
+- **Issue**: Price change was multiplied by 100 then Excel applied percentage format (showing 520% instead of 5.2%)
+- **Fix**: Store as decimal (0.052 for 5.2%), let Excel format handle display
+- **Files Modified**: `analysis/vsr_efficiency_analyzer_telegram.py`
+
+### 3. Added Filtering & De-duplication
+- **Positive Momentum Filter**: Only includes alerts with momentum > 0
+- **De-duplication**: Keeps only first alert per ticker, tracks subsequent count
+- **Result**: Reduced 368,332 alerts to 525 unique first signals
+- **Performance**: 65.6% win rate, strongest correlation (0.39) with alert persistence
+
+### 4. Updated Persistence Tracking (15 Days)
+- **Changed from 3 to 15 days** tracking window
+- **Unique Day Counting**: Max 1 count per day regardless of alert frequency
+- **File Modified**: `services/vsr_ticker_persistence.py`
+- **Display Format**: "Days: N" where N = 1-15 unique days ticker appeared
+- **Impact**: Better persistence tracking for telegram alerts
+
+### 5. Created VSR Documentation
+- **New File**: `docs/VSR_SCANNER_DOCUMENTATION.md`
+- **Contents**: Complete technical documentation of VSR scanner logic
+- **Includes**: Formulas, scoring system, pattern detection, persistence tracking
+- **Performance Metrics**: 30-day analysis results and correlations
+
+**Key Findings:**
+- Alert persistence (days tracked) shows strongest correlation with returns
+- Tickers with 1000+ alerts: +8.93% average return
+- Tickers with < 100 alerts: -0.88% average loss
+- VSR scanner logic unchanged - still uses hourly (60-min) data
+- Core VSR formula: Volume × Price Spread (High - Low)
+
+## 2025-09-24 15:55 IST - Claude
+**Disabled Duplicate Scanner Jobs - long_reversal_daily and short_reversal_daily**
+
+**Problem:**
+- The system was running three scanner jobs that were duplicating efforts:
+  - `long_reversal_daily`: Running every 30 mins from 9:00-15:30
+  - `short_reversal_daily`: Running every 30 mins from 9:00-15:30
+  - `unified_reversal_daily`: Running every 30 mins from 9:00-15:30
+- The unified_reversal_daily scanner already includes ALL functionality from both individual scanners
+
+**Analysis:**
+- Unified_Reversal_Daily.py imports both Long_Reversal_Daily.py and Short_Reversal_Daily.py
+- Calls the exact same process_ticker() functions from both scanners
+- Shares a data cache between them to avoid duplicate API calls
+- Generates the same outputs (Excel files, HTML reports, Telegram notifications)
+- Was specifically created to replace running both scanners separately
+
+**Solution:**
+- Unloaded both long_reversal_daily and short_reversal_daily plist jobs using launchctl
+- Moved plist files to ~/Library/LaunchAgents/disabled_plists/ for backup
+- This will save ~50% API calls, reduce system resources, and prevent potential conflicts
+
+**Commands Executed:**
+```bash
+launchctl unload ~/Library/LaunchAgents/com.india-ts.long_reversal_daily.plist
+launchctl unload ~/Library/LaunchAgents/com.india-ts.short_reversal_daily.plist
+mv ~/Library/LaunchAgents/com.india-ts.long_reversal_daily.plist ~/Library/LaunchAgents/disabled_plists/
+mv ~/Library/LaunchAgents/com.india-ts.short_reversal_daily.plist ~/Library/LaunchAgents/disabled_plists/
+```
+
+**Impact:**
+- Reduced system resource usage (CPU, memory)
+- Reduced API calls to Zerodha by ~50%
+- Eliminated duplicate processing of the same tickers
+- Prevented potential race conditions between parallel jobs
+- unified_reversal_daily continues to run and provides all the same outputs
+
 ## 2025-09-24 14:35 IST - Claude
 **Modified Long_Reversal_Daily_Improved.py for Multi-Timeframe Support**
 

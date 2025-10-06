@@ -144,87 +144,123 @@ class TelegramNotifier:
     def format_momentum_alert(self, ticker_data: Dict) -> str:
         """Format a high momentum alert message"""
         ticker = ticker_data.get('ticker', 'Unknown')
-        score = ticker_data.get('score', 0)
-        vsr = ticker_data.get('vsr', 0)
         price = ticker_data.get('price', 0)
         momentum = ticker_data.get('momentum', 0)
-        volume = ticker_data.get('volume', 0)
-        sector = ticker_data.get('sector', 'Unknown')
-        days_tracked = ticker_data.get('days_tracked', 0)
         building = ticker_data.get('building', False)
         trend = ticker_data.get('trend', '')
-        occurrences = ticker_data.get('occurrences', 0)  # Alert count/persistence
-        
+        alerts_last_30_days = ticker_data.get('alerts_last_30_days', 0)  # Alert count in last 30 days
+        penultimate_alert_date = ticker_data.get('penultimate_alert_date')  # Previous alert date
+        penultimate_alert_price = ticker_data.get('penultimate_alert_price')  # Previous alert price
+
         # Liquidity information
         liquidity_grade = ticker_data.get('liquidity_grade', ticker_data.get('Liquidity_Grade', 'N/A'))
-        liquidity_score = ticker_data.get('liquidity_score', ticker_data.get('Liquidity_Score', 0))
         avg_turnover_cr = ticker_data.get('avg_turnover_cr', ticker_data.get('Avg_Turnover_Cr', 0))
-        
+
         # Create emoji indicators
-        score_emoji = "🔥" if score >= 80 else "⚡" if score >= 60 else "📈"
+        score_emoji = "🔥"
         trend_emoji = "🚀" if trend == "UP" else "⬆️" if trend == "up" else "➡️"
         building_emoji = "🏗️" if building else ""
-        
-        # Persistence indicator
-        persistence_emoji = "🔥🔥🔥" if occurrences > 50 else "🔥🔥" if occurrences > 30 else "🔥" if occurrences > 10 else ""
-        persistence_text = "HIGH PERSISTENCE" if occurrences > 30 else "MODERATE" if occurrences > 10 else "NEW"
-        
-        # Liquidity emoji and text
-        liquidity_emoji = "💎" if liquidity_grade == 'A' else "💧" if liquidity_grade == 'B' else "💦" if liquidity_grade == 'C' else "⚠️"
-        liquidity_text = f"Grade {liquidity_grade}" if liquidity_grade != 'N/A' else "N/A"
-        if avg_turnover_cr > 0:
-            liquidity_text += f" ({avg_turnover_cr:.1f} Cr)"
-        
+
+        # Liquidity emoji only
+        liquidity_emoji = "💎" if liquidity_grade == 'A' else "💧" if liquidity_grade == 'B' else "💦" if liquidity_grade == 'C' else "⚠️" if liquidity_grade in ['D', 'E'] else "❌"
+        liquidity_text = f"{liquidity_emoji} ({avg_turnover_cr:.1f} Cr)" if avg_turnover_cr > 0 else liquidity_emoji
+
+        # Format penultimate (previous) alert date and price
+        last_alerted_text = "First alert 🆕"
+        price_change_text = ""
+
+        # Only show "First alert" if this is truly the first time in the 30-day window
+        # alerts_last_30_days == 1 means first occurrence in tracking window
+        if alerts_last_30_days == 1:
+            last_alerted_text = "First alert 🆕"
+        elif penultimate_alert_date:
+            try:
+                from datetime import datetime as dt
+                # penultimate_alert_date is in format YYYY-MM-DD
+                prev_date = dt.fromisoformat(penultimate_alert_date).date()
+                today = dt.now().date()
+                days_ago = (today - prev_date).days
+
+                if days_ago == 1:
+                    last_alerted_text = "Yesterday"
+                elif days_ago == 2:
+                    last_alerted_text = "2 days ago"
+                elif days_ago <= 7:
+                    last_alerted_text = f"{days_ago} days ago"
+                else:
+                    last_alerted_text = prev_date.strftime('%b %d')  # e.g., "Oct 01"
+
+                # Calculate price change if previous price available
+                if penultimate_alert_price and penultimate_alert_price > 0:
+                    price_change_pct = ((price - penultimate_alert_price) / penultimate_alert_price) * 100
+                    change_emoji = "📈" if price_change_pct > 0 else "📉" if price_change_pct < 0 else "➡️"
+                    price_change_text = f" (₹{penultimate_alert_price:.2f} {change_emoji} {price_change_pct:+.1f}%)"
+            except:
+                last_alerted_text = "N/A"
+
         # Format the message
         message = f"""
 {score_emoji} *HIGH MOMENTUM ALERT* {score_emoji}
 
 *Ticker:* `{ticker}`
-*Score:* {score}/100 {building_emoji}
-*Persistence:* {persistence_text} ({occurrences} alerts) {persistence_emoji}
-*VSR:* {vsr:.2f}
+*Last Alerted:* {last_alerted_text}{price_change_text}
+*Persistence (last 30 days):* {alerts_last_30_days} alerts {building_emoji}
 *Price:* ₹{price:.2f}
 *Momentum:* {momentum:.1f}% {trend_emoji}
-*Liquidity:* {liquidity_text} {liquidity_emoji}
-*Volume:* {volume:,}
-*Sector:* {sector}
-*Days Tracked:* {days_tracked}
+*Liquidity:* {liquidity_text}
 
 _Alert from {self.bot_name} at {datetime.now(self.IST).strftime('%H:%M IST')}_
 """
-        
+
         return message
     
     def format_batch_alert(self, high_momentum_tickers: List[Dict]) -> str:
         """Format multiple high momentum tickers in one message"""
         if not high_momentum_tickers:
             return ""
-        
-        # Sort by score
-        high_momentum_tickers.sort(key=lambda x: x.get('score', 0), reverse=True)
-        
+
+        # Sort by momentum
+        high_momentum_tickers.sort(key=lambda x: x.get('momentum', 0), reverse=True)
+
         message = f"""
 🔥 *HIGH MOMENTUM BATCH ALERT* 🔥
 _Found {len(high_momentum_tickers)} high momentum tickers_
 
 """
-        
+
         for i, ticker_data in enumerate(high_momentum_tickers[:10], 1):  # Limit to top 10
             ticker = ticker_data.get('ticker', 'Unknown')
-            score = ticker_data.get('score', 0)
             momentum = ticker_data.get('momentum', 0)
             trend = ticker_data.get('trend', '')
-            occurrences = ticker_data.get('occurrences', 0)
+            alerts_last_30_days = ticker_data.get('alerts_last_30_days', 0)
             liquidity_grade = ticker_data.get('liquidity_grade', ticker_data.get('Liquidity_Grade', ''))
-            
+            penultimate_alert_date = ticker_data.get('penultimate_alert_date')
+
             trend_emoji = "🚀" if trend == "UP" else "⬆️" if trend == "up" else "➡️"
-            persistence_icon = "🔥" if occurrences > 30 else "📊" if occurrences > 10 else ""
-            liq_icon = "💎" if liquidity_grade == 'A' else "💧" if liquidity_grade == 'B' else ""
-            
-            message += f"{i}. `{ticker}` - Score: {score} | Mom: {momentum:.1f}% | Liq: {liquidity_grade} {liq_icon} | Alerts: {occurrences} {persistence_icon} {trend_emoji}\n"
-        
+            liq_emoji = "💎" if liquidity_grade == 'A' else "💧" if liquidity_grade == 'B' else "💦" if liquidity_grade == 'C' else "⚠️" if liquidity_grade in ['D', 'E'] else "❌"
+
+            # Format penultimate alert date for batch
+            days_ago_text = ""
+            # Only show "First alert" emoji if this is truly the first time in the 30-day window
+            if alerts_last_30_days == 1:
+                days_ago_text = "🆕"
+            elif penultimate_alert_date:
+                try:
+                    from datetime import datetime as dt
+                    prev_date = dt.fromisoformat(penultimate_alert_date).date()
+                    today = dt.now().date()
+                    days_ago = (today - prev_date).days
+                    if days_ago == 1:
+                        days_ago_text = "(Yday)"
+                    elif days_ago <= 7:
+                        days_ago_text = f"({days_ago}d)"
+                except:
+                    pass
+
+            message += f"{i}. `{ticker}` {days_ago_text} - Mom: {momentum:.1f}% | {liq_emoji} | {alerts_last_30_days} alerts {trend_emoji}\n"
+
         message += f"\n_Alert from {self.bot_name} at {datetime.now(self.IST).strftime('%H:%M IST')}_"
-        
+
         return message
     
     def send_message(self, message: str, parse_mode: str = 'Markdown') -> bool:
