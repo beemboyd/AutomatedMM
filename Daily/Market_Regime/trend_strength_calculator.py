@@ -62,16 +62,13 @@ class TrendStrengthCalculator:
     def load_latest_scan(self):
         """Load the most recent scan results directly from Excel files"""
         import pandas as pd
-        
-        # Get today's date
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        
-        # Find latest Excel files
+
+        # Find latest Excel files (any date - don't filter by today only)
         long_dir = "/Users/maverick/PycharmProjects/India-TS/Daily/results"
         short_dir = "/Users/maverick/PycharmProjects/India-TS/Daily/results-s"
-        
-        long_files = glob(os.path.join(long_dir, f"Long_Reversal_Daily_{today}_*.xlsx"))
-        short_files = glob(os.path.join(short_dir, f"Short_Reversal_Daily_{today}_*.xlsx"))
+
+        long_files = glob(os.path.join(long_dir, "Long_Reversal_Daily_*.xlsx"))
+        short_files = glob(os.path.join(short_dir, "Short_Reversal_Daily_*.xlsx"))
         
         if not long_files or not short_files:
             # Try to fall back to cached JSON if no Excel files today

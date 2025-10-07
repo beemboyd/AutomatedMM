@@ -1,5 +1,64 @@
 # Activity Log
 
+## 2025-10-08 02:23 IST - Claude
+**Fixed Market Regime Dashboard Stale Data Issue**
+
+**Problem:**
+- Dashboard showing stale data (11L/47S from Sept 25) instead of current data (61L/44S from Oct 7)
+- Issue persisted after machine restart over weekend
+- market_regime_analyzer service failing with ModuleNotFoundError
+
+**Root Causes:**
+1. **Import Error**: `market_regime_analyzer.py` trying to import deprecated `analysis.market_regime.market_indicators` module
+2. **Date Filter Bug**: `trend_strength_calculator.py` only looking for files with today's date, ignoring recent files from previous days
+3. **Stale Cache**: Old cached JSON from July 27 being used as fallback
+
+**Fixes Applied:**
+1. **market_regime_analyzer.py**:
+   - Commented out broken `MarketIndicators` import (lines 38-39)
+   - Removed initialization of `self.indicators` (line 65)
+   - Commented out breadth calculation using deprecated module (lines 346-348)
+   - Module now imports successfully
+
+2. **trend_strength_calculator.py**:
+   - Removed today-only date filter in `load_latest_scan()` method
+   - Changed from filtering by today's date to using most recent files regardless of date
+   - Now correctly loads Oct 7 data (61L/44S) instead of failing and falling back to stale cache
+
+3. **Cleanup**:
+   - Deleted stale cache file: `scan_results/reversal_scan_20250727_234758.json`
+
+**Verification:**
+- ✅ Dashboard now shows: 61 Long / 44 Short / Ratio 1.09
+- ✅ Last Updated: 2025-10-08 02:22:19
+- ✅ `latest_regime_summary.json` updated with correct counts
+- ✅ Service can now run successfully after restarts
+
+**Files Modified:**
+- `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/market_regime_analyzer.py`
+- `/Users/maverick/PycharmProjects/India-TS/Daily/Market_Regime/trend_strength_calculator.py`
+
+## 2025-10-07 10:39 IST - Claude
+**PSAR Watchdog Successfully Launched for User Sai**
+
+**Status:**
+- ✅ PSAR watchdog running (PID: 31449)
+- ✅ Monitoring 5 CNC positions: CDSL, MTARTECH, KAYNES, LIQUIDIETF, PAYTM
+- ✅ Websocket connected and receiving tick data
+- ✅ Portfolio P&L: ₹115,658.94 (+0.73%)
+- ✅ Automatic shutdown configured at 15:30 IST
+- ✅ Logs: `/Users/maverick/PycharmProjects/India-TS/Daily/logs/Sai/SL_watchdog_PSAR_Sai.log`
+- ✅ Dashboard monitoring: http://localhost:2001
+
+**Ghost Position Cleanup:**
+- Removed ABBOTINDIA and OLECTRA (not present in broker account)
+- Successfully synced with broker state
+
+**Next Steps:**
+- Monitor PSAR calculations as tick buffers fill (1000 ticks needed per candle)
+- Watch for PSAR-based exit signals during trading hours
+- Review logs for PSAR trend changes and exit triggers
+
 ## 2025-10-07 15:30 IST - Claude
 **Created PSAR-Based Stop Loss Watchdog (SL_watchdog_PSAR.py)**
 

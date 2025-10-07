@@ -35,7 +35,8 @@ from enhanced_market_score_calculator import EnhancedMarketScoreCalculator
 from regime_change_notifier import RegimeChangeNotifier
 from pcr_analyzer import PCRAnalyzer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from analysis.market_regime.market_indicators import MarketIndicators
+# DEPRECATED: MarketIndicators moved/archived - breadth calculation now handled by other components
+# from analysis.market_regime.market_indicators import MarketIndicators
 
 # Set up logging
 logging.basicConfig(
@@ -61,7 +62,7 @@ class MarketRegimeAnalyzer:
         # self.scanner = ReversalTrendScanner()  # No longer needed - we load existing results
         self.calculator = TrendStrengthCalculator()
         self.predictor = MarketRegimePredictor()
-        self.indicators = MarketIndicators()
+        # self.indicators = MarketIndicators()  # DEPRECATED - no longer available
         
         # Initialize new components
         self.confidence_calc = ConfidenceCalculator()
@@ -342,8 +343,9 @@ class MarketRegimeAnalyzer:
                 df_combined = pd.concat([df_long, df_short], ignore_index=True) if not df_long.empty or not df_short.empty else pd.DataFrame()
                 
                 # Calculate breadth indicators
-                if not df_combined.empty:
-                    breadth_indicators = self.indicators.calculate_market_breadth(df_combined)
+                # DEPRECATED: MarketIndicators no longer available - breadth calculated elsewhere
+                # if not df_combined.empty:
+                #     breadth_indicators = self.indicators.calculate_market_breadth(df_combined)
             except Exception as e:
                 logger.error(f"Error calculating breadth indicators: {e}")
         
