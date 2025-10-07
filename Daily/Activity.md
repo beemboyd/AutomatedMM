@@ -1,5 +1,128 @@
 # Activity Log
 
+## 2025-10-07 15:30 IST - Claude
+**Created PSAR-Based Stop Loss Watchdog (SL_watchdog_PSAR.py)**
+
+**Objective:**
+- Create a new stop loss monitoring system based on Parabolic SAR instead of ATR
+- Support both CNC (delivery) and MIS (intraday) positions
+- Use real-time websocket tick data aggregated into 1000-tick candles
+- Make it configurable to enable/disable via config.ini
+
+**Implementation:**
+1. **Created New Files:**
+   - `Daily/portfolio/SL_watchdog_PSAR.py` - Main PSAR watchdog (cloned from SL_watchdog.py)
+   - `Daily/portfolio/psar_methods.py` - PSAR calculation methods and websocket handlers
+   - `Daily/portfolio/PSAR_WATCHDOG_IMPLEMENTATION.md` - Complete implementation guide
+
+2. **Key Features:**
+   - **PSAR Calculation**: Standard Parabolic SAR algorithm with configurable parameters (start=0.02, increment=0.02, max=0.2)
+   - **Tick Aggregation**: Websocket listener aggregates every 1000 ticks into OHLC candles
+   - **Exit Logic**:
+     - LONG positions exit when price < PSAR
+     - SHORT positions exit when price > PSAR
+   - **Product Type Support**: Can monitor CNC only, MIS only, or BOTH
+   - **Configuration**: Toggle via `psar_watchdog_enabled` in config.ini
+   - **Websocket Integration**: KiteTicker for real-time tick data with auto-reconnection
+
+3. **Configuration Parameters** (to be added to config.ini):
+   ```ini
+   [DEFAULT]
+   psar_watchdog_enabled = yes
+
+   [PSAR]
+   start = 0.02              # Initial AF
+   increment = 0.02          # AF increment
+   maximum = 0.2             # Max AF
+   tick_aggregate_size = 1000  # Ticks per candle
+   ```
+
+4. **Command Line Usage:**
+   ```bash
+   # Monitor CNC positions only
+   python SL_watchdog_PSAR.py --product-type CNC
+
+   # Monitor MIS positions only
+   python SL_watchdog_PSAR.py --product-type MIS
+
+   # Monitor both CNC and MIS
+   python SL_watchdog_PSAR.py --product-type BOTH
+   ```
+
+5. **Architecture Changes:**
+   - Renamed class: `SLWatchdog` → `PSARWatchdog`
+   - Removed: ATR calculations, SMA20 checks, profit target tranches
+   - Added: PSAR data structures, tick buffers, websocket integration
+   - Modified: Position loading to support CNC/MIS/BOTH filter
+   - Enhanced: Real-time monitoring via websocket vs polling
+
+**Status:**
+- ✅ Core structure created and documented
+- ✅ PSAR methods implemented in psar_methods.py
+- ✅ Configuration support added
+- ✅ Product type filtering implemented
+- ⏳ **Pending**: Final integration of PSAR methods into main class
+- ⏳ **Pending**: Testing with live positions
+- ⏳ **Pending**: config.ini updates
+
+**Files Created/Modified:**
+- `Daily/portfolio/SL_watchdog_PSAR.py` - New PSAR watchdog (2276 lines, based on SL_watchdog.py)
+- `Daily/portfolio/psar_methods.py` - PSAR calculation and websocket methods (280 lines)
+- `Daily/portfolio/PSAR_WATCHDOG_IMPLEMENTATION.md` - Implementation guide and documentation
+- `Daily/Activity.md` - This entry
+
+**Impact:**
+- Provides alternative stop loss methodology based on market structure (PSAR) vs volatility (ATR)
+- Works with both delivery and intraday positions
+- More responsive to price action via real-time tick data
+- User can choose which watchdog to run based on trading style
+- Original SL_watchdog.py remains unchanged for backward compatibility
+
+**Next Steps:**
+1. Complete integration of PSAR methods into PSARWatchdog class
+2. Add PSAR configuration section to Daily/config.ini
+3. Test with live positions (CNC and MIS)
+4. Create launcher plist if deemed production-ready
+5. Document performance comparison vs ATR watchdog
+
+---
+
+## 2025-10-07 10:00 IST - Claude
+**Fixed Duplicate Telegram Notification Processes Running Old Code**
+
+**Problem:**
+- Multiple duplicate Telegram notification processes were running (3x vsr_telegram_service_enhanced.py, 2x vsr_telegram_market_hours_manager.py)
+- Processes running on different Python versions (3.9 vs 3.11) with potentially different code
+- Caused by conflicting LaunchAgent and pre_market_setup_robust.sh both starting services
+
+**Root Cause:**
+- LaunchAgent `com.india-ts.vsr-telegram-alerts-enhanced.plist` scheduled at 8:55 AM to start market_hours_manager.py
+- `pre_market_setup_robust.sh` (runs at 8:00 AM) calls `refresh_token_services.sh` which was starting BOTH vsr_telegram_service_enhanced.py AND vsr_telegram_market_hours_manager.py
+- The market_hours_manager.py spawns vsr_telegram_service_enhanced.py as a subprocess during market hours
+- This created duplicate processes with old code instances
+
+**Solution:**
+1. Unloaded LaunchAgent: `launchctl unload ~/Library/LaunchAgents/com.india-ts.vsr-telegram-alerts-enhanced.plist`
+2. Renamed plist to disabled: `com.india-ts.vsr-telegram-alerts-enhanced.plist.disabled`
+3. Updated `refresh_token_services.sh` to ONLY start vsr_telegram_market_hours_manager.py (removed duplicate vsr_telegram_service_enhanced.py startup)
+4. Let pre_market_setup_robust.sh be the sole startup mechanism via refresh_token_services.sh
+
+**Impact:**
+- ✅ Only 1 instance of vsr_telegram_market_hours_manager.py now running (PID 26874)
+- ✅ Only 1 instance of vsr_telegram_service_enhanced.py now running (PID 26882, spawned by manager during market hours)
+- ✅ All processes using Python 3.11 with latest code
+- ✅ No duplicate notifications
+- ✅ Proper market hours control (service only runs 9:00 AM - 3:30 PM IST on weekdays)
+
+**Files Modified:**
+- `/Daily/refresh_token_services.sh` - Removed duplicate vsr_telegram_service_enhanced.py startup, kept only market_hours_manager.py
+- `~/Library/LaunchAgents/com.india-ts.vsr-telegram-alerts-enhanced.plist.disabled` - Disabled conflicting LaunchAgent
+
+**Architecture:**
+- pre_market_setup_robust.sh (8:00 AM cron) → refresh_token_services.sh → starts market_hours_manager.py → spawns vsr_telegram_service_enhanced.py during market hours
+
+---
+
 ## 2025-10-06 11:30 IST - Claude
 **Fixed "Last Alerted: First alert" Logic in Telegram Notifications**
 
