@@ -1143,11 +1143,13 @@ def main():
             html_output = generate_html_report(results_df, html_file, "Ticker.xlsx")
             logger.info(f"HTML report saved to: {html_output}")
             
-            # Open in browser
-            try:
-                webbrowser.open(f"file://{os.path.abspath(html_file)}")
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # Browser auto-launch disabled
+            logger.info(f"HTML report saved at: {html_file}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open(f"file://{os.path.abspath(html_file)}")
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
             
             # Print summary to console
             print("\n===== Short Reversal Weekly Results =====")
@@ -1222,11 +1224,13 @@ def main():
             with open(html_file, 'w', encoding='utf-8') as f:
                 f.write(no_results_html)
             
-            # Open in browser
-            try:
-                webbrowser.open(f"file://{os.path.abspath(html_file)}")
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # Browser auto-launch disabled
+            logger.info(f"HTML report saved at: {html_file}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open(f"file://{os.path.abspath(html_file)}")
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
                 
             logger.info(f"No high probability SHORT patterns found. Empty output files created at {excel_file} and {html_file}")
             print("\nNo high probability SHORT patterns found.")

@@ -1660,12 +1660,15 @@ def main():
             else:
                 logger.warning("Failed to generate PDF report")
             
-            # Open the HTML report in the default browser
-            try:
-                webbrowser.open('file://' + os.path.abspath(html_output))
-                logger.info(f"Opened HTML report in browser")
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # HTML report generated - browser auto-launch disabled
+            # To view, open the file manually: {html_output}
+            logger.info(f"HTML report generated at: {html_output}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open('file://' + os.path.abspath(html_output))
+            #     logger.info(f"Opened HTML report in browser")
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
             
             # Print summary to console
             print("\n===== High Probability Trading Opportunities =====")
@@ -1789,10 +1792,13 @@ def main():
             with open(html_file, 'w') as f:
                 f.write(html_content)
                 
-            try:
-                webbrowser.open('file://' + os.path.abspath(html_file))
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # Browser auto-launch disabled
+            logger.info(f"HTML report saved at: {html_file}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open('file://' + os.path.abspath(html_file))
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
             
             # Generate empty PDF report
             pdf_output = generate_pdf_report(pd.DataFrame(), pdf_file)

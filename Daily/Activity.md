@@ -1,5 +1,147 @@
 # Activity Log
 
+## 2025-10-23 11:45 IST - Claude
+**Disabled Browser Auto-Launch for All Scanner Reports**
+
+**Objective:**
+- Remove automatic browser opening when scanner reports are generated
+- Keep all other functionality intact (report generation, logging, file saving)
+
+**Changes Made:**
+1. **Modified 32 Scanner Files** to disable browser auto-launch:
+   - **Daily Scanners** (20 files):
+     - KC_Upper_Limit_Trending.py
+     - KC_Lower_Limit_Trending.py
+     - KC_Upper_Limit_Trending_FNO.py
+     - KC_Lower_Limit_Trending_FNO.py
+     - Long_Reversal_Daily_Improved.py
+     - Short_Reversal_Daily.py
+     - Long_Reversal_Daily_FNO_Liquid.py
+     - Long_Reversal_Daily_FNO.py
+     - Short_Reversal_Daily_FNO.py
+     - Al_Brooks_Higher_Probability_Reversal.py
+     - VSR_Momentum_Scanner.py
+     - Al_Brooks_vWAP_SMA20.py
+     - Short_Reversal_Daily_FNO_Liquid.py
+     - Long_Reversal_D_Wyckoff.py
+     - Institutional_Accumulation_Daily.py
+     - Long_Reversal_Daily.py
+     - Al_Brooks_Higher_Probability_Reversal_Weekly.py
+   - **Weekly Scanners** (3 files):
+     - Weekly/Long_Reversal_Weekly.py
+     - Weekly/KC_Upper_Limit_Weekly.py
+     - Weekly/Short_Reversal_Weekly.py
+
+2. **Implementation Details**:
+   - Commented out all `webbrowser.open()` calls
+   - Added clear logging for report generation locations
+   - Included instructions to uncomment code if auto-launch needed in future
+   - Preserved all other functionality (HTML/PDF/Excel generation, console output, logging)
+
+**Impact:**
+- Reports still generated as normal (HTML, PDF, Excel)
+- File paths logged for manual access
+- No automatic browser windows opened
+- User can manually open reports from saved locations
+
+**Testing Required:**
+- Run scanners after 2 hours to verify functionality
+- Confirm reports are generated successfully
+- Verify no browser windows open automatically
+
+## 2025-10-13 02:40 IST - Claude
+**Created Weekly Efficiency Report Automated Job**
+
+**Objective:**
+- Automate weekly efficiency report generation for past 10 business days
+- Schedule to run every Sunday at 9:00 AM IST
+
+**Implementation:**
+1. **Created Shell Script**: `/Daily/bin/weekly_efficiency_report.sh`
+   - Runs VSR efficiency analyzer for past 10 days
+   - Generates both long and short efficiency reports
+   - Saves to `/Daily/analysis/Efficiency/`
+   - Comprehensive logging to `/Daily/logs/weekly_efficiency_report.log`
+
+2. **Created LaunchAgent Plist**: `com.india-ts.weekly_efficiency_report.plist`
+   - Schedule: Every Sunday at 9:00 AM (Weekday: 0, Hour: 9, Minute: 0)
+   - Runs automated report generation without manual intervention
+   - Standard output: `/Daily/logs/weekly_efficiency_report.log`
+   - Error output: `/Daily/logs/weekly_efficiency_report_error.log`
+
+3. **Installed and Verified**:
+   - Script tested successfully - generated reports for Oct 13 - Sept 30
+   - Plist loaded and verified: `launchctl list | grep weekly_efficiency_report`
+   - Reports validated:
+     - Long: 308 tickers tracked
+     - Short: 344 tickers tracked
+     - Files: `Eff_Analysis_long_20251013_20250930.xlsx` and `Eff_Analysis_short_20251013_20250930.xlsx`
+
+**Files Created/Modified:**
+- `/Daily/bin/weekly_efficiency_report.sh` - Weekly report generation script
+- `/Daily/scheduler/plists/com.india-ts.weekly_efficiency_report.plist` - LaunchAgent configuration
+- `~/Library/LaunchAgents/com.india-ts.weekly_efficiency_report.plist` - Installed plist
+
+**Impact:**
+- Automated weekly performance tracking without manual intervention
+- Consistent 10-day analysis window for trend identification
+- Reports available every Sunday morning for review
+- Easy access to efficiency metrics for strategy refinement
+
+---
+
+## 2025-10-09 11:30 IST - Claude
+**Fixed Telegram "Last Alerted" Bug and Duplicate Process Issue**
+
+**Problems:**
+1. Telegram messages showing "Last Alerted: First alert 🆕" for tickers that had alerted multiple times
+2. Multiple duplicate instances of `hourly_breakout_alert_service.py` running simultaneously
+
+**Root Causes:**
+1. **Last Alerted Bug** (`telegram_notifier.py`):
+   - Default value was "First alert 🆕" on line 169
+   - Logic checked `alerts_last_30_days == 1` but didn't check if `penultimate_alert_date` was None
+   - Result: Tickers with no previous alerts showed "First alert" when they should
+
+2. **Duplicate Process Bug**:
+   - LaunchAgent `com.india-ts.hourly-breakout-alerts.plist` scheduled to run at 9:00 AM
+   - `refresh_token_services.sh` (called by `pre_market_setup_robust.sh`) also starting the same service
+   - Result: Two instances running (PID 54649 from LaunchAgent, PID 54788 from script)
+
+**Fixes Applied:**
+
+1. **telegram_notifier.py** (lines 169-177, 247-249):
+   - Changed default `last_alerted_text` from "First alert 🆕" to "N/A"
+   - Updated logic to check BOTH conditions: `alerts_last_30_days == 1` OR `not penultimate_alert_date`
+   - Now correctly shows "First alert 🆕" only when truly first appearance
+   - Applied fix to both `format_momentum_alert()` and `format_batch_alert()`
+
+2. **Duplicate Process Cleanup**:
+   - Killed duplicate process (PID 54788)
+   - Unloaded conflicting LaunchAgent: `launchctl unload ~/Library/LaunchAgents/com.india-ts.hourly-breakout-alerts.plist`
+   - Permanently disabled LaunchAgent: Moved to `~/Library/LaunchAgents/disabled_plists/`
+   - Service now managed exclusively by `refresh_token_services.sh` → `pre_market_setup_robust.sh`
+
+**Verification:**
+- ✅ Only 1 instance of `hourly_breakout_alert_service.py` running (PID 54649)
+- ✅ Only 1 instance of `vsr_telegram_service_enhanced.py` running (PID 60776)
+- ✅ Total alert-related processes: 3 (down from 5+)
+- ✅ LaunchAgent unloaded and won't restart on next boot
+- ✅ "Last Alerted" logic now correctly distinguishes first alerts from continuations
+
+**Impact:**
+- Telegram alerts now show accurate "Last Alerted" information
+- Users can distinguish fresh breakouts from ongoing trends
+- No more duplicate alert services competing
+- Consistent service management through pre_market script
+- Reduced system resource usage
+
+**Files Modified:**
+- `/Daily/alerts/telegram_notifier.py` - Fixed "Last Alerted" logic (2 locations)
+- LaunchAgent permanently disabled and moved to: `~/Library/LaunchAgents/disabled_plists/com.india-ts.hourly-breakout-alerts.plist`
+
+---
+
 ## 2025-10-08 02:23 IST - Claude
 **Fixed Market Regime Dashboard Stale Data Issue**
 

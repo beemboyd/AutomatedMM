@@ -986,12 +986,14 @@ def main():
             # Generate HTML report
             generate_html_report(df, html_file, TICKER_FILE)
             
-            # Open HTML file in browser
-            try:
-                webbrowser.open(f'file://{html_file}')
-                logger.info("HTML report opened in browser")
-            except Exception as e:
-                logger.warning(f"Could not open HTML report in browser: {e}")
+            # HTML report generated - browser auto-launch disabled
+            logger.info(f"HTML report generated at: {html_file}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open(f'file://{html_file}')
+            #     logger.info("HTML report opened in browser")
+            # except Exception as e:
+            #     logger.warning(f"Could not open HTML report in browser: {e}")
             
             # Summary
             logger.info(f"Weekly Analysis Summary:")

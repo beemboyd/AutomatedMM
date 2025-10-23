@@ -1276,6 +1276,8 @@ def generate_html_report(filtered_df, output_file):
                 <tr>
                     <th>Ticker</th>
                     <th>Sector</th>
+                    <th>Liquidity</th>
+                    <th>Turnover</th>
                     <th>Probability</th>
                     <th>VSR Ratio</th>
                     <th>VSR Surges</th>
@@ -1315,10 +1317,18 @@ def generate_html_report(filtered_df, output_file):
         else:
             climax_html = '-'
         
+        # Determine liquidity grade color and emoji
+        liquidity_grade = row.get('Liquidity_Grade', 'F')
+        liquidity_emoji = '💎' if liquidity_grade in ['A', 'A+'] else '💧' if liquidity_grade in ['B', 'B+'] else '💦' if liquidity_grade == 'C' else '⚠️' if liquidity_grade in ['D', 'E'] else '❌'
+        liquidity_color = '#2ecc71' if liquidity_grade in ['A', 'A+', 'B', 'B+'] else '#3498db' if liquidity_grade == 'C' else '#e67e22' if liquidity_grade in ['D', 'E'] else '#e74c3c'
+        avg_turnover = row.get('Avg_Turnover_Cr', 0)
+        
         html_content += f"""
             <tr>
                 <td style="font-weight: bold;">{row['Ticker']}</td>
                 <td>{row['Sector']}</td>
+                <td style="color: {liquidity_color}; font-weight: bold;">{liquidity_emoji} {liquidity_grade}</td>
+                <td>₹{avg_turnover:.1f} Cr</td>
                 <td><span class="{prob_class}">{row['Probability_Score']:.0f}</span></td>
                 <td><span class="{vsr_class}">{row['VSR_Ratio']:.2f}x</span></td>
                 <td>{row['VSR_Surges_10H']} / {row['VSR_Surges_20H']}</td>
@@ -1350,9 +1360,14 @@ def generate_html_report(filtered_df, output_file):
         """
         
         for idx, row in group_df.iterrows():
+            # Determine liquidity grade color and emoji for detail section
+            liquidity_grade = row.get('Liquidity_Grade', 'F')
+            liquidity_emoji = '💎' if liquidity_grade in ['A', 'A+'] else '💧' if liquidity_grade in ['B', 'B+'] else '💦' if liquidity_grade == 'C' else '⚠️' if liquidity_grade in ['D', 'E'] else '❌'
+            liquidity_color = '#2ecc71' if liquidity_grade in ['A', 'A+', 'B', 'B+'] else '#3498db' if liquidity_grade == 'C' else '#e67e22' if liquidity_grade in ['D', 'E'] else '#e74c3c'
+            
             html_content += f"""
             <div style="background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #9b59b6;">
-                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">{row['Ticker']} - {row['Sector']}</h4>
+                <h4 style="margin: 0 0 10px 0; color: #2c3e50;">{row['Ticker']} - {row['Sector']} <span style="color: {liquidity_color}; font-size: 14px; margin-left: 10px;">{liquidity_emoji} Grade {row.get('Liquidity_Grade', 'F')} (₹{row.get('Avg_Turnover_Cr', 0):.1f} Cr)</span></h4>
                 <p style="margin: 5px 0; color: #7f8c8d; font-style: italic;">"{row['Description']}"</p>
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px;">
                     <div>
@@ -1498,12 +1513,14 @@ def main():
             html_output = generate_html_report(results_df, html_file)
             logger.info(f"Generated HTML report at {html_output}")
             
-            # Open the HTML report in the default browser
-            try:
-                webbrowser.open('file://' + os.path.abspath(html_output))
-                logger.info(f"Opened HTML report in browser")
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # HTML report generated - browser auto-launch disabled
+            logger.info(f"HTML report generated at: {html_output}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open('file://' + os.path.abspath(html_output))
+            #     logger.info(f"Opened HTML report in browser")
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
             
             # Print summary to console
             print("\n===== VSR Momentum Opportunities =====")

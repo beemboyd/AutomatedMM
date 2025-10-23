@@ -1055,8 +1055,10 @@ def main():
             </html>
             """
             
-            # Open HTML in browser
-            webbrowser.open(f"file://{os.path.abspath(html_file)}")
+            # HTML report generated - browser auto-launch disabled
+            logger.info(f"HTML report generated at: {html_file}")
+            # Uncomment below to auto-launch in browser:
+            # webbrowser.open(f"file://{os.path.abspath(html_file)}")
             
         else:
             print("\nNo reversal patterns found matching the criteria (60%+ probability)")

@@ -880,12 +880,14 @@ def main():
             html_output = generate_html_report(results_df, html_file, "Ticker.xlsx")
             logger.info(f"Generated HTML report at {html_output}")
             
-            # Open the HTML report in the default browser
-            try:
-                webbrowser.open('file://' + os.path.abspath(html_output))
-                logger.info(f"Opened HTML report in browser")
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # HTML report generated - browser auto-launch disabled
+            logger.info(f"HTML report generated at: {html_output}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open('file://' + os.path.abspath(html_output))
+            #     logger.info(f"Opened HTML report in browser")
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
             
             # Print summary to console
             print("\n===== Al Brooks vWAP + SMA20 + H2 Filter Results =====")
@@ -957,10 +959,13 @@ def main():
             with open(html_file, 'w') as f:
                 f.write(html_content)
                 
-            try:
-                webbrowser.open('file://' + os.path.abspath(html_file))
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # Browser auto-launch disabled
+            logger.info(f"HTML report saved at: {html_file}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open('file://' + os.path.abspath(html_file))
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
                 
             logger.info(f"No tickers matched all criteria. Empty output files created at {excel_file} and {html_file}")
             print("\nNo tickers matched all filter criteria.")

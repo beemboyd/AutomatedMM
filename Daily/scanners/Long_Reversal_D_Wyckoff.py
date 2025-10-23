@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-# Long_Reversal_D_SMC.py - Enhanced reversal scanner with Smart Money Concepts (SMC)
-# Incorporates: BOS, CHoCH, Liquidity Sweeps, Order Blocks, Fair Value Gaps
-# Provides optimal entry points, stop loss levels, and take profit zones
+# Long_Reversal_D_Wyckoff.py - Wyckoff Accumulation Scanner for FNO Liquid Stocks
+# Detects: SC (Selling Climax), ST-A (Secondary Test - Accumulation), SPRING, SOS (Sign of Strength)
+# Incorporates: Volume Profile (HVN/LVN), Phase Analysis, Enhanced 10-point Scoring System
 
 # Standard library imports
 import os
@@ -31,7 +31,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                       "logs", "long_reversal_d_smc.log")),
+                                       "logs", "long_reversal_d_wyckoff.log")),
         logging.StreamHandler()
     ]
 )
@@ -39,8 +39,9 @@ logger = logging.getLogger(__name__)
 
 # Parse command line arguments for user
 def parse_args():
-    parser = argparse.ArgumentParser(description="Long Reversal Daily SMC Analysis - Smart Money Concepts Enhanced")
+    parser = argparse.ArgumentParser(description="Long Reversal Daily - Wyckoff Accumulation Analysis for FNO Liquid Stocks")
     parser.add_argument("-u", "--user", default="Sai", help="User name to use for API credentials (default: Sai)")
+    parser.add_argument("--fno-only", action="store_true", default=True, help="Use FNO Liquid stocks only (default: True)")
     return parser.parse_args()
 
 # Load credentials from Daily/config.ini
@@ -408,8 +409,8 @@ def calculate_indicators(daily_data):
     df['SwingLow'] = df['Low'][(df['Low'].shift(1) > df['Low']) & (df['Low'].shift(-1) > df['Low'])]
     
     # Forward fill swing highs and lows for resistance/support levels
-    df['LastSwingHigh'] = df['SwingHigh'].fillna(method='ffill')
-    df['LastSwingLow'] = df['SwingLow'].fillna(method='ffill')
+    df['LastSwingHigh'] = df['SwingHigh'].ffill()
+    df['LastSwingLow'] = df['SwingLow'].ffill()
     
     # Calculate trend direction based on SMA alignment
     df['TrendUp'] = (df['SMA20'] > df['SMA50']) & (df['SMA50'] > df['SMA200'])
@@ -437,7 +438,7 @@ def calculate_indicators(daily_data):
     return df
 
 # -----------------------------
-# SMC FUNCTIONS - Market Structure
+# WYCKOFF FUNCTIONS - Event Detection
 # -----------------------------
 def identify_swing_points(df, lookback=3):
     """Identify swing highs and lows using a lookback period"""
@@ -475,664 +476,593 @@ def identify_swing_points(df, lookback=3):
     
     return swing_highs, swing_lows
 
-def detect_market_structure(df):
-    """Detect BOS (Break of Structure) and CHoCH (Change of Character)"""
-    swing_highs, swing_lows = identify_swing_points(df)
-    
-    if len(swing_highs) < 2 or len(swing_lows) < 2:
+def detect_selling_climax(df, lookback=20):
+    """Detect Selling Climax (SC) - High volume selloff that marks potential bottom"""
+    if len(df) < lookback:
         return None
     
-    # Get last few swing points
-    last_high = swing_highs[-1]
-    prev_high = swing_highs[-2] if len(swing_highs) > 1 else None
-    last_low = swing_lows[-1]
-    prev_low = swing_lows[-2] if len(swing_lows) > 1 else None
+    recent_bars = df.tail(lookback)
+    sc_events = []
     
-    # Current price
-    current_price = df.iloc[-1]['Close']
+    for i in range(len(recent_bars) - 1):
+        bar = recent_bars.iloc[i]
+        
+        # SC criteria (more lenient):
+        # 1. Large down bar (close < open)
+        # 2. High volume (> 1.5x average, reduced from 2x)
+        # 3. Long lower wick (shows buying interest)
+        is_down_bar = bar['Close'] < bar['Open']
+        volume_spike = bar['VolumeRatio'] > 1.5  # Reduced threshold
+        
+        # Calculate wick ratio
+        body = abs(bar['Close'] - bar['Open'])
+        lower_wick = min(bar['Open'], bar['Close']) - bar['Low']
+        upper_wick = bar['High'] - max(bar['Open'], bar['Close'])
+        
+        has_long_lower_wick = lower_wick > body * 0.5  # Lower wick > 50% of body
+        
+        if is_down_bar and volume_spike and has_long_lower_wick:
+            sc_events.append({
+                'index': i,
+                'date': bar['Date'],
+                'low': bar['Low'],
+                'volume_ratio': bar['VolumeRatio'],
+                'wick_ratio': lower_wick / body if body > 0 else 0
+            })
     
-    # Detect BOS (Break of Structure)
-    bos_bullish = False
-    if prev_high and current_price > prev_high['price']:
-        bos_bullish = True
-    
-    # Detect CHoCH (Change of Character)
-    choch_bullish = False
-    if len(swing_lows) >= 3:
-        # Check if we have higher lows (bullish structure)
-        if swing_lows[-1]['price'] > swing_lows[-2]['price'] and swing_lows[-2]['price'] > swing_lows[-3]['price']:
-            choch_bullish = True
-    
-    return {
-        'bos_bullish': bos_bullish,
-        'choch_bullish': choch_bullish,
-        'last_swing_high': last_high['price'] if last_high else None,
-        'last_swing_low': last_low['price'] if last_low else None,
-        'prev_swing_high': prev_high['price'] if prev_high else None,
-        'prev_swing_low': prev_low['price'] if prev_low else None
-    }
+    return sc_events[-1] if sc_events else None
 
-# -----------------------------
-# SMC FUNCTIONS - Liquidity
-# -----------------------------
-def find_liquidity_zones(df, tolerance=0.002):
-    """Find liquidity zones (equal highs/lows) and sweeps"""
-    liquidity_zones = []
-    
-    # Find equal highs (liquidity above)
-    for i in range(len(df) - 20, max(0, len(df) - 100), -1):
-        current_high = df.iloc[i]['High']
-        for j in range(i - 1, max(0, i - 20), -1):
-            if abs(df.iloc[j]['High'] - current_high) / current_high <= tolerance:
-                liquidity_zones.append({
-                    'type': 'equal_high',
-                    'price': current_high,
-                    'strength': 2  # Number of touches
-                })
-                break
-    
-    # Find equal lows (liquidity below)
-    for i in range(len(df) - 20, max(0, len(df) - 100), -1):
-        current_low = df.iloc[i]['Low']
-        for j in range(i - 1, max(0, i - 20), -1):
-            if abs(df.iloc[j]['Low'] - current_low) / current_low <= tolerance:
-                liquidity_zones.append({
-                    'type': 'equal_low',
-                    'price': current_low,
-                    'strength': 2
-                })
-                break
-    
-    return liquidity_zones
-
-def detect_liquidity_sweep(df, liquidity_zones):
-    """Detect if recent price action swept liquidity"""
-    if len(df) < 5 or not liquidity_zones:
+def detect_secondary_test(df, sc_event, tolerance=0.02):
+    """Detect Secondary Test (ST-A) - Retest of SC low with lower volume"""
+    if not sc_event or len(df) < 5:
         return None
     
-    last_bars = df.tail(5)
+    # Look for ST after SC
+    bars_after_sc = df[df['Date'] > sc_event['date']].tail(10)
     
-    for zone in liquidity_zones:
-        if zone['type'] == 'equal_low':
-            # Check for sweep below and recovery
-            for i in range(len(last_bars) - 1):
-                if last_bars.iloc[i]['Low'] < zone['price'] and last_bars.iloc[i+1]['Close'] > zone['price']:
+    for i in range(len(bars_after_sc)):
+        bar = bars_after_sc.iloc[i]
+        
+        # ST criteria:
+        # 1. Price approaches SC low (within tolerance)
+        # 2. Lower volume than SC
+        # 3. Holds above SC low (ideally)
+        price_near_sc = abs(bar['Low'] - sc_event['low']) / sc_event['low'] <= tolerance
+        lower_volume = bar['VolumeRatio'] < sc_event['volume_ratio'] * 0.7
+        holds_above = bar['Low'] >= sc_event['low'] * 0.995  # Allow slight undercut
+        
+        if price_near_sc and lower_volume:
+            return {
+                'date': bar['Date'],
+                'low': bar['Low'],
+                'held_above': holds_above,
+                'volume_ratio': bar['VolumeRatio']
+            }
+    
+    return None
+
+def detect_spring(df, trading_range, lookback=15):
+    """Detect SPRING - False breakdown below support that quickly recovers"""
+    if len(df) < lookback or not trading_range:
+        return None
+    
+    recent_bars = df.tail(lookback)  # Look at more bars
+    support_level = trading_range['support']
+    
+    for i in range(len(recent_bars) - 1):
+        bar = recent_bars.iloc[i]
+        next_bar = recent_bars.iloc[i + 1] if i < len(recent_bars) - 1 else None
+        
+        # SPRING criteria (more lenient):
+        # 1. Wick below or near support
+        # 2. Close back inside or near range
+        # 3. Any volume increase
+        wick_below = bar['Low'] < support_level * 1.01  # Allow near support
+        close_inside = bar['Close'] > support_level * 0.99  # More lenient
+        
+        if wick_below and close_inside:
+            # Check for follow-through
+            if next_bar is not None:
+                bullish_followthrough = next_bar['Close'] > next_bar['Open']
+                volume_expansion = next_bar['VolumeRatio'] > 1.1  # Reduced threshold
+                
+                if bullish_followthrough or volume_expansion or bar['VolumeRatio'] > 1.2:
                     return {
-                        'type': 'bullish_sweep',
-                        'swept_level': zone['price'],
-                        'sweep_low': last_bars.iloc[i]['Low']
+                        'date': bar['Date'],
+                        'spring_low': bar['Low'],
+                        'recovery_close': bar['Close'],
+                        'volume_ratio': bar['VolumeRatio'],
+                        'confirmed': bullish_followthrough
                     }
     
     return None
 
-# -----------------------------
-# SMC FUNCTIONS - Order Blocks
-# -----------------------------
-def identify_order_blocks(df, lookback=20):
-    """Identify bullish order blocks (last down candle before up move)"""
-    order_blocks = []
+def detect_sign_of_strength(df, trading_range, lookback=10):
+    """Detect Sign of Strength (SOS) - Breakout above resistance with volume"""
+    if len(df) < lookback or not trading_range:
+        return None
     
-    for i in range(len(df) - 3, max(len(df) - lookback, 0), -1):
-        # Check for bearish candle
-        if df.iloc[i]['Close'] < df.iloc[i]['Open']:
-            # Check if next candles are bullish
-            if (df.iloc[i+1]['Close'] > df.iloc[i+1]['Open'] and 
-                df.iloc[i+2]['Close'] > df.iloc[i+2]['Open']):
-                
-                # Check for significant move
-                move_size = (df.iloc[i+2]['Close'] - df.iloc[i]['Low']) / df.iloc[i]['Low']
-                if move_size > 0.02:  # 2% move
-                    # Check volume confirmation
-                    if df.iloc[i+1]['VolumeRatio'] > 1.2 or df.iloc[i+2]['VolumeRatio'] > 1.2:
-                        order_blocks.append({
-                            'index': i,
-                            'high': df.iloc[i]['High'],
-                            'low': df.iloc[i]['Low'],
-                            'mid': (df.iloc[i]['High'] + df.iloc[i]['Low']) / 2,
-                            'volume_ratio': max(df.iloc[i+1]['VolumeRatio'], df.iloc[i+2]['VolumeRatio']),
-                            'strength': move_size
-                        })
+    recent_bars = df.tail(lookback)
+    resistance_level = trading_range['resistance']
     
-    # Return the most recent valid order block
-    if order_blocks:
-        return order_blocks[0]
+    for i in range(len(recent_bars)):
+        bar = recent_bars.iloc[i]
+        
+        # SOS criteria (more lenient):
+        # 1. Close near or above resistance
+        # 2. Above average volume
+        # 3. Bullish bar
+        breaks_resistance = bar['Close'] > resistance_level * 0.99  # Near resistance
+        high_volume = bar['VolumeRatio'] > 1.2  # Reduced threshold
+        bullish_bar = bar['Close'] > bar['Open']
+        strong_body = bar['BodyPercent'] > 50  # Reduced threshold
+        
+        if breaks_resistance and high_volume and bullish_bar and strong_body:
+            return {
+                'date': bar['Date'],
+                'breakout_level': bar['Close'],
+                'volume_ratio': bar['VolumeRatio'],
+                'strength': (bar['Close'] - resistance_level) / resistance_level
+            }
+    
     return None
 
-def check_order_block_mitigation(df, order_block):
-    """Check if price has returned to test/mitigate the order block"""
-    if not order_block:
+def identify_trading_range(df, lookback=50):
+    """Identify the current trading range (support and resistance)"""
+    if len(df) < lookback:
+        return None
+    
+    recent_data = df.tail(lookback)
+    
+    # Find major highs and lows
+    highs = recent_data['High'].rolling(window=5).max()
+    lows = recent_data['Low'].rolling(window=5).min()
+    
+    # Get resistance and support levels
+    resistance = highs.max()
+    support = lows.min()
+    
+    # Calculate range metrics
+    range_height = resistance - support
+    range_percent = (range_height / support) * 100
+    
+    return {
+        'resistance': resistance,
+        'support': support,
+        'range_height': range_height,
+        'range_percent': range_percent,
+        'midpoint': (resistance + support) / 2
+    }
+
+def determine_wyckoff_phase(sc, st, spring, sos, current_price, trading_range):
+    """Determine the current Wyckoff phase - more lenient"""
+    if not trading_range:
+        return "ACCUMULATION"  # Default to accumulation if range exists
+    
+    # Phase A: SC and ST
+    if sc and not spring and not sos:
+        return "PHASE_A"
+    
+    # Phase B: Building cause (trading range)
+    if sc and st and not spring and not sos:
+        if trading_range['support'] < current_price < trading_range['resistance']:
+            return "PHASE_B"
+    
+    # Phase C: Spring/Test
+    if spring:
+        return "PHASE_C"
+    
+    # Phase D: SOS and markup
+    if sos:
+        return "PHASE_D"
+    
+    # Phase E: Markup continuation
+    if sos and current_price > trading_range['resistance'] * 1.05:
+        return "PHASE_E"
+    
+    # More lenient: If we have any Wyckoff event or are in a range, consider it accumulation
+    if sc or st or spring or (trading_range['range_percent'] < 30 and trading_range['range_percent'] > 5):
+        return "ACCUMULATION"
+    
+    return "ACCUMULATION"  # Default to accumulation for scanning
+
+# -----------------------------
+# VOLUME PROFILE FUNCTIONS
+# -----------------------------
+def calculate_volume_profile(df, num_bins=20):
+    """Calculate volume profile to identify HVN (High Volume Nodes) and LVN (Low Volume Nodes)"""
+    if len(df) < 20:
+        return None
+    
+    # Create price bins
+    price_min = df['Low'].min()
+    price_max = df['High'].max()
+    bins = np.linspace(price_min, price_max, num_bins + 1)
+    
+    # Calculate volume at each price level
+    volume_profile = {}
+    bin_centers = []
+    volumes = []
+    
+    for i in range(len(bins) - 1):
+        bin_low = bins[i]
+        bin_high = bins[i + 1]
+        bin_center = (bin_low + bin_high) / 2
+        
+        # Calculate volume for bars that traded in this price range
+        volume_sum = 0
+        for idx, row in df.iterrows():
+            if row['Low'] <= bin_high and row['High'] >= bin_low:
+                # Estimate volume distribution within the bar
+                overlap_ratio = min(row['High'], bin_high) - max(row['Low'], bin_low)
+                overlap_ratio /= (row['High'] - row['Low']) if row['High'] > row['Low'] else 1
+                volume_sum += row['Volume'] * overlap_ratio
+        
+        bin_centers.append(bin_center)
+        volumes.append(volume_sum)
+    
+    # Identify HVN and LVN
+    volumes_array = np.array(volumes)
+    mean_volume = volumes_array.mean()
+    std_volume = volumes_array.std()
+    
+    hvn_zones = []  # High Volume Nodes
+    lvn_zones = []  # Low Volume Nodes
+    gaps = []       # Price gaps
+    
+    for i, (price, vol) in enumerate(zip(bin_centers, volumes)):
+        if vol > mean_volume + std_volume:
+            hvn_zones.append({'price': price, 'volume': vol, 'strength': 'high'})
+        elif vol < mean_volume - std_volume * 0.5:
+            lvn_zones.append({'price': price, 'volume': vol, 'strength': 'low'})
+        elif vol < mean_volume * 0.1:  # Very low volume = potential gap
+            gaps.append({'price': price, 'volume': vol})
+    
+    # Find Point of Control (POC) - highest volume price
+    poc_idx = np.argmax(volumes)
+    poc = bin_centers[poc_idx]
+    
+    # Calculate Value Area (70% of volume)
+    total_volume = sum(volumes)
+    value_area_volume = total_volume * 0.7
+    
+    # Sort by volume and accumulate until we reach 70%
+    sorted_indices = np.argsort(volumes)[::-1]
+    accumulated_volume = 0
+    value_area_prices = []
+    
+    for idx in sorted_indices:
+        accumulated_volume += volumes[idx]
+        value_area_prices.append(bin_centers[idx])
+        if accumulated_volume >= value_area_volume:
+            break
+    
+    vah = max(value_area_prices)  # Value Area High
+    val = min(value_area_prices)  # Value Area Low
+    
+    return {
+        'poc': poc,
+        'vah': vah,
+        'val': val,
+        'hvn_zones': hvn_zones,
+        'lvn_zones': lvn_zones,
+        'gaps': gaps,
+        'profile': list(zip(bin_centers, volumes))
+    }
+
+def check_lvn_spring_confluence(spring_event, volume_profile):
+    """Check if Spring occurred at a Low Volume Node (LVN)"""
+    if not spring_event or not volume_profile:
         return False
     
-    current_price = df.iloc[-1]['Close']
-    ob_mid = order_block['mid']
+    spring_low = spring_event['spring_low']
     
-    # Check if price is within the order block zone
-    if order_block['low'] <= current_price <= order_block['high']:
-        return True
+    # Check if spring low is near any LVN
+    for lvn in volume_profile['lvn_zones']:
+        if abs(spring_low - lvn['price']) / lvn['price'] <= 0.02:  # Within 2%
+            return True
     
-    # Check if price is near the order block (within 1%)
-    if abs(current_price - ob_mid) / ob_mid <= 0.01:
-        return True
+    # Check if spring low is near a gap
+    for gap in volume_profile['gaps']:
+        if abs(spring_low - gap['price']) / gap['price'] <= 0.02:
+            return True
     
     return False
 
 # -----------------------------
-# SMC FUNCTIONS - Fair Value Gaps
+# WYCKOFF SCORING SYSTEM - Enhanced 10-point system
 # -----------------------------
-def calculate_fair_value_gaps(df, min_gap_size=0.001):
-    """Identify Fair Value Gaps (imbalances) in price action"""
-    fvgs = []
-    
-    for i in range(2, len(df)):
-        # Bullish FVG: Gap between previous high and current low
-        gap_size = (df.iloc[i]['Low'] - df.iloc[i-2]['High']) / df.iloc[i-2]['High']
-        if gap_size > min_gap_size:
-            fvgs.append({
-                'type': 'bullish',
-                'top': df.iloc[i]['Low'],
-                'bottom': df.iloc[i-2]['High'],
-                'mid': (df.iloc[i]['Low'] + df.iloc[i-2]['High']) / 2,
-                'index': i
-            })
-    
-    # Return most recent FVG if any
-    if fvgs:
-        return fvgs[-1]
-    return None
-
-# -----------------------------
-# SMC FUNCTIONS - Entry/Exit Optimization
-# -----------------------------
-def determine_optimal_entry(df, order_block, fvg, market_structure):
-    """Calculate optimal entry based on SMC confluence"""
-    current_price = df.iloc[-1]['Close']
-    last_low = df.iloc[-1]['Low']
-    last_high = df.iloc[-1]['High']
-    entries = []
-    
-    # Order Block entry (only if price is near or within OB)
-    if order_block:
-        ob_mid = order_block['mid']
-        # Only consider OB if it's within reasonable range (5% of current price)
-        if abs(ob_mid - current_price) / current_price <= 0.05:
-            entries.append({
-                'price': ob_mid,
-                'reason': 'Order Block Midpoint',
-                'strength': order_block['strength']
-            })
-    
-    # FVG entry (only if price is near FVG)
-    if fvg:
-        fvg_mid = fvg['mid']
-        # Only consider FVG if it's within reasonable range
-        if abs(fvg_mid - current_price) / current_price <= 0.03:
-            entries.append({
-                'price': fvg_mid,
-                'reason': 'Fair Value Gap Fill',
-                'strength': 0.5
-            })
-    
-    # Fibonacci OTE (62-79% retracement)
-    if market_structure and market_structure['last_swing_high'] and market_structure['last_swing_low']:
-        swing_range = market_structure['last_swing_high'] - market_structure['last_swing_low']
-        fib_62 = market_structure['last_swing_low'] + (swing_range * 0.62)
-        fib_79 = market_structure['last_swing_low'] + (swing_range * 0.79)
-        fib_mid = (fib_62 + fib_79) / 2
-        
-        # Only use Fib if price is near these levels
-        if last_low <= fib_mid <= last_high * 1.02:
-            entries.append({
-                'price': fib_mid,
-                'reason': 'Fibonacci OTE Zone',
-                'strength': 0.7
-            })
-    
-    # If we have valid entries, select the best one
-    if entries:
-        # Filter entries that are too far from current price (>3% away)
-        valid_entries = [e for e in entries if abs(e['price'] - current_price) / current_price <= 0.03]
-        
-        if valid_entries:
-            # Sort by strength and select best
-            best_entry = max(valid_entries, key=lambda x: x['strength'])
-            return best_entry['price'], best_entry['reason']
-    
-    # Default to current price or slightly below for limit order
-    entry_price = current_price * 0.995  # 0.5% below current price for better fill
-    return entry_price, "Current Market Price (Limit Order)"
-
-def set_smc_stop_loss(df, market_structure, order_block, entry_price):
-    """Set stop loss based on market structure - ensuring good R:R"""
-    current_price = df.iloc[-1]['Close']
-    atr = df.iloc[-1]['ATR']
-    stops = []
-    
-    # Below last swing low with buffer
-    if market_structure and market_structure['last_swing_low']:
-        swing_stop = market_structure['last_swing_low'] - (atr * 0.3)
-        # Only use if it provides reasonable risk (not more than 5% from entry)
-        if (entry_price - swing_stop) / entry_price <= 0.05:
-            stops.append(swing_stop)
-    
-    # Below order block with small buffer
-    if order_block:
-        ob_stop = order_block['low'] - (atr * 0.2)
-        # Only use if it provides reasonable risk
-        if (entry_price - ob_stop) / entry_price <= 0.04:
-            stops.append(ob_stop)
-    
-    # ATR-based stop (tighter for better R:R)
-    atr_stop = entry_price - (atr * 1.5)  # Reduced from 2.5 to 1.5 for better R:R
-    stops.append(atr_stop)
-    
-    # Use the highest stop (least risk) for better R:R
-    if stops:
-        return max(stops)  # Changed from min to max for tighter stop
-    
-    # Fallback to 2% stop
-    return entry_price * 0.98
-
-def calculate_smc_targets(df, entry_price, stop_loss, liquidity_zones, market_structure):
-    """Calculate take profit levels based on liquidity and structure"""
-    risk = abs(entry_price - stop_loss)
-    
-    # Ensure risk is valid
-    if risk <= 0:
-        risk = df.iloc[-1]['ATR'] * 2  # Use 2x ATR as default risk
-        stop_loss = entry_price - risk
-    
-    targets = []
-    
-    # TP1: Minimum 1.5R or next liquidity level
-    above_liquidity = [z['price'] for z in liquidity_zones if z['price'] > entry_price]
-    tp1_price = entry_price + (risk * 1.5)  # Minimum 1.5R
-    
-    if above_liquidity:
-        liquidity_tp = min(above_liquidity)
-        if liquidity_tp > tp1_price:  # Only use liquidity if it provides better R:R
-            tp1_price = liquidity_tp
-            tp1_reason = 'Next Liquidity Level'
-        else:
-            tp1_reason = '1.5R Minimum Target'
-    else:
-        tp1_reason = '1.5R Target'
-    
-    targets.append({
-        'price': tp1_price,
-        'reason': tp1_reason,
-        'rr': (tp1_price - entry_price) / risk
-    })
-    
-    # TP2: Minimum 2R or previous high
-    tp2_price = entry_price + (risk * 2)  # Minimum 2R
-    
-    if market_structure and market_structure['prev_swing_high']:
-        structure_tp = market_structure['prev_swing_high']
-        if structure_tp > tp2_price:  # Only use if better than 2R
-            tp2_price = structure_tp
-            tp2_reason = 'Previous Swing High'
-        else:
-            tp2_reason = '2R Target'
-    else:
-        tp2_reason = '2R Target'
-    
-    targets.append({
-        'price': tp2_price,
-        'reason': tp2_reason,
-        'rr': (tp2_price - entry_price) / risk
-    })
-    
-    # TP3: 3R or major resistance
-    tp3_price = entry_price + (risk * 3)
-    
-    # Check for major resistance levels
-    if market_structure and market_structure['last_swing_high']:
-        major_resistance = market_structure['last_swing_high'] * 1.02  # 2% above last high
-        if major_resistance > tp3_price:
-            tp3_price = major_resistance
-            tp3_reason = 'Major Resistance'
-        else:
-            tp3_reason = '3R Target'
-    else:
-        tp3_reason = '3R Target'
-    
-    targets.append({
-        'price': tp3_price,
-        'reason': tp3_reason,
-        'rr': (tp3_price - entry_price) / risk
-    })
-    
-    return targets
-
-# -----------------------------
-# SMC Confluence Scoring
-# -----------------------------
-def score_smc_confluence(market_structure, liquidity_sweep, order_block, fvg, 
-                         order_block_mitigated, volume_expansion, momentum):
-    """Calculate SMC confluence score (0-100)"""
+def calculate_wyckoff_score(df, wyckoff_events, volume_profile, trading_range):
+    """Calculate enhanced Wyckoff pattern score (10-point system)"""
     score = 0
-    factors = []
+    conditions_met = []
+    last_bar = df.iloc[-1]
+    recent_bars = df.tail(5)
     
-    # Market Structure (30 points)
-    if market_structure:
-        if market_structure['bos_bullish']:
-            score += 15
-            factors.append("BOS Confirmed")
-        if market_structure['choch_bullish']:
-            score += 15
-            factors.append("CHoCH Bullish")
+    # 1. Resistance Break (1 point)
+    if trading_range and last_bar['Close'] > trading_range['resistance']:
+        score += 1
+        conditions_met.append("Resistance Break")
     
-    # Liquidity (25 points)
-    if liquidity_sweep:
-        score += 15
-        factors.append("Liquidity Sweep")
+    # 2. Multiple Bullish Bars (1 point)
+    bullish_count = sum(1 for _, bar in recent_bars.tail(3).iterrows() if bar['Close'] > bar['Open'])
+    if bullish_count >= 2:
+        score += 1
+        conditions_met.append("Multiple Bullish Bars")
     
-    # Add points for untapped liquidity (will be checked separately)
-    # This is placeholder - actual implementation would check liquidity_zones
+    # 3. Strong Candle Bodies (1 point) - more lenient
+    avg_body_percent = recent_bars['BodyPercent'].mean()
+    if avg_body_percent > 40:  # Reduced from 60 to 40
+        score += 1
+        conditions_met.append("Strong Candle Bodies")
     
-    # Order Blocks (20 points)
-    if order_block:
-        score += 10
-        factors.append("Order Block Present")
-        if order_block_mitigated:
-            score += 10
-            factors.append("OB Mitigation")
+    # 4. Volume Expansion (1.5 points - enhanced weight) - more lenient
+    if last_bar['VolumeRatio'] > 1.1:  # Reduced from 1.5 to 1.1
+        score += 1.5
+        conditions_met.append("Volume Expansion")
     
-    # Fair Value Gaps (15 points)
-    if fvg:
-        score += 10
-        factors.append("FVG Present")
-        # Check if price respecting FVG would add 5 more points
+    # 5. Trend Support - Above SMA20 (1 point)
+    if last_bar['Close'] > last_bar['SMA20']:
+        score += 1
+        conditions_met.append("Above SMA20")
     
-    # Volume & Momentum (10 points)
-    if volume_expansion:
-        score += 7
-        factors.append("Volume Expansion")
-    if momentum > 2:
-        score += 3
-        factors.append("Positive Momentum")
+    # 6. Momentum Positive - ROC5 > 0% (1 point) - more lenient
+    if last_bar['ROC5'] > 0:  # Just needs to be positive
+        score += 1
+        conditions_met.append("Positive Momentum")
     
-    # Confluence bonus (10 points)
-    if len(factors) >= 4:
-        score += 10
-        factors.append("High Confluence")
+    # 7. Close in Upper Range - Top 50% (1 point) - more lenient
+    day_range = last_bar['High'] - last_bar['Low']
+    if day_range > 0:
+        position_in_range = (last_bar['Close'] - last_bar['Low']) / day_range
+        if position_in_range > 0.5:  # Reduced from 0.7 to 0.5
+            score += 1
+            conditions_met.append("Close in Upper Half")
     
-    return score, factors
+    # 8. Wyckoff Event Confirmation (1.5 points - enhanced weight)
+    if wyckoff_events.get('spring') or wyckoff_events.get('sos'):
+        score += 1.5
+        conditions_met.append("Wyckoff Event Confirmed")
+    
+    # 9. Long-term trend check - price above 50 SMA
+    if last_bar['Close'] > last_bar.get('SMA50', last_bar['Close']):
+        score += 1
+        conditions_met.append("Above SMA50")
+    
+    # 10. Phase Confirmation (1 point)
+    if wyckoff_events.get('phase') in ['PHASE_C', 'PHASE_D', 'ACCUMULATION']:
+        score += 1
+        conditions_met.append(f"Phase: {wyckoff_events.get('phase')}")
+    
+    return score, conditions_met
 
-# -----------------------------
-# Multi-Timeframe Analysis Functions
-# -----------------------------
-def analyze_weekly_trend(weekly_data):
-    """Analyze weekly timeframe for major trend and levels"""
-    if weekly_data.empty or len(weekly_data) < 20:
-        return None
+def determine_entry_exit_levels(df, wyckoff_events, volume_profile, trading_range):
+    """Determine optimal entry, stop loss, and target levels based on Wyckoff"""
+    last_bar = df.iloc[-1]
+    atr = last_bar['ATR']
     
-    weekly_indicators = calculate_indicators(weekly_data)
-    if weekly_indicators is None:
-        return None
+    # Entry determination
+    if wyckoff_events.get('spring'):
+        # Entry above spring high
+        entry_price = wyckoff_events['spring']['recovery_close'] * 1.005
+        entry_reason = "Above Spring Recovery"
+    elif wyckoff_events.get('sos'):
+        # Entry on SOS breakout
+        entry_price = wyckoff_events['sos']['breakout_level']
+        entry_reason = "SOS Breakout"
+    elif wyckoff_events.get('st'):
+        # Entry above secondary test
+        entry_price = last_bar['Close'] * 1.002
+        entry_reason = "Secondary Test Confirmation"
+    else:
+        # Default entry at current close
+        entry_price = last_bar['Close']
+        entry_reason = "Current Market Price"
     
-    last_week = weekly_indicators.iloc[-1]
+    # Stop Loss determination
+    if wyckoff_events.get('spring'):
+        # Below spring low with buffer
+        stop_loss = wyckoff_events['spring']['spring_low'] - (atr * 0.5)
+    elif wyckoff_events.get('sc'):
+        # Below SC low
+        stop_loss = wyckoff_events['sc']['low'] - (atr * 0.5)
+    else:
+        # Default: 2.5x ATR below entry
+        stop_loss = entry_price - (atr * 2.5)
     
-    # Determine weekly trend
-    weekly_trend = "neutral"
-    if last_week['Close'] > last_week['SMA20'] and last_week['SMA20'] > last_week['SMA50']:
-        weekly_trend = "bullish"
-    elif last_week['Close'] < last_week['SMA20'] and last_week['SMA20'] < last_week['SMA50']:
-        weekly_trend = "bearish"
+    # Ensure stop gives reasonable risk (max 5%)
+    max_risk = entry_price * 0.05
+    if entry_price - stop_loss > max_risk:
+        stop_loss = entry_price - max_risk
     
-    # Get weekly structure
-    weekly_structure = detect_market_structure(weekly_indicators)
+    # Target determination
+    risk = entry_price - stop_loss
+    
+    # TP1: 1:2 Risk-Reward
+    tp1 = entry_price + (risk * 2)
+    tp1_reason = "2:1 Risk-Reward"
+    
+    # TP2: 1:3 Risk-Reward or resistance
+    tp2 = entry_price + (risk * 3)
+    if trading_range and trading_range['resistance'] > entry_price:
+        if trading_range['resistance'] < tp2:
+            tp2 = trading_range['resistance']
+            tp2_reason = "Trading Range Top"
+        else:
+            tp2_reason = "3:1 Risk-Reward"
+    else:
+        tp2_reason = "3:1 Risk-Reward"
+    
+    # TP3: Range top or extended target
+    if trading_range:
+        range_extension = trading_range['range_height'] * 0.5
+        tp3 = trading_range['resistance'] + range_extension
+        tp3_reason = "Range Extension"
+    else:
+        tp3 = entry_price + (risk * 4)
+        tp3_reason = "4:1 Risk-Reward"
+    
+    # Simplified targets without volume profile
+    # TP1 stays as is (2:1 RR or resistance)
     
     return {
-        'trend': weekly_trend,
-        'resistance': last_week['LastSwingHigh'] if 'LastSwingHigh' in last_week else None,
-        'support': last_week['LastSwingLow'] if 'LastSwingLow' in last_week else None,
-        'structure': weekly_structure,
-        'sma20': last_week['SMA20'],
-        'sma50': last_week['SMA50']
+        'entry_price': entry_price,
+        'entry_reason': entry_reason,
+        'stop_loss': stop_loss,
+        'tp1': tp1,
+        'tp1_reason': tp1_reason,
+        'tp2': tp2,
+        'tp2_reason': tp2_reason,
+        'tp3': tp3,
+        'tp3_reason': tp3_reason,
+        'risk': risk,
+        'rr1': (tp1 - entry_price) / risk if risk > 0 else 0,
+        'rr2': (tp2 - entry_price) / risk if risk > 0 else 0,
+        'rr3': (tp3 - entry_price) / risk if risk > 0 else 0
     }
 
-def analyze_hourly_for_entry(hourly_data, daily_entry_zone):
-    """Analyze hourly timeframe for precise entry"""
-    if hourly_data.empty or len(hourly_data) < 50:
-        return None
-    
-    hourly_indicators = calculate_indicators(hourly_data)
-    if hourly_indicators is None:
-        return None
-    
-    # Look for hourly order blocks near daily entry zone
-    hourly_ob = identify_order_blocks(hourly_indicators, lookback=10)
-    
-    # Check for hourly liquidity sweeps
-    hourly_liquidity_zones = find_liquidity_zones(hourly_indicators, tolerance=0.001)
-    hourly_sweep = detect_liquidity_sweep(hourly_indicators, hourly_liquidity_zones)
-    
-    # Find precise entry on hourly
-    last_hour = hourly_indicators.iloc[-1]
-    hourly_structure = detect_market_structure(hourly_indicators)
-    
-    # Look for bullish confirmation on hourly
-    hourly_bullish = False
-    if hourly_structure and hourly_structure['bos_bullish']:
-        hourly_bullish = True
-    
-    # Check if hourly is at/near daily entry zone
-    entry_proximity = abs(last_hour['Close'] - daily_entry_zone) / daily_entry_zone <= 0.02
-    
-    return {
-        'bullish_confirmation': hourly_bullish,
-        'order_block': hourly_ob,
-        'liquidity_sweep': hourly_sweep,
-        'at_entry_zone': entry_proximity,
-        'last_close': last_hour['Close'],
-        'hourly_atr': last_hour['ATR']
-    }
 
 # -----------------------------
-# Process Single Ticker with SMC
+# MAIN WYCKOFF PROCESSING
 # -----------------------------
-def process_ticker_smc(ticker):
-    """Process a single ticker for SMC-enhanced reversal patterns with multi-timeframe analysis"""
-    logger.info(f"Processing {ticker} with Multi-Timeframe SMC analysis")
+def process_ticker_wyckoff(ticker):
+    """Process a single ticker for Wyckoff accumulation patterns"""
+    logger.info(f"Processing {ticker} with Wyckoff analysis")
     
     try:
         now = datetime.datetime.now()
         
-        # Date ranges for different timeframes
-        from_date_weekly = (now - relativedelta(months=12)).strftime('%Y-%m-%d')
+        # Date ranges
         from_date_daily = (now - relativedelta(months=6)).strftime('%Y-%m-%d')
-        from_date_hourly = (now - relativedelta(days=30)).strftime('%Y-%m-%d')
         to_date = now.strftime('%Y-%m-%d')
         
-        # Fetch WEEKLY data for major trend
-        weekly_data = fetch_data_kite(ticker, interval_mapping['1w'], from_date_weekly, to_date)
-        if weekly_data.empty:
-            logger.warning(f"No weekly data available for {ticker}, skipping")
-            return None
-        
-        # Analyze weekly trend
-        weekly_analysis = analyze_weekly_trend(weekly_data)
-        if not weekly_analysis:
-            logger.warning(f"Could not analyze weekly trend for {ticker}")
-            return None
-        
-        # Only proceed if weekly trend is bullish or neutral (not bearish)
-        if weekly_analysis['trend'] == 'bearish':
-            logger.info(f"{ticker} - Weekly trend is bearish, skipping")
-            return None
-        
-        # Fetch DAILY data for main analysis
+        # Fetch DAILY data
         daily_data = fetch_data_kite(ticker, interval_mapping['1d'], from_date_daily, to_date)
-        if daily_data.empty:
-            logger.warning(f"No daily data available for {ticker}, skipping")
+        if daily_data.empty or len(daily_data) < 50:
+            logger.warning(f"Insufficient data for {ticker}, skipping")
             return None
             
-        # Calculate daily indicators
+        # Calculate indicators
         daily_with_indicators = calculate_indicators(daily_data)
         if daily_with_indicators is None:
             logger.warning(f"Could not calculate indicators for {ticker}, skipping")
             return None
         
-        # Fetch HOURLY data for precise entry
-        hourly_data = fetch_data_kite(ticker, interval_mapping['1h'], from_date_hourly, to_date)
-        if hourly_data.empty:
-            logger.warning(f"No hourly data available for {ticker}, using daily only")
-            hourly_analysis = None
-        else:
-            hourly_analysis = None  # Will be calculated after we have daily entry zone
+        # Identify trading range
+        trading_range = identify_trading_range(daily_with_indicators)
+        if not trading_range:
+            logger.warning(f"Could not identify trading range for {ticker}")
+            return None
         
-        # SMC Analysis on DAILY
-        market_structure = detect_market_structure(daily_with_indicators)
-        liquidity_zones = find_liquidity_zones(daily_with_indicators)
-        liquidity_sweep = detect_liquidity_sweep(daily_with_indicators, liquidity_zones)
-        order_block = identify_order_blocks(daily_with_indicators)
-        order_block_mitigated = check_order_block_mitigation(daily_with_indicators, order_block)
-        fvg = calculate_fair_value_gaps(daily_with_indicators)
+        # Detect Wyckoff events
+        sc = detect_selling_climax(daily_with_indicators)
+        st = detect_secondary_test(daily_with_indicators, sc) if sc else None
+        spring = detect_spring(daily_with_indicators, trading_range)
+        sos = detect_sign_of_strength(daily_with_indicators, trading_range)
+        
+        # Determine phase
+        current_price = daily_with_indicators.iloc[-1]['Close']
+        phase = determine_wyckoff_phase(sc, st, spring, sos, current_price, trading_range)
+        
+        # Skip if clearly not in accumulation (be more lenient)
+        if phase == 'UNKNOWN':
+            logger.info(f"{ticker} - Not in accumulation phase: {phase}")
+            return None
+        
+        # For PHASE_A and PHASE_B, check if there's potential
+        if phase in ['PHASE_A', 'PHASE_B']:
+            # Check if price is near support (potential reversal)
+            last_bar = daily_with_indicators.iloc[-1]
+            near_support = abs(last_bar['Close'] - trading_range['support']) / trading_range['support'] < 0.05
+            if not near_support and not sc and not st:
+                logger.info(f"{ticker} - Early phase without reversal signals")
+                return None
+        
+        # Skip volume profile for now (simplified approach)
+        volume_profile = None
+        lvn_confluence = False
+        
+        # Prepare Wyckoff events dictionary
+        wyckoff_events = {
+            'sc': sc,
+            'st': st,
+            'spring': spring,
+            'sos': sos,
+            'phase': phase,
+            'lvn_confluence': lvn_confluence
+        }
+        
+        # Calculate score
+        score, conditions_met = calculate_wyckoff_score(
+            daily_with_indicators, wyckoff_events, volume_profile, trading_range
+        )
+        
+        # Minimum score requirement (3/10 - very lenient for finding opportunities)
+        if score < 3:
+            logger.info(f"{ticker} - Score too low: {score}/10")
+            return None
+        
+        # Determine entry/exit levels
+        levels = determine_entry_exit_levels(
+            daily_with_indicators, wyckoff_events, volume_profile, trading_range
+        )
+        
+        # Validate risk-reward (minimum 1:1.5 - more lenient)
+        if levels['rr1'] < 1.5:
+            logger.info(f"{ticker} - Risk-Reward too low: {levels['rr1']:.2f}")
+            return None
         
         # Get current values
         last_bar = daily_with_indicators.iloc[-1]
-        volume_expansion = last_bar['VolumeRatio'] > 1.5
-        momentum = last_bar['ROC5']
         
-        # Calculate SMC Score with weekly trend bonus
-        smc_score, confluence_factors = score_smc_confluence(
-            market_structure, liquidity_sweep, order_block, fvg,
-            order_block_mitigated, volume_expansion, momentum
-        )
+        # Determine pattern description
+        pattern_parts = []
+        if sc: pattern_parts.append("SC")
+        if st: pattern_parts.append("ST-A")
+        if spring: pattern_parts.append("SPRING")
+        if sos: pattern_parts.append("SOS")
+        pattern = "+".join(pattern_parts) if pattern_parts else "ACCUMULATION"
         
-        # Add bonus for weekly trend alignment
-        if weekly_analysis['trend'] == 'bullish':
-            smc_score += 10
-            confluence_factors.append("Weekly Bullish Trend")
-        
-        # Add bonus for weekly structure
-        if weekly_analysis['structure'] and weekly_analysis['structure']['bos_bullish']:
-            smc_score += 5
-            confluence_factors.append("Weekly BOS")
-        
-        # Only proceed if score is high enough (40+ for SMC setups)
-        if smc_score < 40:
-            logger.info(f"{ticker} - SMC Score too low: {smc_score}/100")
-            return None
-        
-        # Determine optimal entry on DAILY
-        daily_entry_price, daily_entry_reason = determine_optimal_entry(
-            daily_with_indicators, order_block, fvg, market_structure
-        )
-        
-        # Now analyze HOURLY for precise entry if available
-        if hourly_data is not None and not hourly_data.empty:
-            hourly_analysis = analyze_hourly_for_entry(hourly_data, daily_entry_price)
-            
-            # Refine entry based on hourly
-            if hourly_analysis and hourly_analysis['at_entry_zone']:
-                if hourly_analysis['order_block']:
-                    # Use hourly order block for more precise entry
-                    entry_price = hourly_analysis['order_block']['mid']
-                    entry_reason = "Hourly Order Block at Daily Zone"
-                    confluence_factors.append("Hourly OB Confluence")
-                else:
-                    entry_price = hourly_analysis['last_close']
-                    entry_reason = "Hourly Confirmation at Daily Zone"
-                
-                # Add hourly confirmations to score
-                if hourly_analysis['bullish_confirmation']:
-                    smc_score += 5
-                    confluence_factors.append("Hourly BOS")
-                if hourly_analysis['liquidity_sweep']:
-                    smc_score += 5
-                    confluence_factors.append("Hourly Liquidity Sweep")
-            else:
-                # Use daily entry if hourly not at zone
-                entry_price = daily_entry_price
-                entry_reason = daily_entry_reason
-        else:
-            # No hourly data, use daily entry
-            entry_price = daily_entry_price
-            entry_reason = daily_entry_reason
-        
-        # Set stop loss using multi-timeframe levels
-        stop_loss = set_smc_stop_loss(daily_with_indicators, market_structure, order_block, entry_price)
-        
-        # Use hourly ATR for tighter stop if available
-        if hourly_analysis and hourly_analysis.get('hourly_atr'):
-            hourly_stop = entry_price - (hourly_analysis['hourly_atr'] * 2)
-            # Use tighter stop if it's reasonable
-            if hourly_stop > stop_loss and (entry_price - hourly_stop) / entry_price <= 0.03:
-                stop_loss = hourly_stop
-                entry_reason += " (Hourly ATR Stop)"
-        
-        # Calculate targets
-        targets = calculate_smc_targets(
-            daily_with_indicators, entry_price, stop_loss,
-            liquidity_zones, market_structure
-        )
-        
-        # Validate risk-reward ratio - minimum 1:1.5 for TP1
-        if not targets or targets[0]['rr'] < 1.5:
-            logger.info(f"{ticker} - Risk-Reward too low: {targets[0]['rr']:.2f}R for TP1" if targets else f"{ticker} - No valid targets")
-            return None
-        
-        # Validate that entry price makes sense (not too far from current price)
-        current_close = daily_with_indicators.iloc[-1]['Close']
-        if abs(entry_price - current_close) / current_close > 0.05:  # More than 5% away
-            logger.info(f"{ticker} - Entry price too far from current: Entry={entry_price:.2f}, Current={current_close:.2f}")
-            return None
-        
-        # Validate stop loss is below entry (for long positions)
-        if stop_loss >= entry_price:
-            logger.info(f"{ticker} - Invalid stop loss: Stop={stop_loss:.2f} >= Entry={entry_price:.2f}")
-            return None
-        
-        # Get sector information
+        # Get sector
         sector = get_sector_for_ticker(ticker)
         
-        # Determine trade quality
-        if smc_score >= 70:
-            trade_quality = "HIGH"
-        elif smc_score >= 50:
-            trade_quality = "MEDIUM"
-        else:
-            trade_quality = "LOW"
-        
         # Log the findings
-        logger.info(f"{ticker} - Multi-TF SMC Reversal! Score: {smc_score}/100")
-        logger.info(f"{ticker} - Weekly: {weekly_analysis['trend']}, Daily: Entry @ {entry_price:.2f}")
-        logger.info(f"{ticker} - Confluence: {', '.join(confluence_factors)}")
+        logger.info(f"{ticker} - Wyckoff Setup Found! Score: {score}/10, Phase: {phase}")
+        logger.info(f"{ticker} - Pattern: {pattern}, Entry: {levels['entry_price']:.2f}")
         
-        # Prepare result with multi-timeframe data
+        # Prepare result
         result = {
             'Ticker': ticker,
             'Sector': sector,
-            'Weekly_Trend': weekly_analysis['trend'].upper(),
-            'SMC_Score': smc_score,
-            'Trade_Quality': trade_quality,
-            'Entry_Price': entry_price,
-            'Entry_Reason': entry_reason,
-            'Stop_Loss': stop_loss,
-            'TP1': targets[0]['price'] if targets else entry_price * 1.02,
-            'TP1_RR': targets[0]['rr'] if targets else 1.5,
-            'TP1_Reason': targets[0]['reason'] if targets else "Default",
-            'TP2': targets[1]['price'] if len(targets) > 1 else entry_price * 1.04,
-            'TP2_RR': targets[1]['rr'] if len(targets) > 1 else 2.0,
-            'TP2_Reason': targets[1]['reason'] if len(targets) > 1 else "Default",
-            'TP3': targets[2]['price'] if len(targets) > 2 else entry_price * 1.06,
-            'TP3_RR': targets[2]['rr'] if len(targets) > 2 else 3.0,
-            'TP3_Reason': targets[2]['reason'] if len(targets) > 2 else "Default",
-            'Risk': entry_price - stop_loss,
+            'Phase': phase,
+            'Pattern': pattern,
+            'Score': score,
+            'Entry_Price': levels['entry_price'],
+            'Entry_Reason': levels['entry_reason'],
+            'Stop_Loss': levels['stop_loss'],
+            'Target1': levels['tp1'],
+            'Target1_RR': levels['rr1'],
+            'Target1_Reason': levels['tp1_reason'],
+            'Target2': levels['tp2'],
+            'Target2_RR': levels['rr2'],
+            'Target2_Reason': levels['tp2_reason'],
+            'Target3': levels['tp3'],
+            'Target3_RR': levels['rr3'],
+            'Target3_Reason': levels['tp3_reason'],
+            'Risk': levels['risk'],
+            'Risk_Reward_Ratio': levels['rr1'],
             'Volume_Ratio': last_bar['VolumeRatio'],
-            'Momentum_5D': momentum,
+            'Momentum_5D': last_bar['ROC5'],
             'ATR': last_bar['ATR'],
-            'Confluence_Factors': ', '.join(confluence_factors),
-            'Weekly_Support': weekly_analysis['support'] if weekly_analysis['support'] else 0,
-            'Weekly_Resistance': weekly_analysis['resistance'] if weekly_analysis['resistance'] else 0,
-            'BOS': market_structure['bos_bullish'] if market_structure else False,
-            'CHoCH': market_structure['choch_bullish'] if market_structure else False,
-            'Liquidity_Sweep': liquidity_sweep is not None,
-            'Order_Block': order_block is not None,
-            'FVG': fvg is not None,
-            'Hourly_Confirmation': hourly_analysis['bullish_confirmation'] if hourly_analysis else False
+            'Conditions_Met': ', '.join(conditions_met),
+            'Description': f"Wyckoff {phase} - {pattern}",
+            'LVN_Confluence': False,
+            'POC': 0,
+            'VAH': 0,
+            'VAL': 0,
+            'Range_Top': trading_range['resistance'],
+            'Range_Bottom': trading_range['support'],
+            'Range_Percent': trading_range['range_percent']
         }
         
         return result
@@ -1141,11 +1071,17 @@ def process_ticker_smc(ticker):
         logger.error(f"Error processing {ticker}: {e}")
         return None
 
+
+
+
+
+
 # -----------------------------
 # Read Ticker File
 # -----------------------------
-def read_ticker_file():
+def read_ticker_file(use_fno_liquid=True):
     """Read tickers from the Excel file"""
+    # Always use Ticker.xlsx as requested by user
     ticker_file = os.path.join(DATA_DIR, "Ticker.xlsx")
     
     try:
@@ -1153,19 +1089,36 @@ def read_ticker_file():
             logger.error(f"Ticker file not found: {ticker_file}")
             return []
         
+        # Read the Ticker sheet
         df = pd.read_excel(ticker_file, sheet_name="Ticker")
-        tickers = df['Ticker'].dropna().tolist()
-        logger.info(f"Read {len(tickers)} tickers from {ticker_file}")
-        return tickers
+        all_tickers = df['Ticker'].dropna().tolist()
+        
+        # Optional: Filter for FNO Liquid stocks if needed
+        if use_fno_liquid:
+            fno_file = os.path.join(DATA_DIR, "FNO_Liquid.xlsx")
+            if os.path.exists(fno_file):
+                try:
+                    fno_df = pd.read_excel(fno_file)
+                    fno_tickers = fno_df['Ticker'].dropna().tolist() if 'Ticker' in fno_df.columns else []
+                    # Filter to only FNO liquid stocks that are in Ticker.xlsx
+                    filtered_tickers = [t for t in all_tickers if t in fno_tickers]
+                    if filtered_tickers:
+                        logger.info(f"Using {len(filtered_tickers)} FNO Liquid stocks from {len(all_tickers)} total tickers")
+                        return filtered_tickers
+                except Exception as e:
+                    logger.warning(f"Could not filter FNO Liquid stocks: {e}")
+        
+        logger.info(f"Read {len(all_tickers)} tickers from {ticker_file}")
+        return all_tickers
     except Exception as e:
         logger.error(f"Error reading ticker file: {e}")
         return []
 
 # -----------------------------
-# Generate Enhanced HTML Report with SMC
+# Generate Enhanced HTML Report with Wyckoff
 # -----------------------------
-def generate_smc_html_report(filtered_df, output_file):
-    """Generate an enhanced HTML report with SMC analysis"""
+def generate_wyckoff_html_report(filtered_df, output_file):
+    """Generate an enhanced HTML report with Wyckoff analysis"""
     today = datetime.datetime.now()
     formatted_date = today.strftime("%d-%m-%Y")
     formatted_time = today.strftime("%H:%M")
@@ -1177,7 +1130,7 @@ def generate_smc_html_report(filtered_df, output_file):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Long Reversal SMC Analysis - {formatted_date}</title>
+        <title>Long Reversal Wyckoff Analysis - {formatted_date}</title>
         <style>
             body {{
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1405,18 +1358,18 @@ def generate_smc_html_report(filtered_df, output_file):
     </head>
     <body>
         <div class="container">
-            <h1>📊 Long Reversal Daily - Smart Money Concepts Analysis</h1>
+            <h1>📊 Long Reversal Daily - Wyckoff Accumulation Analysis</h1>
             <div class="header-info">
                 <div>Date: {formatted_date} | Time: {formatted_time}</div>
-                <div>Enhanced with SMC: BOS, CHoCH, Liquidity Sweeps, Order Blocks, FVGs</div>
+                <div>Wyckoff Events: SC, ST-A, SPRING, SOS | Volume Profile: HVN/LVN Analysis</div>
             </div>
     """
     
     # Add summary statistics
     if len(filtered_df) > 0:
-        avg_score = filtered_df['SMC_Score'].mean()
-        high_quality = len(filtered_df[filtered_df['Trade_Quality'] == 'HIGH'])
-        medium_quality = len(filtered_df[filtered_df['Trade_Quality'] == 'MEDIUM'])
+        avg_score = filtered_df['Score'].mean()
+        high_score = len(filtered_df[filtered_df['Score'] >= 7])
+        medium_score = len(filtered_df[(filtered_df['Score'] >= 5) & (filtered_df['Score'] < 7)])
         
         html_content += f"""
             <div class="summary-stats">
@@ -1425,36 +1378,36 @@ def generate_smc_html_report(filtered_df, output_file):
                     <div class="stat-label">Total Setups Found</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">{avg_score:.0f}</div>
-                    <div class="stat-label">Average SMC Score</div>
+                    <div class="stat-value">{avg_score:.1f}</div>
+                    <div class="stat-label">Average Score (10)</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">{high_quality}</div>
-                    <div class="stat-label">High Quality Trades</div>
+                    <div class="stat-value">{high_score}</div>
+                    <div class="stat-label">High Score (7+)</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">{medium_quality}</div>
-                    <div class="stat-label">Medium Quality Trades</div>
+                    <div class="stat-value">{medium_score}</div>
+                    <div class="stat-label">Medium Score (5-7)</div>
                 </div>
             </div>
         """
     
     # Add detailed table
     html_content += """
-        <h2>📈 Multi-Timeframe SMC Reversal Opportunities</h2>
+        <h2>📈 Wyckoff Accumulation Setups</h2>
         <table>
             <thead>
                 <tr>
                     <th>Ticker</th>
                     <th>Sector</th>
-                    <th>Weekly</th>
-                    <th>SMC Score</th>
-                    <th>Quality</th>
+                    <th>Phase</th>
+                    <th>Pattern</th>
+                    <th>Score</th>
                     <th>Entry</th>
                     <th>Stop Loss</th>
-                    <th>TP1 (RR)</th>
-                    <th>TP2 (RR)</th>
-                    <th>SMC Signals</th>
+                    <th>Target1 (RR)</th>
+                    <th>Target2 (RR)</th>
+                    <th>Volume Profile</th>
                 </tr>
             </thead>
             <tbody>
@@ -1462,42 +1415,44 @@ def generate_smc_html_report(filtered_df, output_file):
     
     # Add rows for each ticker
     for idx, row in filtered_df.iterrows():
-        # Create SMC badges
-        smc_badges = ""
-        if row['BOS']:
-            smc_badges += '<span class="smc-badge badge-bos">BOS</span>'
-        if row['CHoCH']:
-            smc_badges += '<span class="smc-badge badge-choch">CHoCH</span>'
-        if row['Liquidity_Sweep']:
-            smc_badges += '<span class="smc-badge badge-sweep">SWEEP</span>'
-        if row['Order_Block']:
-            smc_badges += '<span class="smc-badge badge-ob">OB</span>'
-        if row['FVG']:
-            smc_badges += '<span class="smc-badge badge-fvg">FVG</span>'
+        # Create volume profile info
+        vp_info = ""
+        if row.get('LVN_Confluence'):
+            vp_info += '<span class="smc-badge badge-sweep">LVN</span>'
+        if row.get('POC', 0) > 0:
+            vp_info += f'<span class="smc-badge badge-ob">POC: ₹{row["POC"]:.0f}</span>'
         
-        # Quality class
-        quality_class = f"quality-{row['Trade_Quality'].lower()}"
+        # Score quality class
+        if row['Score'] >= 7:
+            quality_class = "quality-high"
+            quality_text = "HIGH"
+        elif row['Score'] >= 5:
+            quality_class = "quality-medium"
+            quality_text = "MEDIUM"
+        else:
+            quality_class = "quality-low"
+            quality_text = "LOW"
         
-        # Weekly trend badge color
-        weekly_color = "green" if row.get('Weekly_Trend', '') == 'BULLISH' else "orange"
+        # Phase color
+        phase_color = "green" if row['Phase'] in ['PHASE_C', 'PHASE_D'] else "orange"
         
         html_content += f"""
             <tr>
                 <td><strong>{row['Ticker']}</strong></td>
                 <td>{row['Sector']}</td>
-                <td><span style="color: {weekly_color}; font-weight: bold;">{row.get('Weekly_Trend', 'N/A')}</span></td>
+                <td><span style="color: {phase_color}; font-weight: bold;">{row['Phase']}</span></td>
+                <td>{row['Pattern']}</td>
                 <td>
-                    {row['SMC_Score']}/100
+                    {row['Score']:.1f}/10
                     <div class="score-meter">
-                        <div class="score-fill score-{row['Trade_Quality'].lower()}" style="width: {row['SMC_Score']}%"></div>
+                        <div class="score-fill score-{quality_text.lower()}" style="width: {row['Score']*10}%"></div>
                     </div>
                 </td>
-                <td><span class="quality-badge {quality_class}">{row['Trade_Quality']}</span></td>
                 <td>₹{row['Entry_Price']:.2f}</td>
                 <td>₹{row['Stop_Loss']:.2f}</td>
-                <td>₹{row['TP1']:.2f} ({row['TP1_RR']:.1f}R)</td>
-                <td>₹{row['TP2']:.2f} ({row['TP2_RR']:.1f}R)</td>
-                <td>{smc_badges}</td>
+                <td>₹{row['Target1']:.2f} ({row['Target1_RR']:.1f}R)</td>
+                <td>₹{row['Target2']:.2f} ({row['Target2_RR']:.1f}R)</td>
+                <td>{vp_info if vp_info else 'Standard'}</td>
             </tr>
         """
     
@@ -1507,23 +1462,32 @@ def generate_smc_html_report(filtered_df, output_file):
     """
     
     # Add detailed cards for each ticker
-    html_content += "<h2>📋 Detailed Multi-Timeframe SMC Analysis</h2>"
+    html_content += "<h2>📋 Detailed Wyckoff Analysis</h2>"
     
     for idx, row in filtered_df.iterrows():
-        # Create SMC indicator badges
-        smc_indicators = ""
-        if row['BOS']:
-            smc_indicators += '<span class="smc-badge badge-bos">BOS ✓</span>'
-        if row['CHoCH']:
-            smc_indicators += '<span class="smc-badge badge-choch">CHoCH ✓</span>'
-        if row['Liquidity_Sweep']:
-            smc_indicators += '<span class="smc-badge badge-sweep">Liquidity Sweep ✓</span>'
-        if row['Order_Block']:
-            smc_indicators += '<span class="smc-badge badge-ob">Order Block ✓</span>'
-        if row['FVG']:
-            smc_indicators += '<span class="smc-badge badge-fvg">Fair Value Gap ✓</span>'
+        # Create Wyckoff indicator badges
+        wyckoff_indicators = ""
+        if 'SC' in row.get('Pattern', ''):
+            wyckoff_indicators += '<span class="smc-badge badge-bos">SC ✓</span>'
+        if 'ST-A' in row.get('Pattern', ''):
+            wyckoff_indicators += '<span class="smc-badge badge-choch">ST-A ✓</span>'
+        if 'SPRING' in row.get('Pattern', ''):
+            wyckoff_indicators += '<span class="smc-badge badge-sweep">SPRING ✓</span>'
+        if 'SOS' in row.get('Pattern', ''):
+            wyckoff_indicators += '<span class="smc-badge badge-ob">SOS ✓</span>'
+        if row.get('LVN_Confluence'):
+            wyckoff_indicators += '<span class="smc-badge badge-fvg">LVN Confluence ✓</span>'
         
-        quality_class = f"quality-{row['Trade_Quality'].lower()}"
+        # Quality class based on score
+        if row['Score'] >= 7:
+            quality_class = "quality-high"
+            quality_text = "HIGH"
+        elif row['Score'] >= 5:
+            quality_class = "quality-medium"
+            quality_text = "MEDIUM"
+        else:
+            quality_class = "quality-low"
+            quality_text = "LOW"
         
         html_content += f"""
         <div class="ticker-card">
@@ -1533,22 +1497,22 @@ def generate_smc_html_report(filtered_df, output_file):
                     <span style="color: #7f8c8d; margin-left: 15px;">{row['Sector']}</span>
                 </div>
                 <div>
-                    <span class="quality-badge {quality_class}">{row['Trade_Quality']}</span>
+                    <span class="quality-badge {quality_class}">{quality_text}</span>
                     <span style="margin-left: 15px; font-size: 1.2em; font-weight: bold;">
-                        Score: {row['SMC_Score']}/100
+                        Score: {row['Score']:.1f}/10
                     </span>
                 </div>
             </div>
             
             <div class="smc-indicators">
-                {smc_indicators}
+                {wyckoff_indicators}
             </div>
             
             <div style="background-color: #f0f4f8; padding: 10px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Multi-Timeframe Analysis:</strong>
-                <span style="margin-left: 15px;">Weekly: <strong style="color: {'green' if row.get('Weekly_Trend') == 'BULLISH' else 'orange'};">{row.get('Weekly_Trend', 'N/A')}</strong></span>
-                <span style="margin-left: 15px;">Daily: <strong>SMC Setup</strong></span>
-                <span style="margin-left: 15px;">Hourly: <strong>{'✓ Confirmed' if row.get('Hourly_Confirmation') else 'Pending'}</strong></span>
+                <strong>📊 Wyckoff Analysis:</strong>
+                <span style="margin-left: 15px;">Phase: <strong style="color: {'green' if row['Phase'] in ['PHASE_C', 'PHASE_D'] else 'orange'};">{row['Phase']}</strong></span>
+                <span style="margin-left: 15px;">Pattern: <strong>{row['Pattern']}</strong></span>
+                <span style="margin-left: 15px;">Range: <strong>{row.get('Range_Percent', 0):.1f}%</strong></span>
             </div>
             
             <div class="ticker-details">
@@ -1583,24 +1547,30 @@ def generate_smc_html_report(filtered_df, output_file):
             <div class="targets-section">
                 <h4>🎯 Take Profit Targets</h4>
                 <div class="target-row">
-                    <span><strong>TP1:</strong> ₹{row['TP1']:.2f}</span>
-                    <span>RR: {row['TP1_RR']:.1f}</span>
-                    <span style="color: #7f8c8d;">{row['TP1_Reason']}</span>
+                    <span><strong>T1:</strong> ₹{row['Target1']:.2f}</span>
+                    <span>RR: {row['Target1_RR']:.1f}</span>
+                    <span style="color: #7f8c8d;">{row.get('Target1_Reason', '2:1 RR')}</span>
                 </div>
                 <div class="target-row">
-                    <span><strong>TP2:</strong> ₹{row['TP2']:.2f}</span>
-                    <span>RR: {row['TP2_RR']:.1f}</span>
-                    <span style="color: #7f8c8d;">{row['TP2_Reason']}</span>
+                    <span><strong>T2:</strong> ₹{row['Target2']:.2f}</span>
+                    <span>RR: {row['Target2_RR']:.1f}</span>
+                    <span style="color: #7f8c8d;">{row.get('Target2_Reason', '3:1 RR')}</span>
                 </div>
                 <div class="target-row">
-                    <span><strong>TP3:</strong> ₹{row['TP3']:.2f}</span>
-                    <span>RR: {row['TP3_RR']:.1f}</span>
-                    <span style="color: #7f8c8d;">{row['TP3_Reason']}</span>
+                    <span><strong>T3:</strong> ₹{row['Target3']:.2f}</span>
+                    <span>RR: {row['Target3_RR']:.1f}</span>
+                    <span style="color: #7f8c8d;">{row.get('Target3_Reason', 'Range Top')}</span>
                 </div>
             </div>
             
             <div class="confluence-section">
-                <strong>Confluence Factors:</strong> {row['Confluence_Factors']}
+                <strong>Conditions Met:</strong> {row.get('Conditions_Met', 'N/A')}
+            </div>
+            <div style="margin-top: 10px; padding: 10px; background-color: #f8f9fa; border-radius: 8px;">
+                <strong>Volume Profile:</strong>
+                <span style="margin-left: 10px;">POC: ₹{row.get('POC', 0):.0f}</span>
+                <span style="margin-left: 10px;">VAH: ₹{row.get('VAH', 0):.0f}</span>
+                <span style="margin-left: 10px;">VAL: ₹{row.get('VAL', 0):.0f}</span>
             </div>
         </div>
         """
@@ -1610,11 +1580,11 @@ def generate_smc_html_report(filtered_df, output_file):
             <div style="margin-top: 50px; padding: 20px; background-color: #f8f9fa; border-radius: 10px; text-align: center;">
                 <p style="color: #7f8c8d;">
                     Generated on {formatted_date} at {formatted_time} | 
-                    Long Reversal Daily with Smart Money Concepts
+                    Long Reversal Daily with Wyckoff Method
                 </p>
                 <p style="color: #95a5a6; font-size: 0.9em;">
-                    This analysis incorporates institutional trading concepts including market structure analysis,
-                    liquidity zones, order blocks, and fair value gaps for enhanced accuracy.
+                    This analysis uses Wyckoff accumulation patterns including Selling Climax (SC), Secondary Test (ST-A),
+                    Spring, and Sign of Strength (SOS) combined with Volume Profile analysis for enhanced accuracy.
                 </p>
             </div>
         </div>
@@ -1632,24 +1602,24 @@ def generate_smc_html_report(filtered_df, output_file):
 # Main Function
 # -----------------------------
 def main():
-    """Main function to filter tickers using SMC analysis"""
-    logger.info("Starting Long Reversal Daily SMC Analysis")
+    """Main function to filter tickers using Wyckoff analysis"""
+    logger.info("Starting Long Reversal Daily Wyckoff Analysis")
     
     start_time = time.time()
 
     try:
-        # Read the tickers
-        tickers = read_ticker_file()
+        # Read the tickers (use FNO Liquid filter based on args)
+        tickers = read_ticker_file(use_fno_liquid=args.fno_only)
         if not tickers:
             logger.error("No tickers found, exiting")
             return 1
         
-        logger.info(f"Starting SMC analysis for {len(tickers)} tickers")
+        logger.info(f"Starting Wyckoff analysis for {len(tickers)} tickers")
         
-        # Process each ticker with SMC
+        # Process each ticker with Wyckoff
         results = []
         for ticker in tickers:
-            result = process_ticker_smc(ticker)
+            result = process_ticker_wyckoff(ticker)
             if result:
                 results.append(result)
         
@@ -1657,18 +1627,15 @@ def main():
         today = datetime.datetime.now()
         formatted_date = today.strftime("%Y%m%d")
         formatted_time = today.strftime("%H%M%S")
-        excel_file = os.path.join(RESULTS_DIR, f"Long_Reversal_D_SMC_{formatted_date}_{formatted_time}.xlsx")
-        html_file = os.path.join(HTML_DIR, f"Long_Reversal_D_SMC_{formatted_date}_{formatted_time}.html")
+        excel_file = os.path.join(RESULTS_DIR, f"Long_Reversal_Wyckoff_{formatted_date}_{formatted_time}.xlsx")
+        html_file = os.path.join(HTML_DIR, f"Long_Reversal_Wyckoff_{formatted_date}_{formatted_time}.html")
         
         if results:
             # Convert to DataFrame
             results_df = pd.DataFrame(results)
             
-            # Sort by SMC Score (descending) then by Trade Quality
-            quality_order = {'HIGH': 3, 'MEDIUM': 2, 'LOW': 1}
-            results_df['Quality_Order'] = results_df['Trade_Quality'].map(quality_order)
-            results_df = results_df.sort_values(by=['Quality_Order', 'SMC_Score'], ascending=[False, False])
-            results_df = results_df.drop('Quality_Order', axis=1)
+            # Sort by Score (descending)
+            results_df = results_df.sort_values(by='Score', ascending=False)
             
             # Round numeric columns for better readability
             numeric_cols = ['Entry_Price', 'Stop_Loss', 'TP1', 'TP2', 'TP3', 
@@ -1680,62 +1647,67 @@ def main():
             
             # Write to Excel
             results_df.to_excel(excel_file, index=False)
-            logger.info(f"Successfully wrote {len(results_df)} SMC setups to {excel_file}")
+            logger.info(f"Successfully wrote {len(results_df)} Wyckoff setups to {excel_file}")
             
             # Generate HTML report
-            html_output = generate_smc_html_report(results_df, html_file)
-            logger.info(f"Generated SMC HTML report at {html_output}")
+            html_output = generate_wyckoff_html_report(results_df, html_file)
+            logger.info(f"Generated Wyckoff HTML report at {html_output}")
             
-            # Open the HTML report in the default browser
-            try:
-                webbrowser.open('file://' + os.path.abspath(html_output))
-                logger.info(f"Opened HTML report in browser")
-            except Exception as e:
-                logger.warning(f"Could not open browser automatically: {e}")
+            # HTML report generated - browser auto-launch disabled
+            logger.info(f"HTML report generated at: {html_output}")
+            # Uncomment below to auto-launch in browser:
+            # try:
+            #     webbrowser.open('file://' + os.path.abspath(html_output))
+            #     logger.info(f"Opened HTML report in browser")
+            # except Exception as e:
+            #     logger.warning(f"Could not open browser automatically: {e}")
             
             # Print summary to console
             print("\n" + "="*60)
-            print("   SMART MONEY CONCEPTS - REVERSAL ANALYSIS RESULTS")
+            print("   WYCKOFF ACCUMULATION - ANALYSIS RESULTS")
             print("="*60)
-            print(f"\n📊 Found {len(results_df)} SMC Reversal Setups")
+            print(f"\n📊 Found {len(results_df)} Wyckoff Accumulation Setups")
             
-            # Quality breakdown
-            quality_counts = results_df['Trade_Quality'].value_counts()
-            print("\n🎯 Trade Quality Distribution:")
-            for quality, count in quality_counts.items():
-                print(f"   {quality}: {count} setups")
+            # Score breakdown
+            high_score = len(results_df[results_df['Score'] >= 7])
+            medium_score = len(results_df[(results_df['Score'] >= 5) & (results_df['Score'] < 7)])
+            print("\n🎯 Score Distribution:")
+            print(f"   High (7+): {high_score} setups")
+            print(f"   Medium (5-7): {medium_score} setups")
             
             # Top setups
-            print("\n🏆 Top 5 SMC Setups by Score:")
+            print("\n🏆 Top 5 Wyckoff Setups by Score:")
             for idx, row in results_df.head(5).iterrows():
-                smc_signals = []
-                if row['BOS']: smc_signals.append("BOS")
-                if row['CHoCH']: smc_signals.append("CHoCH")
-                if row['Liquidity_Sweep']: smc_signals.append("SWEEP")
-                if row['Order_Block']: smc_signals.append("OB")
-                if row['FVG']: smc_signals.append("FVG")
-                
                 print(f"\n   {row['Ticker']} ({row['Sector']})")
-                print(f"   Score: {row['SMC_Score']}/100 | Quality: {row['Trade_Quality']}")
+                print(f"   Phase: {row['Phase']} | Pattern: {row['Pattern']}")
+                print(f"   Score: {row['Score']:.1f}/10")
                 print(f"   Entry: ₹{row['Entry_Price']:.2f} | Stop: ₹{row['Stop_Loss']:.2f}")
-                print(f"   Targets: TP1={row['TP1_RR']:.1f}R, TP2={row['TP2_RR']:.1f}R, TP3={row['TP3_RR']:.1f}R")
-                print(f"   SMC: {' + '.join(smc_signals)}")
+                print(f"   Targets: T1={row['Target1_RR']:.1f}R, T2={row['Target2_RR']:.1f}R, T3={row['Target3_RR']:.1f}R")
+                if row.get('LVN_Confluence'):
+                    print(f"   Special: LVN Confluence at Spring/ST")
 
             print(f"\n📁 Results saved to:")
             print(f"   Excel: {excel_file}")
             print(f"   HTML: {html_file}")
         else:
-            # Create empty Excel
-            empty_cols = ['Ticker', 'Sector', 'SMC_Score', 'Trade_Quality', 'Entry_Price', 
-                         'Entry_Reason', 'Stop_Loss', 'TP1', 'TP1_RR', 'TP1_Reason',
-                         'TP2', 'TP2_RR', 'TP2_Reason', 'TP3', 'TP3_RR', 'TP3_Reason',
-                         'Risk', 'Volume_Ratio', 'Momentum_5D', 'ATR', 'Confluence_Factors',
-                         'BOS', 'CHoCH', 'Liquidity_Sweep', 'Order_Block', 'FVG']
-            pd.DataFrame(columns=empty_cols).to_excel(excel_file, index=False)
+            # Create empty Excel with correct columns
+            empty_cols = ['Ticker', 'Sector', 'Phase', 'Pattern', 'Score', 'Entry_Price', 
+                         'Entry_Reason', 'Stop_Loss', 'Target1', 'Target1_RR', 'Target1_Reason',
+                         'Target2', 'Target2_RR', 'Target2_Reason', 'Target3', 'Target3_RR', 'Target3_Reason',
+                         'Risk', 'Risk_Reward_Ratio', 'Volume_Ratio', 'Momentum_5D', 'ATR', 
+                         'Conditions_Met', 'Description', 'LVN_Confluence', 'POC', 'VAH', 'VAL',
+                         'Range_Top', 'Range_Bottom', 'Range_Percent']
+            empty_df = pd.DataFrame(columns=empty_cols)
+            empty_df.to_excel(excel_file, index=False)
             
-            logger.info(f"No SMC reversal patterns found. Empty output created at {excel_file}")
-            print("\nNo SMC reversal patterns found meeting the criteria.")
+            # Also create empty HTML
+            generate_wyckoff_html_report(empty_df, html_file)
+            
+            logger.info(f"No Wyckoff accumulation patterns found. Empty output created at {excel_file}")
+            print("\nNo Wyckoff accumulation patterns found meeting the criteria.")
             print(f"Empty results saved to: {excel_file}")
+            print("\nTip: The market may not have many stocks in accumulation phase currently.")
+            print("Consider running during market corrections or after selloffs for better results.")
             
         # Calculate and print execution time
         execution_time = time.time() - start_time
@@ -1754,34 +1726,21 @@ def main():
 if __name__ == "__main__":
     # Print banner
     print("\n" + "="*60)
-    print("   LONG REVERSAL DAILY - SMART MONEY CONCEPTS (SMC)")
+    print("   LONG REVERSAL DAILY - WYCKOFF ACCUMULATION METHOD")
     print("="*60)
-    print("\n📊 Enhanced Reversal Detection using:")
-    print("   • BOS (Break of Structure)")
-    print("   • CHoCH (Change of Character)")
-    print("   • Liquidity Sweeps & Pools")
-    print("   • Order Blocks (OB)")
-    print("   • Fair Value Gaps (FVG)")
-    print("   • Optimal Trade Entry (OTE)")
-    print("   • Structure-based Stop Loss")
-    print("   • Liquidity-based Take Profits")
+    print("\n📊 Wyckoff Accumulation Pattern Detection:")
+    print("   • SC (Selling Climax) - High volume selloff")
+    print("   • ST-A (Secondary Test) - Low volume retest")
+    print("   • SPRING - False breakdown below support")
+    print("   • SOS (Sign of Strength) - Breakout with volume")
+    print("   • Volume Profile Analysis (HVN/LVN)")
+    print("   • Phase Identification (A-E)")
+    print("   • Enhanced 10-point Scoring System")
+    print("   • FNO Liquid Stock Focus")
     print("\n" + "="*60)
     print(f"👤 Using credentials for: {user_name}")
+    print(f"📁 Reading tickers from: Ticker.xlsx")
     print("="*60 + "\n")
 
     result = main()
-    
-    # Trigger market regime analysis after successful scan
-    if result == 0:
-        try:
-            import subprocess
-            logger.info("Triggering market regime analysis...")
-            subprocess.run([
-                sys.executable, 
-                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                            "Market_Regime", "market_regime_analyzer.py")
-            ], timeout=60)
-        except Exception as e:
-            logger.warning(f"Could not trigger market regime analysis: {e}")
-    
     sys.exit(result)
