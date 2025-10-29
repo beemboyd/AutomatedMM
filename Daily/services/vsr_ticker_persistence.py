@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 VSR Ticker Persistence Manager
-Maintains a 3-day rolling window of tickers with momentum tracking
+Maintains a 15-day rolling window of tickers with momentum tracking
+Counts unique days each ticker appeared (max 1 count per day)
 """
 
 import os
@@ -12,15 +13,16 @@ from collections import defaultdict
 import pandas as pd
 
 class VSRTickerPersistence:
-    """Manages persistent tracking of VSR tickers over a 3-day window"""
-    
-    def __init__(self, persistence_file: str = None):
+    """Manages persistent tracking of VSR tickers over a 30-day window"""
+
+    def __init__(self, persistence_file: str = None, window_days: int = 30):
         if persistence_file is None:
             data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
             os.makedirs(data_dir, exist_ok=True)
             persistence_file = os.path.join(data_dir, 'vsr_ticker_persistence.json')
-        
+
         self.persistence_file = persistence_file
+        self.window_days = window_days  # Track for 30 days
         self.ticker_data = self.load_persistence_data()
         
     def load_persistence_data(self) -> Dict:
@@ -78,11 +80,12 @@ class VSRTickerPersistence:
         except Exception as e:
             print(f"Error saving persistence data: {e}")
     
-    def update_tickers(self, current_tickers: List[str], momentum_data: Dict[str, float] = None):
-        """Update ticker list with new scan results and momentum data"""
+    def update_tickers(self, current_tickers: List[str], momentum_data: Dict[str, float] = None, price_data: Dict[str, float] = None):
+        """Update ticker list with new scan results, momentum data, and price data"""
         now = datetime.datetime.now()
         momentum_data = momentum_data or {}
-        
+        price_data = price_data or {}
+
         # Update existing tickers or add new ones
         for ticker in current_tickers:
             if ticker not in self.ticker_data['tickers']:
@@ -94,17 +97,54 @@ class VSRTickerPersistence:
                     'appearances': 1,
                     'positive_momentum_days': 0,
                     'last_positive_momentum': None,
-                    'momentum_history': []
+                    'momentum_history': [],
+                    'daily_appearances': {now.date().isoformat(): 1},  # Track unique days
+                    'daily_prices': {}  # Track price on each unique day
                 }
             else:
                 # Existing ticker
                 ticker_info = self.ticker_data['tickers'][ticker]
                 ticker_info['last_seen'] = now
                 ticker_info['appearances'] += 1
-                
-                # Update days tracked
-                days_since_first = (now - ticker_info['first_seen']).days + 1
-                ticker_info['days_tracked'] = min(days_since_first, 3)
+
+                # Track daily appearances (max 1 per day)
+                today = now.date().isoformat()
+                if 'daily_appearances' not in ticker_info:
+                    ticker_info['daily_appearances'] = {}
+                if 'daily_prices' not in ticker_info:
+                    ticker_info['daily_prices'] = {}
+
+                if today not in ticker_info['daily_appearances']:
+                    ticker_info['daily_appearances'][today] = 1
+                else:
+                    ticker_info['daily_appearances'][today] += 1
+
+                # Clean up old daily appearances (keep only last 15 days)
+                cutoff_date = (now.date() - datetime.timedelta(days=self.window_days)).isoformat()
+                ticker_info['daily_appearances'] = {
+                    date: count for date, count in ticker_info['daily_appearances'].items()
+                    if date >= cutoff_date
+                }
+
+                # Update days tracked (count unique days in last 15 days)
+                ticker_info['days_tracked'] = len(ticker_info['daily_appearances'])
+
+            # Store price for today if provided
+            if ticker in price_data:
+                ticker_info = self.ticker_data['tickers'][ticker]
+                today = now.date().isoformat()
+                # Store first price of the day (don't overwrite if already set today)
+                if today not in ticker_info.get('daily_prices', {}):
+                    if 'daily_prices' not in ticker_info:
+                        ticker_info['daily_prices'] = {}
+                    ticker_info['daily_prices'][today] = price_data[ticker]
+
+                # Clean up old daily prices (keep only last 15 days)
+                cutoff_date = (now.date() - datetime.timedelta(days=self.window_days)).isoformat()
+                ticker_info['daily_prices'] = {
+                    date: price for date, price in ticker_info.get('daily_prices', {}).items()
+                    if date >= cutoff_date
+                }
             
             # Update momentum data if provided
             if ticker in momentum_data:
@@ -117,8 +157,8 @@ class VSRTickerPersistence:
                     'momentum': momentum
                 })
                 
-                # Keep only last 3 days of history
-                cutoff_date = now - datetime.timedelta(days=3)
+                # Keep only last 15 days of history
+                cutoff_date = now - datetime.timedelta(days=self.window_days)
                 ticker_info['momentum_history'] = [
                     h for h in ticker_info['momentum_history']
                     if datetime.datetime.fromisoformat(h['date']) > cutoff_date
@@ -141,25 +181,25 @@ class VSRTickerPersistence:
         self.save_persistence_data()
     
     def _cleanup_old_tickers(self):
-        """Remove tickers that haven't appeared in 3 days or have no positive momentum for 3 days"""
+        """Remove tickers that haven't appeared in 15 days or have no positive momentum for 15 days"""
         now = datetime.datetime.now()
-        cutoff_date = now - datetime.timedelta(days=3)
+        cutoff_date = now - datetime.timedelta(days=self.window_days)
         
         tickers_to_remove = []
         
         for ticker, info in self.ticker_data['tickers'].items():
-            # Remove if not seen in 3 days
+            # Remove if not seen in 15 days
             if info['last_seen'] < cutoff_date:
                 tickers_to_remove.append(ticker)
                 continue
-            
-            # Remove if no positive momentum in 3 days
+
+            # Remove if no positive momentum in 15 days
             if info['last_positive_momentum'] is None:
-                # Never had positive momentum, check if tracked for 3 days
-                if (now - info['first_seen']).days >= 3:
+                # Never had positive momentum, check if tracked for 15 days
+                if (now - info['first_seen']).days >= self.window_days:
                     tickers_to_remove.append(ticker)
             elif info['last_positive_momentum'] < cutoff_date:
-                # Had positive momentum but not in last 3 days
+                # Had positive momentum but not in last 15 days
                 tickers_to_remove.append(ticker)
         
         # Remove tickers
@@ -170,10 +210,10 @@ class VSRTickerPersistence:
             print(f"Removed {len(tickers_to_remove)} tickers: {', '.join(tickers_to_remove)}")
     
     def get_active_tickers(self) -> Set[str]:
-        """Get all tickers that should be tracked (appeared in last 3 days with momentum criteria)"""
+        """Get all tickers that should be tracked (appeared in last 15 days with momentum criteria)"""
         active_tickers = set()
         now = datetime.datetime.now()
-        cutoff_date = now - datetime.timedelta(days=3)
+        cutoff_date = now - datetime.timedelta(days=self.window_days)
         
         for ticker, info in self.ticker_data['tickers'].items():
             # Include if seen recently
@@ -188,8 +228,58 @@ class VSRTickerPersistence:
         """Get statistics for a specific ticker"""
         if ticker not in self.ticker_data['tickers']:
             return None
-        
-        return self.ticker_data['tickers'][ticker]
+
+        ticker_info = self.ticker_data['tickers'][ticker].copy()
+
+        # Calculate total alerts in last 30 days
+        now = datetime.datetime.now()
+        cutoff_date = (now.date() - datetime.timedelta(days=30)).isoformat()
+        daily_appearances = ticker_info.get('daily_appearances', {})
+
+        # Sum all appearances in last 30 days
+        alerts_last_30_days = sum(
+            count for date, count in daily_appearances.items()
+            if date >= cutoff_date
+        )
+        ticker_info['alerts_last_30_days'] = alerts_last_30_days
+
+        # Get last 3 alert dates and prices (excluding today)
+        if 'daily_appearances' in ticker_info and len(ticker_info['daily_appearances']) > 0:
+            # Get sorted dates (newest first)
+            sorted_dates = sorted(ticker_info['daily_appearances'].keys(), reverse=True)
+            daily_prices = ticker_info.get('daily_prices', {})
+
+            # Get today's date for comparison
+            today_str = now.date().isoformat()
+
+            # Build list of last 3 historical alerts (excluding today)
+            historical_alerts = []
+            for date_str in sorted_dates:
+                if date_str != today_str:  # Skip today
+                    alert_info = {
+                        'date': date_str,
+                        'count': daily_appearances[date_str],
+                        'price': daily_prices.get(date_str)
+                    }
+                    historical_alerts.append(alert_info)
+                    if len(historical_alerts) >= 3:
+                        break
+
+            ticker_info['last_3_alerts'] = historical_alerts
+
+            # Keep penultimate (most recent non-today) for backward compatibility
+            if len(historical_alerts) > 0:
+                ticker_info['penultimate_alert_date'] = historical_alerts[0]['date']
+                ticker_info['penultimate_alert_price'] = historical_alerts[0]['price']
+            else:
+                ticker_info['penultimate_alert_date'] = None
+                ticker_info['penultimate_alert_price'] = None
+        else:
+            ticker_info['last_3_alerts'] = []
+            ticker_info['penultimate_alert_date'] = None
+            ticker_info['penultimate_alert_price'] = None
+
+        return ticker_info
     
     def get_persistence_summary(self) -> Dict:
         """Get summary of persistence data"""

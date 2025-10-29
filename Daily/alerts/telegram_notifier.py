@@ -149,8 +149,7 @@ class TelegramNotifier:
         building = ticker_data.get('building', False)
         trend = ticker_data.get('trend', '')
         alerts_last_30_days = ticker_data.get('alerts_last_30_days', 0)  # Alert count in last 30 days
-        penultimate_alert_date = ticker_data.get('penultimate_alert_date')  # Previous alert date
-        penultimate_alert_price = ticker_data.get('penultimate_alert_price')  # Previous alert price
+        last_3_alerts = ticker_data.get('last_3_alerts', [])  # Last 3 historical alerts
 
         # Liquidity information
         liquidity_grade = ticker_data.get('liquidity_grade', ticker_data.get('Liquidity_Grade', 'N/A'))
@@ -165,47 +164,61 @@ class TelegramNotifier:
         liquidity_emoji = "💎" if liquidity_grade == 'A' else "💧" if liquidity_grade == 'B' else "💦" if liquidity_grade == 'C' else "⚠️" if liquidity_grade in ['D', 'E'] else "❌"
         liquidity_text = f"{liquidity_emoji} ({avg_turnover_cr:.1f} Cr)" if avg_turnover_cr > 0 else liquidity_emoji
 
-        # Format penultimate (previous) alert date and price
-        last_alerted_text = "First alert 🆕"
-        price_change_text = ""
+        # Format alert history (last 3 occurrences)
+        history_section = ""
 
-        # Only show "First alert" if this is truly the first time in the 30-day window
-        # alerts_last_30_days == 1 means first occurrence in tracking window
-        if alerts_last_30_days == 1:
-            last_alerted_text = "First alert 🆕"
-        elif penultimate_alert_date:
+        if not last_3_alerts or len(last_3_alerts) == 0:
+            history_section = "*Alert History:* First alert 🆕"
+        else:
+            history_section = "*Alert History:*\n"
             try:
                 from datetime import datetime as dt
-                # penultimate_alert_date is in format YYYY-MM-DD
-                prev_date = dt.fromisoformat(penultimate_alert_date).date()
                 today = dt.now().date()
-                days_ago = (today - prev_date).days
 
-                if days_ago == 1:
-                    last_alerted_text = "Yesterday"
-                elif days_ago == 2:
-                    last_alerted_text = "2 days ago"
-                elif days_ago <= 7:
-                    last_alerted_text = f"{days_ago} days ago"
-                else:
-                    last_alerted_text = prev_date.strftime('%b %d')  # e.g., "Oct 01"
+                for i, alert in enumerate(last_3_alerts[:3]):  # Max 3
+                    alert_date_str = alert.get('date')
+                    alert_price = alert.get('price')
+                    alert_count = alert.get('count', 1)
 
-                # Calculate price change if previous price available
-                if penultimate_alert_price and penultimate_alert_price > 0:
-                    price_change_pct = ((price - penultimate_alert_price) / penultimate_alert_price) * 100
-                    change_emoji = "📈" if price_change_pct > 0 else "📉" if price_change_pct < 0 else "➡️"
-                    price_change_text = f" (₹{penultimate_alert_price:.2f} {change_emoji} {price_change_pct:+.1f}%)"
-            except:
-                last_alerted_text = "N/A"
+                    if not alert_date_str:
+                        continue
+
+                    # Format date
+                    prev_date = dt.fromisoformat(alert_date_str).date()
+                    days_ago = (today - prev_date).days
+
+                    if days_ago == 1:
+                        date_text = "Yesterday"
+                    elif days_ago == 2:
+                        date_text = "2 days ago"
+                    elif days_ago <= 7:
+                        date_text = f"{days_ago} days ago"
+                    else:
+                        date_text = prev_date.strftime('%b %d')
+
+                    # Format price and change
+                    if alert_price and alert_price > 0:
+                        price_change_pct = ((price - alert_price) / alert_price) * 100
+                        change_emoji = "📈" if price_change_pct > 0 else "📉" if price_change_pct < 0 else "➡️"
+                        price_text = f"₹{alert_price:.2f} {change_emoji} {price_change_pct:+.1f}%"
+                    else:
+                        price_text = "₹N/A"
+
+                    # Add count if multiple alerts that day
+                    count_text = f" ({alert_count}x)" if alert_count > 1 else ""
+
+                    history_section += f"  • {date_text}: {price_text}{count_text}\n"
+            except Exception as e:
+                history_section = "*Alert History:* N/A"
 
         # Format the message
         message = f"""
 {score_emoji} *HIGH MOMENTUM ALERT* {score_emoji}
 
 *Ticker:* `{ticker}`
-*Last Alerted:* {last_alerted_text}{price_change_text}
-*Persistence (last 30 days):* {alerts_last_30_days} alerts {building_emoji}
-*Price:* ₹{price:.2f}
+{history_section}
+*Total Alerts (30d):* {alerts_last_30_days} alerts {building_emoji}
+*Current Price:* ₹{price:.2f}
 *Momentum:* {momentum:.1f}% {trend_emoji}
 *Liquidity:* {liquidity_text}
 
@@ -242,7 +255,8 @@ _Found {len(high_momentum_tickers)} high momentum tickers_
             # Format penultimate alert date for batch
             days_ago_text = ""
             # Only show "First alert" emoji if this is truly the first time in the 30-day window
-            if alerts_last_30_days == 1:
+            # Also check if penultimate_alert_date is None/empty (no previous alert)
+            if alerts_last_30_days == 1 or not penultimate_alert_date:
                 days_ago_text = "🆕"
             elif penultimate_alert_date:
                 try:
