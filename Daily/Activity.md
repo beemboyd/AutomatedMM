@@ -1,5 +1,56 @@
 # Activity Log
 
+## 2025-10-29 11:10 IST - Claude
+**Fixed: VSR Telegram Alerts Missing Historical "Last Alerted" Data**
+
+**Issue:**
+- VSR telegram alerts showing "First alert 🆕" for tickers that were alerted yesterday
+- No historical data (Last Alerted dates, alert counts) appearing in notifications
+- Example: SUZLON had 10+ alerts on Oct 28, but showing as "first alert" on Oct 29
+
+**Root Cause:**
+- `pre_market_setup_robust.sh` was clearing main VSR persistence file daily (line 97-99)
+- File `vsr_ticker_persistence.json` maintains 30-day rolling window of alert history
+- Daily clearing destroyed all historical data needed for telegram notifications
+- Fields lost: `alerts_last_30_days`, `penultimate_alert_date`, `penultimate_alert_price`, multi-day `daily_appearances`
+
+**Changes Made:**
+- Modified `clean_persistence_files()` function in `pre_market_setup_robust.sh`
+- Main VSR persistence file (`vsr_ticker_persistence.json`) is NOW PRESERVED
+- Only hourly tracking files are cleared daily (as intended):
+  - `vsr_ticker_persistence_hourly_long.json`
+  - `vsr_ticker_persistence_hourly_short.json`
+
+**Code Change:**
+```bash
+# Before (BAD):
+echo "{\"tickers\": {}, \"last_updated\": \"$current_time\"}" > "$vsr_main_file"
+
+# After (GOOD):
+if [ ! -f "$vsr_main_file" ]; then
+    # Only create if doesn't exist
+    echo "{\"tickers\": {}, \"last_updated\": \"$current_time\"}" > "$vsr_main_file"
+else
+    # Preserve existing 30-day history
+    log_message "✓ Preserved main VSR persistence file (30-day history intact)"
+fi
+```
+
+**Impact:**
+- Starting tomorrow (Oct 30), historical alert data will be maintained
+- Telegram alerts will show correct "Last Alerted: Yesterday/2 days ago" messages
+- Alert persistence counts (last 30 days) will display correctly
+- 30-day rolling window working as designed
+
+**Note:**
+- Oct 28 history was already lost (cleared this morning at 8 AM)
+- Tomorrow's alerts will show today's data as "Last Alerted: Yesterday"
+
+**Files Modified:**
+- `/Users/maverick/PycharmProjects/India-TS/Daily/pre_market_setup_robust.sh`
+
+---
+
 ## 2025-10-29 11:00 IST - Claude
 **Fixed Duplicate VSR Telegram Alerts - Removed Redundant LaunchAgent Jobs**
 
