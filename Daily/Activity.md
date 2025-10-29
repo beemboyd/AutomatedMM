@@ -1,6 +1,56 @@
 # Activity Log
 
 ## 2025-10-29 11:10 IST - Claude
+**Enhanced VSR Telegram Alerts with Last 3 Alert History**
+
+**Enhancement:**
+- Added detailed alert history showing last 3 occurrences with prices and changes
+- Each historical alert now displays:
+  - Date (Yesterday, 2 days ago, or specific date)
+  - Price at that alert
+  - Percentage change from that price to current price
+  - Alert count if multiple alerts occurred that day (e.g., "5x")
+
+**Example Alert Format:**
+```
+🔥 HIGH MOMENTUM ALERT 🔥
+
+Ticker: SUZLON
+Alert History:
+  • Yesterday: ₹58.00 📈 +0.3% (5x)
+  • 3 days ago: ₹56.50 📈 +2.9%
+  • Oct 25: ₹57.20 📈 +1.7%
+Total Alerts (30d): 18 alerts
+Current Price: ₹58.17
+Momentum: 4.6% 🚀
+Liquidity: 💧 (45.2 Cr)
+```
+
+**Changes Made:**
+1. **Modified `vsr_ticker_persistence.py`**:
+   - Enhanced `get_ticker_stats()` to return `last_3_alerts` array
+   - Each entry includes date, price, and alert count
+   - Excludes today's alerts (shows only historical)
+
+2. **Modified `telegram_notifier.py`**:
+   - Enhanced `format_momentum_alert()` to display up to 3 historical alerts
+   - Shows price and % change for each historical occurrence
+   - Displays alert count per day if multiple alerts
+   - Better context for traders to see ticker's recent behavior
+
+**Impact:**
+- Traders get much better context about ticker persistence
+- Can see if price is up/down from previous alerts
+- Helps identify if ticker is building momentum or fading
+- More informed decision-making with historical price context
+
+**Files Modified:**
+- `services/vsr_ticker_persistence.py`
+- `alerts/telegram_notifier.py`
+
+---
+
+## 2025-10-29 11:10 IST - Claude
 **Fixed: VSR Telegram Alerts Missing Historical "Last Alerted" Data**
 
 **Issue:**
