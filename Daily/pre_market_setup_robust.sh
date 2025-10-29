@@ -83,22 +83,29 @@ EOF
 # Function to clean persistence files with proper initialization
 clean_persistence_files() {
     local current_time=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    # VSR Long tracker persistence
+
+    # VSR Long tracker persistence (hourly tracking - reset daily)
     local vsr_long_file="${DAILY_DIR}/data/vsr_ticker_persistence_hourly_long.json"
     mkdir -p "$(dirname "$vsr_long_file")"
     echo "{\"tickers\": {}, \"last_updated\": \"$current_time\"}" > "$vsr_long_file"
-    
-    # VSR Short tracker persistence
+
+    # VSR Short tracker persistence (hourly tracking - reset daily)
     local vsr_short_file="${DAILY_DIR}/data/short_momentum/vsr_ticker_persistence_hourly_short.json"
     mkdir -p "$(dirname "$vsr_short_file")"
     echo "{\"tickers\": {}, \"last_updated\": \"$current_time\"}" > "$vsr_short_file"
-    
-    # Main VSR persistence
+
+    # Main VSR persistence - DO NOT CLEAR (maintains 30-day alert history)
+    # This file tracks historical alerts for "Last Alerted" dates in telegram notifications
     local vsr_main_file="${DAILY_DIR}/data/vsr_ticker_persistence.json"
-    echo "{\"tickers\": {}, \"last_updated\": \"$current_time\"}" > "$vsr_main_file"
-    
-    log_message "✓ Persistence files cleaned and initialized"
+    if [ ! -f "$vsr_main_file" ]; then
+        mkdir -p "$(dirname "$vsr_main_file")"
+        echo "{\"tickers\": {}, \"last_updated\": \"$current_time\"}" > "$vsr_main_file"
+        log_message "✓ Created new main VSR persistence file"
+    else
+        log_message "✓ Preserved main VSR persistence file (30-day history intact)"
+    fi
+
+    log_message "✓ Hourly persistence files cleaned and initialized"
 }
 
 # Function to wait for market data availability
@@ -196,16 +203,28 @@ else
     exit 1
 fi
 
-# Step 3: Clean up stale processes
+# Step 3: Run refresh_token_services.sh to ensure clean restart with current token
 log_message ""
-log_message "Step 3: Cleaning up stale processes"
-pkill -f "hourly_tracker_service" 2>/dev/null || true
-pkill -f "short_tracker_service" 2>/dev/null || true
-pkill -f "vsr_tracker" 2>/dev/null || true
-pkill -f "tracker_dashboard.py" 2>/dev/null || true
-pkill -f "momentum_dashboard.py" 2>/dev/null || true
-sleep 2
-log_message "✓ Stale processes cleaned"
+log_message "Step 3: Running token refresh service restart"
+if [ -f "./refresh_token_services.sh" ]; then
+    log_message "Executing refresh_token_services.sh to ensure all services use current token..."
+    ./refresh_token_services.sh > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        log_message "✓ Token refresh service restart completed"
+    else
+        log_message "⚠ Token refresh service restart had warnings"
+    fi
+else
+    log_message "⚠ refresh_token_services.sh not found, falling back to manual cleanup"
+    pkill -f "hourly_tracker_service" 2>/dev/null || true
+    pkill -f "short_tracker_service" 2>/dev/null || true
+    pkill -f "vsr_tracker" 2>/dev/null || true
+    pkill -f "tracker_dashboard.py" 2>/dev/null || true
+    pkill -f "momentum_dashboard.py" 2>/dev/null || true
+    pkill -f "alert_volume_tracker" 2>/dev/null || true
+    sleep 2
+    log_message "✓ Stale processes cleaned manually"
+fi
 
 # Step 4: Initialize persistence files
 log_message ""
@@ -216,20 +235,12 @@ clean_persistence_files
 log_message ""
 log_message "Step 5: Running initial scanners"
 
-# Run Long Reversal Daily
-log_message "Running Long Reversal Daily scanner..."
-if timeout 60 python3 scanners/Long_Reversal_Daily.py > /dev/null 2>&1; then
-    log_message "✓ Long Reversal Daily completed"
+# Run Unified Reversal Daily
+log_message "Running Unified Reversal Daily scanner..."
+if timeout 180 python3 scanners/Unified_Reversal_Daily.py > /dev/null 2>&1; then
+    log_message "✓ Unified Reversal Daily completed"
 else
-    log_message "⚠ Long Reversal Daily timed out or failed"
-fi
-
-# Run Short Reversal Daily
-log_message "Running Short Reversal Daily scanner..."
-if timeout 60 python3 scanners/Short_Reversal_Daily.py > /dev/null 2>&1; then
-    log_message "✓ Short Reversal Daily completed"
-else
-    log_message "⚠ Short Reversal Daily timed out or failed"
+    log_message "⚠ Unified Reversal Daily timed out or failed"
 fi
 
 # Step 6: Wait for sufficient market data
@@ -265,34 +276,9 @@ while [ $retry_count -lt $max_retries ]; do
     fi
 done
 
-# Step 8: Start tracker services with proper initialization
+# Step 8: Verify tracker services are running (already started by refresh_token_services.sh)
 log_message ""
-log_message "Step 8: Starting tracker services"
-
-# Function to safely restart a launchctl service
-restart_service() {
-    local plist_name=$1
-    local service_desc=$2
-    
-    launchctl unload ~/Library/LaunchAgents/${plist_name} 2>/dev/null || true
-    sleep 1
-    if launchctl load ~/Library/LaunchAgents/${plist_name} 2>/dev/null; then
-        log_message "✓ ${service_desc} started"
-        return 0
-    else
-        log_message "⚠ Failed to start ${service_desc}"
-        return 1
-    fi
-}
-
-# Start services in order of dependency
-restart_service "com.india-ts.vsr-tracker-enhanced.plist" "VSR Tracker Enhanced"
-sleep 2
-restart_service "com.india-ts.hourly-tracker-service.plist" "Hourly Tracker Service"
-sleep 2
-restart_service "com.india-ts.hourly-short-tracker-service.plist" "Hourly Short Tracker Service"
-sleep 2
-restart_service "com.india-ts.short-momentum-tracker.plist" "Short Momentum Tracker"
+log_message "Step 8: Verifying tracker services"
 
 # Step 9: Verify services are running
 log_message ""
@@ -311,48 +297,49 @@ else
     log_message "⚠ VSR tracker service not detected"
 fi
 
-# Step 10: Start alert services
+# Step 10: Verify alert services (already started by refresh_token_services.sh)
 log_message ""
-log_message "Step 10: Starting alert services"
-restart_service "com.india-ts.vsr-telegram-alerts-enhanced.plist" "VSR Telegram Alerts"
-restart_service "com.india-ts.hourly-breakout-alerts.plist" "Hourly Breakout Alerts"
+log_message "Step 10: Verifying alert services"
+if pgrep -f "telegram" > /dev/null; then
+    log_message "✓ Telegram alert services are running"
+else
+    log_message "⚠ Telegram alert services not detected"
+fi
 
-# Step 11: Start dashboards with health checks
+# Step 11: Verify dashboards (already started by refresh_token_services.sh)
 log_message ""
-log_message "Step 11: Starting dashboards"
+log_message "Step 11: Verifying dashboards"
 
-cd dashboards
+# Check each dashboard port
+if lsof -i :3001 | grep LISTEN > /dev/null 2>&1; then
+    log_message "✓ VSR Dashboard running on port 3001"
+else
+    log_message "⚠ VSR Dashboard not detected on port 3001"
+fi
 
-# Function to start dashboard with verification
-start_dashboard() {
-    local script_name=$1
-    local port=$2
-    local dashboard_name=$3
-    
-    if [ -f "$script_name" ]; then
-        nohup python3 "$script_name" > "${script_name%.py}.log" 2>&1 &
-        sleep 3
-        
-        # Verify dashboard is responding
-        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:${port}/api/status" | grep -q "200\|404"; then
-            log_message "✓ ${dashboard_name} started on port ${port}"
-            return 0
-        else
-            log_message "⚠ ${dashboard_name} may not be responding on port ${port}"
-            return 1
-        fi
-    else
-        log_message "⚠ ${script_name} not found"
-        return 1
-    fi
-}
+if lsof -i :3002 | grep LISTEN > /dev/null 2>&1; then
+    log_message "✓ Hourly Tracker Dashboard running on port 3002"
+else
+    log_message "⚠ Hourly Tracker Dashboard not detected on port 3002"
+fi
 
-start_dashboard "vsr_tracker_dashboard.py" 3001 "VSR Dashboard"
-start_dashboard "hourly_tracker_dashboard.py" 3002 "Hourly Tracker Dashboard"
-start_dashboard "short_momentum_dashboard.py" 3003 "Short Momentum Dashboard"
-start_dashboard "hourly_short_tracker_dashboard.py" 3004 "Hourly Short Dashboard"
+if lsof -i :3003 | grep LISTEN > /dev/null 2>&1; then
+    log_message "✓ Short Momentum Dashboard running on port 3003"
+else
+    log_message "⚠ Short Momentum Dashboard not detected on port 3003"
+fi
 
-cd ..
+if lsof -i :3004 | grep LISTEN > /dev/null 2>&1; then
+    log_message "✓ Hourly Short Dashboard running on port 3004"
+else
+    log_message "⚠ Hourly Short Dashboard not detected on port 3004"
+fi
+
+if lsof -i :2002 | grep LISTEN > /dev/null 2>&1; then
+    log_message "✓ PDH Breakout Tracker running on port 2002"
+else
+    log_message "⚠ PDH Breakout Tracker not detected on port 2002"
+fi
 
 # Step 12: Initialize Market Breadth Dashboard
 log_message ""
@@ -444,6 +431,7 @@ echo "{
         \"hourly_tracker\": \"http://localhost:3002\",
         \"short_momentum\": \"http://localhost:3003\",
         \"hourly_short\": \"http://localhost:3004\",
+        \"pdh_breakout\": \"http://localhost:2002\",
         \"market_breadth\": \"http://localhost:8080\"
     }
 }" > "${DAILY_DIR}/data/pre_market_status.json"
