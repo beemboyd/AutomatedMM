@@ -1,5 +1,51 @@
 # Activity Log
 
+## 2025-10-29 10:52 IST - Claude
+**Fixed Duplicate VSR Telegram Alerts**
+
+**Issue:**
+- Multiple duplicate VSR telegram alerts being sent
+- 5 separate VSR telegram processes running simultaneously
+- Both old and new VSR telegram services were active
+
+**Root Cause:**
+- Old service (`com.india-ts.vsr-telegram-alerts.plist`) still loaded and running
+- New enhanced service (`com.india-ts.vsr-telegram-alerts-enhanced.plist`) also running
+- Both services monitoring same scan results and sending duplicate alerts
+- Market hours manager spawning multiple instances
+
+**Changes Made:**
+1. **Stopped all VSR telegram processes**:
+   - Killed 5 running processes (PIDs: 77343, 77214, 79082, 79073, 79548)
+
+2. **Unloaded and disabled old service**:
+   - Unloaded `com.india-ts.vsr-telegram-alerts.plist`
+   - Renamed to `com.india-ts.vsr-telegram-alerts.plist.disabled-OLD`
+   - Old service was running `vsr_telegram_service.py` (non-enhanced)
+
+3. **Reloaded only the enhanced service**:
+   - Kept `com.india-ts.vsr-telegram-alerts-enhanced.plist` active
+   - This runs `vsr_telegram_market_hours_manager.py` at 8:55 AM
+   - Manager spawns `vsr_telegram_service_enhanced.py` during market hours
+
+**Current State:**
+- Only 2 processes running (correct):
+  - Market hours manager (parent)
+  - Enhanced VSR telegram service (child)
+- Only 1 LaunchAgent active: `com.india-ts.vsr-telegram-alerts-enhanced`
+- No duplicate alerts being sent
+
+**Files Modified:**
+- `~/Library/LaunchAgents/com.india-ts.vsr-telegram-alerts.plist` → Disabled
+- Service logs: `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram/`
+
+**Impact:**
+- VSR telegram alerts now sent only once per ticker
+- Cooldown mechanism working properly
+- Enhanced service features working correctly (hourly/daily alerts, liquidity info, persistence tracking)
+
+---
+
 ## 2025-10-23 11:45 IST - Claude
 **Disabled Browser Auto-Launch for All Scanner Reports**
 
