@@ -1,46 +1,56 @@
 # Activity Log
 
-## 2025-10-29 10:52 IST - Claude
-**Fixed Duplicate VSR Telegram Alerts**
+## 2025-10-29 11:00 IST - Claude
+**Fixed Duplicate VSR Telegram Alerts - Removed Redundant LaunchAgent Jobs**
 
 **Issue:**
 - Multiple duplicate VSR telegram alerts being sent
 - 5 separate VSR telegram processes running simultaneously
 - Both old and new VSR telegram services were active
+- LaunchAgent jobs were redundant with startup scripts
 
 **Root Cause:**
 - Old service (`com.india-ts.vsr-telegram-alerts.plist`) still loaded and running
-- New enhanced service (`com.india-ts.vsr-telegram-alerts-enhanced.plist`) also running
-- Both services monitoring same scan results and sending duplicate alerts
-- Market hours manager spawning multiple instances
+- New enhanced service (`com.india-ts.vsr-telegram-alerts-enhanced.plist`) also loaded via LaunchAgent
+- **VSR telegram service already started by `refresh_token_services.sh`** (line 192)
+- LaunchAgent jobs were duplicating the service startup, causing multiple instances
 
 **Changes Made:**
 1. **Stopped all VSR telegram processes**:
    - Killed 5 running processes (PIDs: 77343, 77214, 79082, 79073, 79548)
 
-2. **Unloaded and disabled old service**:
-   - Unloaded `com.india-ts.vsr-telegram-alerts.plist`
-   - Renamed to `com.india-ts.vsr-telegram-alerts.plist.disabled-OLD`
-   - Old service was running `vsr_telegram_service.py` (non-enhanced)
+2. **Disabled ALL VSR telegram LaunchAgent jobs** (redundant with startup scripts):
+   - `com.india-ts.vsr-telegram-alerts.plist` → `.disabled-OLD`
+   - `com.india-ts.vsr-telegram-alerts-enhanced.plist` → `.disabled-REDUNDANT`
+   - `com.india-ts.vsr-telegram-shutdown.plist` → `.disabled-REDUNDANT`
 
-3. **Reloaded only the enhanced service**:
-   - Kept `com.india-ts.vsr-telegram-alerts-enhanced.plist` active
-   - This runs `vsr_telegram_market_hours_manager.py` at 8:55 AM
-   - Manager spawns `vsr_telegram_service_enhanced.py` during market hours
+3. **Service now managed exclusively by startup scripts**:
+   - `pre_market_setup_robust.sh` calls `refresh_token_services.sh` (line 204)
+   - `refresh_token_services.sh` starts market_hours_manager (line 192)
+   - Market hours manager spawns enhanced service during market hours (9 AM - 3:30 PM)
 
 **Current State:**
-- Only 2 processes running (correct):
-  - Market hours manager (parent)
-  - Enhanced VSR telegram service (child)
-- Only 1 LaunchAgent active: `com.india-ts.vsr-telegram-alerts-enhanced`
-- No duplicate alerts being sent
+- No LaunchAgent jobs managing VSR telegram (all disabled)
+- Service starts automatically via `refresh_token_services.sh`
+- Service runs only during market hours via market_hours_manager
+- No duplicate processes or alerts
+
+**Correct Service Startup Flow:**
+```
+Daily 8 AM → pre_market_setup_robust.sh
+          → refresh_token_services.sh
+          → vsr_telegram_market_hours_manager.py
+          → vsr_telegram_service_enhanced.py (during market hours only)
+```
 
 **Files Modified:**
-- `~/Library/LaunchAgents/com.india-ts.vsr-telegram-alerts.plist` → Disabled
+- `~/Library/LaunchAgents/com.india-ts.vsr-telegram-*.plist` → All disabled
 - Service logs: `/Users/maverick/PycharmProjects/India-TS/Daily/logs/vsr_telegram/`
 
 **Impact:**
-- VSR telegram alerts now sent only once per ticker
+- VSR telegram alerts now sent only once per ticker (no duplicates)
+- Service automatically starts via token refresh/pre-market scripts
+- No manual LaunchAgent management needed
 - Cooldown mechanism working properly
 - Enhanced service features working correctly (hourly/daily alerts, liquidity info, persistence tracking)
 
