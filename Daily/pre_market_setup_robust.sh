@@ -175,6 +175,18 @@ log_message "========================================="
 
 cd "${DAILY_DIR}"
 
+# Step 0: Kill any existing caffeinate and start fresh for market hours
+pkill -f "caffeinate.*market_hours" 2>/dev/null || true
+
+# Prevent system sleep during market hours (9:00 AM to 4:00 PM IST = 7 hours)
+# -d: Prevent display sleep, -i: Prevent idle sleep, -s: Prevent system sleep
+log_message ""
+log_message "Step 0: Starting caffeinate to prevent sleep during market hours"
+caffeinate -dis -t 25200 &  # 7 hours = 25200 seconds
+CAFFEINATE_PID=$!
+echo $CAFFEINATE_PID > /tmp/caffeinate_market_hours.pid
+log_message "✓ Caffeinate started (PID: $CAFFEINATE_PID) - system will not sleep for 7 hours"
+
 # Step 1: Pre-flight checks
 log_message ""
 log_message "Step 1: Pre-flight checks"
