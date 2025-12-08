@@ -10,14 +10,15 @@
 
 1. [System Overview](#system-overview)
 2. [Order Execution Program](#order-execution-program)
-3. [SL Watchdog (PSAR-based)](#sl-watchdog-psar-based)
-4. [Configuration Parameters](#configuration-parameters)
-5. [Data Flow](#data-flow)
-6. [Step-by-Step: Turn On Auto Order Management](#step-by-step-turn-on-auto-order-management)
-7. [SL Watchdog Dashboard](#sl-watchdog-dashboard)
-8. [How to Run Daily](#how-to-run-daily)
-9. [Scheduled Jobs Reference](#scheduled-jobs-reference)
-10. [Quick Reference Commands](#quick-reference-commands)
+3. [SL Watchdog (ATR-based - Default)](#sl-watchdog-atr-based---default)
+4. [ATR vs PSAR Watchdog Toggle](#atr-vs-psar-watchdog-toggle)
+5. [Configuration Parameters](#configuration-parameters)
+6. [Data Flow](#data-flow)
+7. [Step-by-Step: Turn On Auto Order Management](#step-by-step-turn-on-auto-order-management)
+8. [SL Watchdog Dashboard](#sl-watchdog-dashboard)
+9. [How to Run Daily](#how-to-run-daily)
+10. [Scheduled Jobs Reference](#scheduled-jobs-reference)
+11. [Quick Reference Commands](#quick-reference-commands)
 
 ---
 
@@ -134,34 +135,31 @@ order_manager.place_order(
 
 ---
 
-## SL Watchdog (PSAR-based)
+## SL Watchdog (ATR-based - Default)
 
 ### File Location
-`/Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog_PSAR.py`
+`/Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog.py`
 
 ### Purpose
-Real-time stop-loss monitoring using Parabolic SAR (PSAR) and ATR-based trailing stops.
+Real-time stop-loss monitoring using ATR (Average True Range) based trailing stops. This is the **default and recommended** watchdog for the system.
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    SL_watchdog_PSAR                         │
+│                    SL_watchdog (ATR-based)                  │
 ├─────────────────────────────────────────────────────────────┤
 │  THREADS:                                                    │
 │  ├── Price Poll Thread (every 45s)                          │
 │  │   └── Fetches LTP via kite.ltp()                         │
-│  ├── Order Processing Thread                                 │
-│  │   └── Executes queued exit orders                        │
-│  └── WebSocket Thread (real-time ticks)                     │
-│       └── Aggregates 1000 ticks → OHLC candles              │
+│  └── Order Processing Thread                                 │
+│       └── Executes queued exit orders                       │
 ├─────────────────────────────────────────────────────────────┤
 │  DATA STRUCTURES:                                            │
 │  ├── tracked_positions{}  - All monitored positions         │
 │  ├── current_prices{}     - Latest prices per ticker        │
 │  ├── position_high_prices{} - Highest price since entry     │
 │  ├── atr_data{}           - ATR & stop loss per ticker      │
-│  ├── psar_data{}          - PSAR values per ticker          │
 │  └── order_queue          - Pending exit orders             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -222,6 +220,92 @@ Based on volatility category:
 | Order Retries | 5 retries with exponential backoff |
 | Tick Size Rounding | Ensures valid price increments |
 | Market Hours Check | Stops after 3:30 PM IST |
+
+---
+
+## ATR vs PSAR Watchdog Toggle
+
+### Available Watchdog Types
+
+| Watchdog | Script | Class | Stop Loss Method | Status |
+|----------|--------|-------|------------------|--------|
+| **ATR-based** | `SL_watchdog.py` | `SLWatchdog` | Volatility-based (ATR × multiplier) | **DEFAULT** |
+| **PSAR-based** | `SL_watchdog_PSAR.py` | `PSARWatchdog` | Parabolic SAR trend-following | Alternative |
+
+### Default Setup: ATR-Based Watchdog
+
+The system uses **ATR-based watchdog** by default. This is configured in:
+- `start_all_sl_watchdogs.py` → calls `SL_watchdog.py`
+- Scheduled job `com.india-ts.sl_watchdog_start` → runs `start_all_sl_watchdogs.py`
+
+### Running ATR Watchdog (Default)
+
+```bash
+# Automatic - via scheduled job at 9:15 AM
+# (Already configured, no action needed)
+
+# Manual - for all users with valid tokens
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/start_all_sl_watchdogs.py
+
+# Manual - for specific user
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog.py -u Sai
+```
+
+### Running PSAR Watchdog (Alternative)
+
+```bash
+# For CNC positions only
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog_PSAR.py --product-type CNC
+
+# For MIS positions only
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog_PSAR.py --product-type MIS
+
+# For both CNC and MIS
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog_PSAR.py --product-type BOTH
+```
+
+### Switching Between Watchdogs
+
+**Switch from ATR to PSAR:**
+```bash
+# 1. Stop ATR watchdog
+pkill -f "SL_watchdog.py.*India-TS"
+
+# 2. Start PSAR watchdog
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog_PSAR.py --product-type CNC
+```
+
+**Switch from PSAR to ATR:**
+```bash
+# 1. Stop PSAR watchdog
+pkill -f "SL_watchdog_PSAR.py"
+
+# 2. Start ATR watchdog
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog.py -u Sai
+```
+
+### Comparison
+
+| Feature | ATR Watchdog (Default) | PSAR Watchdog |
+|---------|------------------------|---------------|
+| **Stop Loss Calculation** | ATR × volatility multiplier | Parabolic SAR indicator |
+| **Data Source** | Daily historical data | Real-time tick aggregation |
+| **Trailing Method** | Position high tracking | PSAR acceleration factor |
+| **Best For** | All market conditions | Strong trending stocks |
+| **Complexity** | Simpler, more robust | More sophisticated |
+| **Product Types** | CNC (default) | CNC, MIS, or BOTH |
+
+### Recommendation
+
+Use **ATR-based watchdog** (default) for:
+- Normal market conditions
+- Mixed portfolio (trending + ranging stocks)
+- Simpler operation and monitoring
+
+Use **PSAR-based watchdog** when:
+- Trading strongly trending stocks
+- Want tighter trailing stops in trends
+- Comfortable with more complex exit logic
 
 ---
 
@@ -414,14 +498,19 @@ cd /Users/maverick/PycharmProjects/India-TS/Daily/dashboards
 
 ```bash
 # Option A: Let scheduled job start automatically at 9:15 AM
-# (Already configured in com.india-ts.sl_watchdog_start)
+# (Already configured - uses ATR-based watchdog by default)
 
-# Option B: Start manually
+# Option B: Start ATR watchdog manually (DEFAULT - RECOMMENDED)
 python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/start_all_sl_watchdogs.py
 
-# Option C: Start PSAR watchdog directly for specific product type
+# Option C: Start ATR watchdog for specific user
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog.py -u Sai
+
+# Option D: Start PSAR watchdog (ALTERNATIVE - for trending stocks)
 python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog_PSAR.py --product-type CNC
 ```
+
+**Note:** ATR-based watchdog is the default and recommended option.
 
 ---
 
