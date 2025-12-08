@@ -8,9 +8,13 @@ Counts unique days each ticker appeared (max 1 count per day)
 import os
 import json
 import datetime
+import tempfile
+import logging
 from typing import Dict, List, Set, Tuple
 from collections import defaultdict
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 class VSRTickerPersistence:
     """Manages persistent tracking of VSR tickers over a 30-day window"""
@@ -59,14 +63,18 @@ class VSRTickerPersistence:
         }
     
     def save_persistence_data(self):
-        """Save persistence data to file"""
+        """Save persistence data to file using atomic write to prevent corruption.
+
+        Uses tempfile + os.rename pattern to ensure file is either fully written
+        or not modified at all. This prevents corruption from interrupted writes.
+        """
         try:
             # Convert datetime objects to strings for JSON serialization
             data_to_save = {
                 'tickers': {},
                 'last_updated': datetime.datetime.now().isoformat()
             }
-            
+
             for ticker, info in self.ticker_data.get('tickers', {}).items():
                 data_to_save['tickers'][ticker] = {}
                 for key, value in info.items():
@@ -74,10 +82,30 @@ class VSRTickerPersistence:
                         data_to_save['tickers'][ticker][key] = value.isoformat()
                     else:
                         data_to_save['tickers'][ticker][key] = value
-            
-            with open(self.persistence_file, 'w') as f:
-                json.dump(data_to_save, f, indent=2)
+
+            # Atomic write: write to temp file first, then rename
+            # This ensures the file is either fully written or not modified
+            dir_name = os.path.dirname(self.persistence_file)
+
+            # Create temp file in same directory to ensure same filesystem (required for atomic rename)
+            fd, temp_path = tempfile.mkstemp(suffix='.tmp', prefix='vsr_persistence_', dir=dir_name)
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(data_to_save, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())  # Ensure data is written to disk
+
+                # Atomic rename - this is the key operation that prevents corruption
+                os.rename(temp_path, self.persistence_file)
+                logger.debug(f"Saved persistence data: {len(data_to_save['tickers'])} tickers")
+            except Exception as e:
+                # Clean up temp file if rename failed
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                raise e
+
         except Exception as e:
+            logger.error(f"Error saving persistence data: {e}")
             print(f"Error saving persistence data: {e}")
     
     def update_tickers(self, current_tickers: List[str], momentum_data: Dict[str, float] = None, price_data: Dict[str, float] = None):
