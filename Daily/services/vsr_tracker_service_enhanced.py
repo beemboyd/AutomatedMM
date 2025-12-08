@@ -32,11 +32,15 @@ from scanners.VSR_Momentum_Scanner import (
     get_sector_for_ticker,
     DataCache,
     fetch_data_kite,
-    interval_mapping
+    interval_mapping,
+    calculate_liquidity_metrics
 )
 
 # Import persistence manager
 from services.vsr_ticker_persistence import VSRTickerPersistence, merge_ticker_lists
+
+# Import liquidity cache
+from services.liquidity_cache import LiquidityCache
 
 class EnhancedVSRTracker:
     """Enhanced VSR tracker with 3-day ticker persistence"""
@@ -45,6 +49,7 @@ class EnhancedVSRTracker:
         self.user_name = user_name
         self.data_cache = DataCache()
         self.persistence_manager = VSRTickerPersistence()
+        self.liquidity_cache = LiquidityCache(ttl_hours=1)  # Cache liquidity for 1 hour
         self.last_ticker_file = None
         self.last_file_check_time = None
         self.file_check_interval = 300  # Check for new files every 5 minutes
@@ -272,12 +277,43 @@ class EnhancedVSRTracker:
             # Get sector
             sector = get_sector_for_ticker(ticker)
             
+            # Check liquidity cache first
+            liquidity_metrics = self.liquidity_cache.get(ticker)
+            
+            if liquidity_metrics is None:
+                # Calculate liquidity metrics if not in cache
+                self.logger.debug(f"Calculating liquidity for {ticker} (not in cache)")
+                liquidity_metrics = calculate_liquidity_metrics(ticker, hourly_with_indicators)
+                
+                # Cache the result
+                if liquidity_metrics:
+                    self.liquidity_cache.set(ticker, liquidity_metrics)
+            else:
+                self.logger.debug(f"Using cached liquidity for {ticker}")
+            
             # Store momentum for persistence
             self.current_momentum_data[ticker] = price_change
             
             # Get persistence stats
             persistence_stats = self.persistence_manager.get_ticker_stats(ticker)
             days_tracked = persistence_stats['days_tracked'] if persistence_stats else 0
+            occurrences = persistence_stats['appearances'] if persistence_stats else 0
+            alerts_last_30_days = persistence_stats.get('alerts_last_30_days', 0) if persistence_stats else 0
+            first_seen = persistence_stats['first_seen'] if persistence_stats else None
+            penultimate_alert_date = persistence_stats.get('penultimate_alert_date') if persistence_stats else None
+            penultimate_alert_price = persistence_stats.get('penultimate_alert_price') if persistence_stats else None
+
+            # Safely extract liquidity data (handle None case)
+            if liquidity_metrics:
+                liquidity_grade = liquidity_metrics.get('liquidity_grade', 'F')
+                liquidity_score = liquidity_metrics.get('liquidity_score', 0)
+                avg_turnover_cr = liquidity_metrics.get('avg_daily_turnover_cr', 0)
+                liquidity_rank = liquidity_metrics.get('liquidity_rank', 'Low')
+            else:
+                liquidity_grade = 'F'
+                liquidity_score = 0
+                avg_turnover_cr = 0
+                liquidity_rank = 'Low'
             
             result = {
                 'ticker': ticker,
@@ -290,6 +326,15 @@ class EnhancedVSRTracker:
                 'trend': trend,
                 'sector': sector,
                 'days_tracked': days_tracked,
+                'occurrences': occurrences,
+                'alerts_last_30_days': alerts_last_30_days,
+                'first_seen': first_seen,
+                'penultimate_alert_date': penultimate_alert_date,
+                'penultimate_alert_price': penultimate_alert_price,
+                'liquidity_grade': liquidity_grade,
+                'liquidity_score': liquidity_score,
+                'avg_turnover_cr': avg_turnover_cr,
+                'liquidity_rank': liquidity_rank,
                 'timestamp': datetime.datetime.now()
             }
             
@@ -319,21 +364,38 @@ class EnhancedVSRTracker:
             
             # Trend indicator
             trend_str = f"Trend: {result['trend']:<4}"
-            
+
             # Days tracked indicator
             days_str = f"Days: {result['days_tracked']}"
+
+            # Occurrences/Persistence indicator
+            occur_str = f"Alerts: {result.get('occurrences', 0)}"
+
+            # Liquidity indicators
+            liquidity_str = f"Liq: {result.get('liquidity_grade', 'F')}({result.get('liquidity_score', 0):>2})"
+            turnover_str = f"TO: ₹{result.get('avg_turnover_cr', 0):.1f}Cr"
             
             # Sector
             sector_str = f"Sector: {result['sector']}"
             
-            # Full log line
-            log_line = f"[{self.user_name}] {ticker_str} | {score_str} | {vsr_str} | {price_str} | {volume_str} | {momentum_str} | {build_str} | {trend_str} | {days_str} | {sector_str}"
-            
+            # Full log line with liquidity data and occurrences
+            log_line = f"[{self.user_name}] {ticker_str} | {score_str} | {vsr_str} | {price_str} | {volume_str} | {momentum_str} | {build_str} | {trend_str} | {days_str} | {occur_str} | {liquidity_str} | {turnover_str} | {sector_str}"
+
             self.logger.info(log_line)
     
     def run_tracking_cycle(self):
         """Run one complete tracking cycle"""
         try:
+            # Clean expired cache entries periodically
+            if hasattr(self, '_last_cache_cleanup'):
+                if (datetime.datetime.now() - self._last_cache_cleanup).total_seconds() > 3600:
+                    expired = self.liquidity_cache.clear_expired()
+                    if expired > 0:
+                        self.logger.info(f"Cleared {expired} expired liquidity cache entries")
+                    self._last_cache_cleanup = datetime.datetime.now()
+            else:
+                self._last_cache_cleanup = datetime.datetime.now()
+            
             # Get current scan tickers (checks for new files every 5 minutes)
             current_tickers = self.get_latest_long_reversal_tickers()
             
@@ -353,9 +415,10 @@ class EnhancedVSRTracker:
                 leaders = [f"{t['ticker']} ({t['days']}d)" for t in summary['momentum_leaders'][:5]]
                 self.logger.info(f"[{self.user_name}] Momentum leaders: {', '.join(leaders)}")
             
-            # Reset momentum data
+            # Reset momentum and price data
             self.current_momentum_data = {}
-            
+            self.current_price_data = {}
+
             # Track each ticker
             results = []
             for ticker in sorted(all_tickers):
@@ -363,12 +426,15 @@ class EnhancedVSRTracker:
                 if result:
                     results.append(result)
                     self.log_result(result)
-            
-            # Update persistence with momentum data
-            if self.current_momentum_data:
+                    # Collect price data for persistence
+                    self.current_price_data[ticker] = result.get('price', 0)
+
+            # Update persistence with momentum and price data
+            if self.current_momentum_data or self.current_price_data:
                 self.persistence_manager.update_tickers(
-                    list(self.current_momentum_data.keys()), 
-                    self.current_momentum_data
+                    list(set(self.current_momentum_data.keys()) | set(self.current_price_data.keys())),
+                    self.current_momentum_data,
+                    self.current_price_data
                 )
             
             # Sort results by score for summary
@@ -379,6 +445,10 @@ class EnhancedVSRTracker:
                 self.logger.info(f"[{self.user_name}] ━━━ Top 5 by Score ━━━")
                 for result in results[:5]:
                     self.logger.info(f"[{self.user_name}]   {result['ticker']:<10} Score: {result['score']:>3} | VSR: {result['vsr']:>5.2f} | Days: {result['days_tracked']}")
+            
+            # Log cache statistics
+            cache_stats = self.liquidity_cache.get_stats()
+            self.logger.info(f"[{self.user_name}] Liquidity cache: {cache_stats['valid_entries']}/{cache_stats['total_entries']} valid entries (TTL: {cache_stats['ttl_hours']}h)")
             
         except Exception as e:
             self.logger.error(f"Error in tracking cycle: {e}")

@@ -283,6 +283,7 @@
             }
         }
     </style>
+<!-- Liquidity display integrated -->
 </head>
 <body>
     <div class="container">
@@ -584,6 +585,52 @@
         
         // Initial fetch
         fetchData();
-    </script>
+    
+        // Liquidity color helper
+        function getLiquidityColor(grade) {
+            const colors = {
+                'A+': '#00c853', 'A': '#4caf50',
+                'B+': '#8bc34a', 'B': '#cddc39', 
+                'C+': '#ffeb3b', 'C': '#ffc107',
+                'D+': '#ff9800', 'D': '#ff6b35',
+                'E+': '#f44336', 'E': '#e91e63',
+                'F': '#9e9e9e'
+            };
+            return colors[grade] || colors['F'];
+        }
+
+        // Fetch liquidity data for displayed tickers
+        async function fetchLiquidityData(tickers) {
+            if (!tickers || tickers.length === 0) return {};
+            
+            try {
+                const response = await fetch('http://localhost:5555/liquidity/batch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({tickers: tickers})
+                });
+                
+                if (!response.ok) return {};
+                
+                const data = await response.json();
+                const liquidityMap = {};
+                
+                data.results.forEach(item => {
+                    if (item.data) {
+                        liquidityMap[item.ticker] = {
+                            liquidity_grade: item.data.liquidity_grade,
+                            liquidity_score: item.data.liquidity_score,
+                            avg_turnover_cr: item.data.avg_daily_turnover_cr
+                        };
+                    }
+                });
+                
+                return liquidityMap;
+            } catch (error) {
+                console.error('Error fetching liquidity data:', error);
+                return {};
+            }
+        }
+</script>
 </body>
 </html>

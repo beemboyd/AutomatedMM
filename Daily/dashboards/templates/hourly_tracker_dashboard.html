@@ -254,6 +254,7 @@
             font-size: 12px;
         }
     </style>
+<!-- Liquidity display integrated -->
 </head>
 <body>
     <div class="container">
@@ -290,6 +291,14 @@
         </div>
         
         <div id="contentContainer" style="display: none;">
+            <!-- Liquid Stocks - TOP PRIORITY SECTION -->
+            <div class="category-section" id="liquidStocksSection" style="border: 2px solid #3b82f6; background: linear-gradient(135deg, #0a1f3b 0%, #1a1a1a 100%);">
+                <div class="category-header" style="color: #3b82f6;">
+                    <span>💎 Liquid Stocks (Grade B+)</span>
+                </div>
+                <div class="ticker-grid" id="liquidStocksGrid"></div>
+            </div>
+            
             <!-- Persistence Tiers -->
             <div class="category-section" id="extremePersistenceSection" style="border: 2px solid #ff4444;">
                 <div class="category-header" style="color: #ff4444;">
@@ -451,6 +460,14 @@
                     </div>
                     ${ticker.sector !== 'Unknown' ? `<span class="sector-tag">${ticker.sector}</span>` : ''}
                     ${ticker.appearances > 1 ? `<span class="appearances-badge" style="margin-left: 5px;">${ticker.appearances}x</span>` : ''}
+                    ${ticker.liquidity_grade && ticker.liquidity_grade !== 'F' ? `
+                        <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+                            <span style="background: #3b82f6; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                                💎 Grade ${ticker.liquidity_grade}
+                            </span>
+                            ${ticker.avg_turnover_cr > 0 ? `<span style="color: #888; font-size: 12px;">₹${ticker.avg_turnover_cr.toFixed(1)} Cr</span>` : ''}
+                        </div>
+                    ` : ''}
                     ${persistenceIndicator}
                     <div class="timestamp">Last seen: ${ticker.last_seen || ticker.timestamp}</div>
                 </div>
@@ -465,6 +482,18 @@
             
             // Update timestamp
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            
+            // Update liquid stocks section
+            const liquidStocksGrid = document.getElementById('liquidStocksGrid');
+            const liquidStocksSection = document.getElementById('liquidStocksSection');
+            if (data.categories.liquid_stocks && data.categories.liquid_stocks.length > 0) {
+                liquidStocksGrid.innerHTML = data.categories.liquid_stocks
+                    .map(ticker => createTickerCard(ticker))
+                    .join('');
+                liquidStocksSection.style.display = 'block';
+            } else {
+                liquidStocksSection.style.display = 'none';
+            }
             
             // Update persistence tiers
             const persistenceTiers = [
@@ -559,6 +588,7 @@
         function refreshData() {
             fetchData();
         }
+        // Liquidity data integrated via API
         
         function showTickerDetails(ticker) {
             // For now, just log - can be expanded to show detailed view
@@ -579,5 +609,41 @@
             }
         });
     </script>
+
+    <script src="/static/liquidity-widget.js"></script>
+
+    <!-- Liquidity Display Example -->
+    <script>
+    // Example: Add liquidity info to ticker displays
+    async function enhanceWithLiquidity(tickerElement, ticker) {
+        const liquidityData = await window.liquidityWidget.fetchLiquidityData(ticker);
+        if (liquidityData) {
+            // Add simple badge
+            const badge = window.liquidityWidget.createSimpleBadge(liquidityData);
+            tickerElement.insertAdjacentHTML('beforeend', badge);
+            
+            // Or add detailed card (for expanded views)
+            // const card = window.liquidityWidget.createDetailedCard(liquidityData);
+            // tickerElement.insertAdjacentHTML('afterend', card);
+        }
+    }
+    
+    // Call this when displaying tickers
+    // enhanceWithLiquidity(element, 'RELIANCE');
+    
+        // Liquidity color helper
+        function getLiquidityColor(grade) {
+            const colors = {
+                'A+': '#00c853', 'A': '#4caf50',
+                'B+': '#8bc34a', 'B': '#cddc39', 
+                'C+': '#ffeb3b', 'C': '#ffc107',
+                'D+': '#ff9800', 'D': '#ff6b35',
+                'E+': '#f44336', 'E': '#e91e63',
+                'F': '#9e9e9e'
+            };
+            return colors[grade] || colors['F'];
+        }
+</script>
+    
 </body>
 </html>

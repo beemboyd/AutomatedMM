@@ -136,6 +136,52 @@
             font-weight: 500;
         }
         
+        /* Liquidity badge styles */
+        .liquidity-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .liquidity-A { background: #10b98120; color: #10b981; border: 1px solid #10b98140; }
+        .liquidity-B { background: #3b82f620; color: #3b82f6; border: 1px solid #3b82f640; }
+        .liquidity-C { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b40; }
+        .liquidity-D { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
+        .liquidity-F { background: #6b728020; color: #6b7280; border: 1px solid #6b728040; }
+        
+        .liquidity-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+        
+        .liquidity-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .liquidity-stat-label {
+            font-size: 0.7rem;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .liquidity-stat-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #fff;
+        }
+        
         .score-100 { color: #10b981; }
         .score-high { color: #f59e0b; }
         .score-medium { color: #3b82f6; }
@@ -201,7 +247,7 @@
     <div class="container">
         <div class="header">
             <div>
-                <h1>VSR Tracker Dashboard - Positive Momentum Only</h1>
+                <h1>VSR Tracker Dashboard - With Liquidity Rankings</h1>
                 <div class="last-updated" id="lastUpdated"></div>
                 <div class="real-time-status" id="realTimeStatus" style="color: #10b981; font-size: 12px; margin-top: 5px;"></div>
             </div>
@@ -212,6 +258,12 @@
         <div id="error" class="error" style="display: none;"></div>
         
         <div id="categories" class="categories" style="display: none;">
+            <!-- Liquid Stocks - TOP PRIORITY SECTION -->
+            <div class="category-card" style="border: 2px solid #3b82f6; background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);">
+                <h2 class="category-title" style="color: #3b82f6;">💎 Liquid Stocks (Grade B+)</h2>
+                <div id="liquidStocks" class="ticker-list"></div>
+            </div>
+            
             <!-- Persistence Leaders - NEW PRIORITY SECTION -->
             <div class="category-card" style="border: 2px solid #10b981;">
                 <h2 class="category-title" style="color: #10b981;">🔥 High Persistence (>30 alerts)</h2>
@@ -264,9 +316,31 @@
     
     <script>
         let currentData = null;
+        let liquidityCache = {};
         
         function formatNumber(num) {
             return new Intl.NumberFormat('en-IN').format(num);
+        }
+        
+        // Fetch liquidity data from API
+        async function fetchLiquidityData(ticker) {
+            try {
+                if (liquidityCache[ticker]) {
+                    return liquidityCache[ticker];
+                }
+                
+                const response = await fetch(`http://localhost:5555/liquidity/${ticker}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.data) {
+                        liquidityCache[ticker] = data.data;
+                        return data.data;
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to fetch liquidity for ${ticker}:`, error);
+            }
+            return null;
         }
         
         function getScoreClass(score) {
@@ -287,11 +361,41 @@
             return 'vsr-low';
         }
         
+        function getLiquidityRank(grade) {
+            const ranks = {
+                'A+': 'Excellent',
+                'A': 'Very High',
+                'B': 'High',
+                'C': 'Medium',
+                'D': 'Low',
+                'F': 'Very Low'
+            };
+            return ranks[grade] || 'Unknown';
+        }
+        
+        function getTradeSize(turnoverCr) {
+            if (turnoverCr >= 100) return 'Large Cap';
+            if (turnoverCr >= 50) return 'Mid-Large';
+            if (turnoverCr >= 20) return 'Mid Cap';
+            if (turnoverCr >= 10) return 'Small-Mid';
+            if (turnoverCr >= 5) return 'Small Cap';
+            return 'Micro Cap';
+        }
+        
         function createTickerElement(ticker) {
             // Calculate persistence indicator
             const persistenceLevel = ticker.occurrences > 30 ? 'high' : ticker.occurrences > 10 ? 'medium' : 'low';
             const persistenceColor = persistenceLevel === 'high' ? '#10b981' : persistenceLevel === 'medium' ? '#f59e0b' : '#6b7280';
             const persistenceIcon = persistenceLevel === 'high' ? '🔥' : persistenceLevel === 'medium' ? '📊' : '';
+            
+            // Get liquidity color based on grade
+            const getLiquidityColor = (grade) => {
+                if (grade === 'A' || grade === 'A+') return '#10b981';
+                if (grade === 'B') return '#3b82f6';
+                if (grade === 'C') return '#f59e0b';
+                if (grade === 'D') return '#ef4444';
+                return '#6b7280';
+            };
             
             return `
                 <div class="ticker-item" onclick="showTickerDetails('${ticker.ticker}')">
@@ -309,6 +413,19 @@
                             <span class="detail-label">Momentum</span>
                             <span class="detail-value ${getMomentumClass(ticker.momentum)}">${ticker.momentum.toFixed(1)}%</span>
                         </div>
+                        ${(ticker.liquidity_grade || ticker.liquidity_score !== undefined) ? `
+                        <div class="detail-item" style="grid-column: span 2;">
+                            <span class="detail-label">Liquidity Analysis</span>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                <span class="liquidity-badge liquidity-${ticker.liquidity_grade || 'F'}">
+                                    Grade ${ticker.liquidity_grade || 'F'}
+                                </span>
+                                <span style="color: #888; font-size: 0.85rem;">
+                                    Score: ${ticker.liquidity_score || 0}/100
+                                </span>
+                            </div>
+                        </div>
+                        ` : ''}
                         <div class="detail-item">
                             <span class="detail-label">Persistence</span>
                             <span class="detail-value" style="color: ${persistenceColor}; font-weight: bold;">
@@ -336,12 +453,38 @@
                         </div>
                         ` : ''}
                     </div>
+                    ${ticker.liquidity_grade ? `
+                    <div class="liquidity-details">
+                        <div class="liquidity-stat">
+                            <span class="liquidity-stat-label">Avg Turnover</span>
+                            <span class="liquidity-stat-value">₹${(ticker.avg_turnover_cr || 0).toFixed(1)}Cr</span>
+                        </div>
+                        <div class="liquidity-stat">
+                            <span class="liquidity-stat-label">Liquidity Rank</span>
+                            <span class="liquidity-stat-value">${getLiquidityRank(ticker.liquidity_grade || 'F')}</span>
+                        </div>
+                        <div class="liquidity-stat">
+                            <span class="liquidity-stat-label">Trade Size</span>
+                            <span class="liquidity-stat-value">${getTradeSize(ticker.avg_turnover_cr || 0)}</span>
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
             `;
         }
         
         function updateCategories(data) {
             const categories = data.categories;
+            
+            // Update liquid stocks (TOP PRIORITY - Grade C and above)
+            const liquidEl = document.getElementById('liquidStocks');
+            if (categories.liquid_stocks && categories.liquid_stocks.length > 0) {
+                liquidEl.innerHTML = categories.liquid_stocks
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                liquidEl.innerHTML = '<div class="empty-state">No liquid stocks (Grade B+) found</div>';
+            }
             
             // Update persistence leaders (HIGH PRIORITY)
             const persistenceEl = document.getElementById('persistenceLeaders');

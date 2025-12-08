@@ -21,6 +21,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Sync with broker positions: `python utils/cleanup_mis_positions.py --sync-broker`
 - Remove specific position: `python utils/cleanup_mis_positions.py --remove-ticker TICKER`
 
+## System Startup & Token Management
+**IMPORTANT - Daily Service Management:**
+- **Before 9 AM (Pre-market setup)**: System automatically runs `./Daily/pre_market_setup_robust.sh` at 8:00 AM via cron
+  - This starts all services fresh for the day with the current token
+  - No manual intervention needed unless services fail
+- **After 9 AM (Token refresh ONLY)**: Run `./Daily/refresh_token_services.sh`
+  - Use ONLY when you refresh the API token after services are already running
+  - This handles all token caching issues (process-level, Python cache, persistence files)
+  - Kills ALL services and restarts them with the new token
+- **Key Point**: You only need ONE script - pre_market for daily startup (automatic), refresh_token for token updates (manual)
+
 ## Code Style Guidelines
 - **Formatting**: 4-space indentation, ~100 char line length
 - **Imports**: Standard lib first, third-party libs second, local modules last

@@ -175,6 +175,10 @@ class PSARWatchdog:
         self.psar_maximum = float(config.get('PSAR', 'maximum', fallback='0.2'))  # Maximum AF
         self.tick_aggregate_size = int(config.get('PSAR', 'tick_aggregate_size', fallback='1000'))  # Ticks per candle
 
+        # Dry run mode - log exit signals but don't place orders
+        dry_run_str = config.get('PSAR', 'dry_run', fallback='yes').lower()
+        self.dry_run_mode = dry_run_str in ['yes', 'true', '1', 'on']
+
         # Initialize KiteConnect client
         try:
             self.kite = KiteConnect(api_key=self.api_key)
@@ -276,6 +280,11 @@ class PSARWatchdog:
                 self.logger.info("- Monitoring CNC (delivery) positions only")
             elif self.product_type_filter == 'MIS':
                 self.logger.info("- Monitoring MIS (intraday) positions only")
+            self.logger.info("")
+            if self.dry_run_mode:
+                self.logger.info("⚠️  DRY RUN MODE ENABLED - Exit signals will be logged but NO ORDERS will be placed")
+            else:
+                self.logger.info("✅ LIVE MODE - Exit signals will trigger actual order placement")
         else:
             self.logger.info("PSAR WATCHDOG IS DISABLED")
             self.logger.info("No stop losses will be monitored or triggered")
@@ -537,8 +546,8 @@ class PSARWatchdog:
             # Log raw position data for debugging
             self.logger.debug(f"Raw positions response: {len(positions.get('net', []))} net positions, {len(positions.get('day', []))} day positions")
 
-            # Filter for CNC positions with non-zero quantities
-            cnc_positions = []
+            # Filter for positions based on product_type_filter (CNC, MIS, or BOTH)
+            filtered_positions = []
             all_positions_debug = []
 
             for position in positions['net']:
@@ -549,68 +558,78 @@ class PSARWatchdog:
                 # Log all positions for debugging
                 all_positions_debug.append(f"{ticker}({product}:{quantity})")
 
-                if (product == 'CNC' and quantity != 0 and ticker != ''):
-                    cnc_positions.append(position)
-                    self.logger.debug(f"CNC Position found: {ticker} - {quantity} shares, Product: {product}")
+                # Filter based on product_type_filter
+                should_include = False
+                if self.product_type_filter == 'BOTH':
+                    should_include = (product in ['CNC', 'MIS'] and quantity != 0 and ticker != '')
+                elif self.product_type_filter == 'CNC':
+                    should_include = (product == 'CNC' and quantity != 0 and ticker != '')
+                elif self.product_type_filter == 'MIS':
+                    should_include = (product == 'MIS' and quantity != 0 and ticker != '')
+
+                if should_include:
+                    filtered_positions.append(position)
+                    self.logger.debug(f"{product} Position found: {ticker} - {quantity} shares")
 
             self.logger.info(f"All positions in account: {', '.join(all_positions_debug[:10])}{'...' if len(all_positions_debug) > 10 else ''}")
-            self.logger.info(f"Found {len(cnc_positions)} CNC positions from positions API")
+            self.logger.info(f"Found {len(filtered_positions)} {self.product_type_filter} positions from positions API")
 
-            # Also get holdings (CNC positions carried overnight)
-            try:
-                holdings = self.kite.holdings()
-                self.logger.info(f"Found {len(holdings)} holdings from holdings API")
+            # Also get holdings (CNC positions carried overnight) if monitoring CNC or BOTH
+            if self.product_type_filter in ['CNC', 'BOTH']:
+                try:
+                    holdings = self.kite.holdings()
+                    self.logger.info(f"Found {len(holdings)} holdings from holdings API")
 
-                holdings_count = 0
-                existing_tickers = {pos['tradingsymbol'] for pos in cnc_positions}
+                    holdings_count = 0
+                    existing_tickers = {pos['tradingsymbol'] for pos in filtered_positions}
 
-                for holding in holdings:
-                    ticker = holding.get('tradingsymbol', '')
-                    quantity = int(holding.get('quantity', 0))
-                    t1_quantity = int(holding.get('t1_quantity', 0))
-                    total_quantity = quantity + t1_quantity
+                    for holding in holdings:
+                        ticker = holding.get('tradingsymbol', '')
+                        quantity = int(holding.get('quantity', 0))
+                        t1_quantity = int(holding.get('t1_quantity', 0))
+                        total_quantity = quantity + t1_quantity
 
-                    if total_quantity > 0 and ticker != '' and ticker not in existing_tickers:
-                        # Convert holding to position-like format
-                        holding_as_position = {
-                            'tradingsymbol': ticker,
-                            'product': 'CNC',  # Holdings are always CNC
-                            'quantity': total_quantity,
-                            'settled_quantity': quantity,
-                            't1_quantity': t1_quantity,
-                            'average_price': holding.get('average_price', 0),
-                            'last_price': holding.get('last_price', 0),
-                            'pnl': holding.get('pnl', 0),
-                            'exchange': holding.get('exchange', 'NSE'),
-                            'instrument_token': holding.get('instrument_token', 0),
-                            'unrealised': holding.get('day_change', 0) * total_quantity,
-                            'realised': 0
-                        }
-                        cnc_positions.append(holding_as_position)
-                        holdings_count += 1
-                        if t1_quantity > 0:
-                            self.logger.info(f"CNC Holding with T1 found: {ticker} - Settled: {quantity}, T1: {t1_quantity}, Total: {total_quantity} shares")
-                        else:
-                            self.logger.debug(f"CNC Holding found: {ticker} - {total_quantity} shares")
-                    elif ticker in existing_tickers:
-                        self.logger.debug(f"Skipping duplicate ticker {ticker} from holdings (already in positions)")
-                    elif total_quantity <= 0:
-                        self.logger.debug(f"Skipping {ticker} from holdings: settled={quantity}, t1={t1_quantity}, total={total_quantity}")
+                        if total_quantity > 0 and ticker != '' and ticker not in existing_tickers:
+                            # Convert holding to position-like format
+                            holding_as_position = {
+                                'tradingsymbol': ticker,
+                                'product': 'CNC',  # Holdings are always CNC
+                                'quantity': total_quantity,
+                                'settled_quantity': quantity,
+                                't1_quantity': t1_quantity,
+                                'average_price': holding.get('average_price', 0),
+                                'last_price': holding.get('last_price', 0),
+                                'pnl': holding.get('pnl', 0),
+                                'exchange': holding.get('exchange', 'NSE'),
+                                'instrument_token': holding.get('instrument_token', 0),
+                                'unrealised': holding.get('day_change', 0) * total_quantity,
+                                'realised': 0
+                            }
+                            filtered_positions.append(holding_as_position)
+                            holdings_count += 1
+                            if t1_quantity > 0:
+                                self.logger.info(f"CNC Holding with T1 found: {ticker} - Settled: {quantity}, T1: {t1_quantity}, Total: {total_quantity} shares")
+                            else:
+                                self.logger.debug(f"CNC Holding found: {ticker} - {total_quantity} shares")
+                        elif ticker in existing_tickers:
+                            self.logger.debug(f"Skipping duplicate ticker {ticker} from holdings (already in positions)")
+                        elif total_quantity <= 0:
+                            self.logger.debug(f"Skipping {ticker} from holdings: settled={quantity}, t1={t1_quantity}, total={total_quantity}")
 
-                self.logger.info(f"Added {holdings_count} holdings as CNC positions")
+                    self.logger.info(f"Added {holdings_count} holdings as CNC positions")
 
-            except Exception as e:
-                self.logger.warning(f"Could not fetch holdings: {e}")
+                except Exception as e:
+                    self.logger.warning(f"Could not fetch holdings: {e}")
 
-            total_cnc_positions = len(cnc_positions)
-            self.logger.info(f"Total CNC positions found: {total_cnc_positions} (positions + holdings)")
+            total_positions = len(filtered_positions)
+            self.logger.info(f"Total {self.product_type_filter} positions found: {total_positions} (positions + holdings)")
 
-            if total_cnc_positions == 0:
-                self.logger.warning("No CNC positions found in account")
+            if total_positions == 0:
+                self.logger.warning(f"No {self.product_type_filter} positions found in account")
                 return 0
 
-            # Create tracked positions from CNC positions
-            for position in cnc_positions:
+            # Create tracked positions from filtered positions
+            for position in filtered_positions:
                 ticker = position['tradingsymbol']
                 quantity = int(position['quantity'])
 
@@ -654,7 +673,8 @@ class PSARWatchdog:
                 # Initialize highest price tracking with entry price
                 self.position_high_prices[ticker] = entry_price
 
-                self.logger.info(f"Tracking CNC position - {ticker}: {quantity} shares @ ₹{entry_price:.2f}")
+                product_type = position['product']
+                self.logger.info(f"Tracking {product_type} position - {ticker}: {quantity} shares @ ₹{entry_price:.2f}")
                 self.logger.info(f"  Investment: ₹{investment_amount:.2f}, Current P&L: ₹{float(position.get('pnl', 0)):.2f}")
 
             return len(self.tracked_positions)
@@ -1852,81 +1872,391 @@ class PSARWatchdog:
                     time.sleep(0.5)
         except Exception as e:
             self.logger.error(f"Fatal error in order thread: {e}")
-    
+
+    def calculate_psar(self, ticker: str, candles: List[Dict]) -> Optional[Dict]:
+        """Calculate Parabolic SAR for a list of OHLC candles"""
+        try:
+            if len(candles) < 2:
+                self.logger.debug(f"{ticker}: Need at least 2 candles to calculate PSAR")
+                return None
+
+            # Initialize or get existing PSAR data
+            if ticker not in self.psar_data:
+                candle0 = candles[0]
+                candle1 = candles[1]
+
+                if candle1['close'] > candle0['close']:
+                    trend = 'LONG'
+                    psar = candle0['low']
+                    ep = candle1['high']
+                else:
+                    trend = 'SHORT'
+                    psar = candle0['high']
+                    ep = candle1['low']
+
+                af = self.psar_start
+            else:
+                psar_info = self.psar_data[ticker]
+                psar = psar_info['psar']
+                af = psar_info['af']
+                trend = psar_info['trend']
+                ep = psar_info['ep']
+
+            current_candle = candles[-1]
+
+            if trend == 'LONG':
+                new_psar = psar + af * (ep - psar)
+
+                if len(candles) >= 2:
+                    new_psar = min(new_psar, candles[-2]['low'])
+                if len(candles) >= 3:
+                    new_psar = min(new_psar, candles[-3]['low'])
+
+                if current_candle['low'] < new_psar:
+                    trend = 'SHORT'
+                    psar = ep
+                    ep = current_candle['low']
+                    af = self.psar_start
+                    self.logger.info(f"{ticker}: PSAR TREND REVERSAL - Now SHORT @ ₹{psar:.2f}")
+                else:
+                    psar = new_psar
+                    if current_candle['high'] > ep:
+                        ep = current_candle['high']
+                        af = min(af + self.psar_increment, self.psar_maximum)
+            else:
+                new_psar = psar + af * (ep - psar)
+
+                if len(candles) >= 2:
+                    new_psar = max(new_psar, candles[-2]['high'])
+                if len(candles) >= 3:
+                    new_psar = max(new_psar, candles[-3]['high'])
+
+                if current_candle['high'] > new_psar:
+                    trend = 'LONG'
+                    psar = ep
+                    ep = current_candle['high']
+                    af = self.psar_start
+                    self.logger.info(f"{ticker}: PSAR TREND REVERSAL - Now LONG @ ₹{psar:.2f}")
+                else:
+                    psar = new_psar
+                    if current_candle['low'] < ep:
+                        ep = current_candle['low']
+                        af = min(af + self.psar_increment, self.psar_maximum)
+
+            return {
+                'psar': psar,
+                'af': af,
+                'trend': trend,
+                'ep': ep,
+                'last_updated': datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error calculating PSAR for {ticker}: {e}")
+            return None
+
+    def aggregate_ticks_to_candle(self, ticker: str, tick_price: float):
+        """Aggregate tick prices into OHLC candles based on tick_aggregate_size"""
+        try:
+            if ticker not in self.tick_buffers:
+                self.tick_buffers[ticker] = deque(maxlen=self.tick_aggregate_size)
+
+            self.tick_buffers[ticker].append(tick_price)
+
+            if len(self.tick_buffers[ticker]) == self.tick_aggregate_size:
+                ticks = list(self.tick_buffers[ticker])
+                candle = {
+                    'open': ticks[0],
+                    'high': max(ticks),
+                    'low': min(ticks),
+                    'close': ticks[-1],
+                    'timestamp': datetime.now().isoformat()
+                }
+
+                if ticker not in self.tick_candles:
+                    self.tick_candles[ticker] = []
+
+                self.tick_candles[ticker].append(candle)
+                if len(self.tick_candles[ticker]) > 100:
+                    self.tick_candles[ticker].pop(0)
+
+                psar_result = self.calculate_psar(ticker, self.tick_candles[ticker])
+                if psar_result:
+                    self.psar_data[ticker] = psar_result
+
+                    # Get position info for context
+                    position = self.tracked_positions.get(ticker, {})
+                    entry_price = position.get('entry_price', 0)
+                    position_type = position.get('type', 'LONG')
+
+                    # Calculate SL distance from current price
+                    psar_sl = psar_result['psar']
+                    current_price = candle['close']
+                    sl_distance_pct = abs((current_price - psar_sl) / current_price * 100)
+
+                    # Log detailed PSAR calculation with SL information
+                    self.logger.info(f"🎯 {ticker} PSAR UPDATE ({self.tick_aggregate_size}-tick candle completed)")
+                    self.logger.info(f"   Candle: O=₹{candle['open']:.2f}, H=₹{candle['high']:.2f}, "
+                                   f"L=₹{candle['low']:.2f}, C=₹{candle['close']:.2f}")
+                    self.logger.info(f"   PSAR Stop Loss: ₹{psar_sl:.2f} ({psar_result['trend']} trend, "
+                                   f"AF={psar_result['af']:.3f}, EP=₹{psar_result['ep']:.2f})")
+                    self.logger.info(f"   Distance from SL: {sl_distance_pct:.2f}% | "
+                                   f"Entry: ₹{entry_price:.2f} | Current: ₹{current_price:.2f}")
+
+                    # Warning if price is getting close to PSAR
+                    if position_type == 'LONG' and sl_distance_pct < 2.0:
+                        self.logger.warning(f"⚠️  {ticker}: Price approaching PSAR! Only {sl_distance_pct:.2f}% away from stop loss")
+                    elif position_type == 'SHORT' and sl_distance_pct < 2.0:
+                        self.logger.warning(f"⚠️  {ticker}: Price approaching PSAR! Only {sl_distance_pct:.2f}% away from stop loss")
+
+                self.tick_buffers[ticker].clear()
+
+        except Exception as e:
+            self.logger.error(f"Error aggregating ticks for {ticker}: {e}")
+
+    def check_psar_exit(self, ticker: str, current_price: float):
+        """Check if current price has crossed PSAR, triggering an exit"""
+        try:
+            if not self.psar_watchdog_enabled:
+                return
+
+            if ticker not in self.psar_data:
+                return
+
+            if ticker not in self.tracked_positions:
+                return
+
+            if self.tracked_positions[ticker].get("has_pending_order", False):
+                return
+
+            position_data = self.tracked_positions.get(ticker, {})
+            expected_quantity = position_data.get("quantity", 0)
+
+            if not self.verify_position_exists(ticker, expected_quantity):
+                self.logger.warning(f"{ticker}: Position not found in broker account. Removing from tracking.")
+                self.remove_position_from_tracking(ticker)
+                return
+
+            psar_info = self.psar_data[ticker]
+            psar_value = psar_info['psar']
+            position_type = position_data.get("type", "LONG")
+            quantity = position_data["quantity"]
+
+            exit_triggered = False
+            reason = ""
+
+            if position_type == "LONG":
+                if current_price < psar_value:
+                    exit_triggered = True
+                    reason = f"PSAR Exit - LONG position: Price ₹{current_price:.2f} below PSAR ₹{psar_value:.2f}"
+            elif position_type == "SHORT":
+                if current_price > psar_value:
+                    exit_triggered = True
+                    reason = f"PSAR Exit - SHORT position: Price ₹{current_price:.2f} above PSAR ₹{psar_value:.2f}"
+
+            if exit_triggered:
+                tick_size = self.get_tick_size(ticker)
+
+                if position_type == "LONG":
+                    transaction_type = "SELL"
+                    raw_price = current_price * 0.995
+                else:
+                    transaction_type = "BUY"
+                    raw_price = current_price * 1.005
+
+                order_price = self.round_to_tick_size(raw_price, tick_size)
+
+                # Get position info for context
+                entry_price = position_data.get('entry_price', 0)
+                pnl = (current_price - entry_price) * quantity if position_type == 'LONG' else (entry_price - current_price) * quantity
+                pnl_pct = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+
+                self.logger.warning("=" * 80)
+                self.logger.warning(f"🚨 PSAR EXIT SIGNAL TRIGGERED: {ticker}")
+                self.logger.warning(f"   {reason}")
+                self.logger.warning(f"   Position: {position_type} {quantity} shares @ ₹{entry_price:.2f}")
+                self.logger.warning(f"   Current Price: ₹{current_price:.2f} | PSAR SL: ₹{psar_value:.2f}")
+                self.logger.warning(f"   P&L: ₹{pnl:,.2f} ({pnl_pct:+.2f}%)")
+                self.logger.warning(f"   Proposed Order: {transaction_type} {quantity} shares @ ₹{order_price:.2f}")
+
+                if self.dry_run_mode:
+                    self.logger.warning(f"   ⚠️  DRY RUN MODE - Order NOT placed (monitoring accuracy only)")
+                    self.logger.warning("=" * 80)
+                else:
+                    self.logger.warning(f"   ✅ LIVE MODE - Queuing order for execution")
+                    self.logger.warning("=" * 80)
+                    self.queue_order(ticker, quantity, transaction_type, reason, order_price)
+
+        except Exception as e:
+            self.logger.error(f"Error checking PSAR exit for {ticker}: {e}")
+
+    def on_ticks(self, ws, ticks):
+        """Websocket callback for tick data"""
+        try:
+            for tick in ticks:
+                instrument_token = tick['instrument_token']
+
+                ticker = None
+                for t, token in self.instrument_tokens.items():
+                    if token == instrument_token:
+                        ticker = t
+                        break
+
+                if not ticker:
+                    continue
+
+                ltp = tick.get('last_price')
+                if not ltp or ltp <= 0:
+                    continue
+
+                self.current_prices[ticker] = ltp
+                self.aggregate_ticks_to_candle(ticker, ltp)
+                self.check_psar_exit(ticker, ltp)
+
+        except Exception as e:
+            self.logger.error(f"Error processing ticks: {e}")
+
+    def on_connect(self, ws, response):
+        """Websocket connect callback"""
+        self.logger.info(f"Websocket connected: {response}")
+
+        if self.instrument_tokens:
+            tokens = list(self.instrument_tokens.values())
+            ws.subscribe(tokens)
+            ws.set_mode(ws.MODE_LTP, tokens)
+            self.logger.info(f"Subscribed to {len(tokens)} instruments for PSAR monitoring")
+
+    def on_close(self, ws, code, reason):
+        """Websocket close callback"""
+        self.logger.warning(f"Websocket closed: {code} - {reason}")
+
+        if self.running:
+            self.logger.info("Attempting to reconnect websocket in 5 seconds...")
+            time.sleep(5)
+            if self.running:
+                self.start_websocket()
+
+    def on_error(self, ws, code, reason):
+        """Websocket error callback"""
+        self.logger.error(f"Websocket error: {code} - {reason}")
+
+    def start_websocket(self):
+        """Initialize and start the websocket connection for tick data"""
+        try:
+            if not self.psar_watchdog_enabled:
+                self.logger.info("PSAR watchdog disabled - skipping websocket initialization")
+                return
+
+            self.logger.info("Initializing websocket for tick data...")
+
+            self.kws = KiteTicker(self.api_key, self.access_token)
+
+            self.kws.on_ticks = self.on_ticks
+            self.kws.on_connect = self.on_connect
+            self.kws.on_close = self.on_close
+            self.kws.on_error = self.on_error
+
+            self.websocket_thread = threading.Thread(target=self.kws.connect, daemon=True)
+            self.websocket_thread.start()
+
+            self.logger.info("Websocket thread started for real-time tick data")
+
+        except Exception as e:
+            self.logger.error(f"Error starting websocket: {e}")
+
+    def stop_websocket(self):
+        """Stop the websocket connection"""
+        try:
+            if self.kws:
+                self.logger.info("Stopping websocket connection...")
+                self.kws.close()
+                self.kws = None
+
+            if self.websocket_thread and self.websocket_thread.is_alive():
+                self.websocket_thread.join(timeout=5)
+
+            self.logger.info("Websocket stopped")
+
+        except Exception as e:
+            self.logger.error(f"Error stopping websocket: {e}")
+
+    def subscribe_position_to_websocket(self, ticker: str):
+        """Subscribe a single position to websocket for tick data"""
+        try:
+            if not self.psar_watchdog_enabled or not self.kws:
+                return
+
+            token = self.get_instrument_token(ticker)
+            if not token:
+                self.logger.error(f"Cannot subscribe {ticker} - instrument token not found")
+                return
+
+            self.instrument_tokens[ticker] = token
+
+            self.kws.subscribe([token])
+            self.kws.set_mode(self.kws.MODE_LTP, [token])
+
+            self.logger.info(f"Subscribed {ticker} (token: {token}) to websocket for PSAR monitoring")
+
+        except Exception as e:
+            self.logger.error(f"Error subscribing {ticker} to websocket: {e}")
+
     def start(self):
         """Start the watchdog monitoring system"""
-        self.logger.info(f"Starting ATR-based stop loss watchdog for user {self.user_name}...")
+        self.logger.info(f"Starting PSAR-based stop loss watchdog for user {self.user_name}...")
 
         # Check if market is already closed
         if self.is_market_closed():
-            self.logger.warning("Market is closed (after 3:30 PM IST or weekend). SL_watchdog will not start.")
+            self.logger.warning("Market is closed (after 3:30 PM IST or weekend). PSAR watchdog will not start.")
             return False
         else:
             # Log when shutdown will occur
             ist = pytz.timezone('Asia/Kolkata')
             current_time = datetime.now(ist)
             market_close = current_time.replace(hour=15, minute=30, second=0, microsecond=0)
-            self.logger.info(f"SL_watchdog will automatically shutdown at {market_close.strftime('%H:%M IST')}")
+            self.logger.info(f"PSAR watchdog will automatically shutdown at {market_close.strftime('%H:%M IST')}")
 
         self.running = True
 
-        # Load CNC positions using hybrid approach (both Zerodha API and orders file)
-        positions_loaded = self.load_cnc_positions_from_zerodha()
+        # Start websocket for tick data FIRST (before loading positions)
+        if self.psar_watchdog_enabled:
+            self.start_websocket()
+            time.sleep(2)  # Give websocket time to connect
 
-        # Always also load from orders file to get complete picture (if provided)
-        if self.orders_file and os.path.exists(self.orders_file):
-            self.logger.info("Loading additional positions from orders file to ensure complete coverage...")
-            orders_loaded = self.load_positions_from_orders_file()
-            self.logger.info(f"Total positions after hybrid loading: {len(self.tracked_positions)}")
-        else:
-            self.logger.warning("No orders file provided - only using Zerodha API positions")
+        # Load ONLY current positions from Zerodha API (not from orders file)
+        # PSAR watchdog monitors only real-time positions that exist in broker account
+        positions_loaded = self.load_positions_from_zerodha()
+        self.logger.info(f"Loaded {positions_loaded} positions from Zerodha API")
 
         if len(self.tracked_positions) == 0:
             self.logger.error("No positions to monitor. Exiting.")
             return False
-        
-        # Initialize ATR-based stop losses
-        self.update_atr_stop_losses()
-        
-        # Initialize SMA20 hourly data
-        self.logger.info("Initializing SMA20 hourly data for all positions...")
-        self.last_sma20_check = 0  # Force immediate update
-        self.update_sma20_hourly_data()
-        
-        # Start price polling thread
-        self.price_poll_thread = threading.Thread(target=self.poll_prices)
-        self.price_poll_thread.daemon = True
-        self.price_poll_thread.start()
-        self.logger.info(f"Started price polling thread (interval: {self.price_poll_interval}s)")
-        
+
+        # Subscribe all positions to websocket for PSAR monitoring
+        if self.psar_watchdog_enabled and self.kws:
+            self.logger.info("Subscribing all positions to websocket for PSAR monitoring...")
+            for ticker in self.tracked_positions.keys():
+                self.subscribe_position_to_websocket(ticker)
+            time.sleep(1)  # Give subscriptions time to register
+
         # Start order processing thread
         self.order_thread = threading.Thread(target=self.process_order_queue)
         self.order_thread.daemon = True
         self.order_thread.start()
         self.logger.info("Started order processing thread")
-        
+
         # Print initial status
         self.print_portfolio_summary()
-        
+
         # Main monitoring loop
         try:
             while self.running:
                 # Check if market is closed and shutdown if needed
                 if self.is_market_closed():
-                    self.logger.info("Market has closed (3:30 PM IST). Shutting down SL_watchdog...")
+                    self.logger.info("Market has closed (3:30 PM IST). Shutting down PSAR watchdog...")
                     self.stop()
                     break
 
-                # Update ATR-based stop losses periodically (daily)
-                self.update_atr_stop_losses()
-                
-                # Update SMA20 hourly data periodically (every 30 minutes)
-                # This is for display/monitoring only, not for exit decisions
-                self.update_sma20_hourly_data()
-                
-                # SMA20 exit check at 2:30 PM is DISABLED
-                # self.check_sma20_exit_at_230pm()
-                
                 # Sync positions with broker periodically (every 10 minutes)
                 self.sync_positions_with_broker()
 
@@ -1939,7 +2269,7 @@ class PSARWatchdog:
             self.logger.error(f"Error in main monitoring loop: {e}")
             self.stop()
             return False
-        
+
         return True
     
     def check_sma20_today_only(self, ticker) -> Optional[Dict]:
@@ -2087,22 +2417,22 @@ class PSARWatchdog:
 
     def stop(self):
         """Stop the watchdog monitoring system"""
-        self.logger.info("Stopping ATR-based stop loss watchdog...")
+        self.logger.info("Stopping PSAR-based stop loss watchdog...")
         self.running = False
 
-        # Wait for threads to complete
-        if self.price_poll_thread and self.price_poll_thread.is_alive():
-            self.price_poll_thread.join(timeout=5)
+        # Stop websocket
+        self.stop_websocket()
 
+        # Wait for threads to complete
         if self.order_thread and self.order_thread.is_alive():
             self.order_thread.join(timeout=5)
 
-        self.logger.info("ATR-based stop loss watchdog stopped")
+        self.logger.info("PSAR-based stop loss watchdog stopped")
         return True
     
     def print_portfolio_summary(self):
         """Print a summary of the current monitored positions"""
-        self.logger.info("=== ATR-Based Trailing Stop Loss Portfolio Summary ===")
+        self.logger.info("=== PSAR-Based Trailing Stop Loss Portfolio Summary ===")
 
         if not self.tracked_positions:
             self.logger.info("No positions currently being monitored")
@@ -2116,41 +2446,32 @@ class PSARWatchdog:
             entry_price = position["entry_price"]
             investment = position["investment_amount"]
 
-            # Get ATR data for this ticker
-            atr_info = self.atr_data.get(ticker, {})
-            if atr_info:
-                stop_loss = atr_info.get('stop_loss', 0)
-                atr_pct = atr_info.get('atr_percentage', 0)
-                volatility = atr_info.get('volatility_category', 'Unknown')
-                multiplier = atr_info.get('multiplier', 0)
+            # Get PSAR data for this ticker
+            psar_info = self.psar_data.get(ticker, {})
+            current_price = self.current_prices.get(ticker, entry_price)
 
-                # Get the current price before trying to use it
-                current_price = self.current_prices.get(ticker, entry_price)
+            if psar_info:
+                psar_value = psar_info.get('psar', 0)
+                trend = psar_info.get('trend', 'Unknown')
+                af = psar_info.get('af', 0)
+                ep = psar_info.get('ep', 0)
 
-                # Get position high info for trailing information
-                position_high = self.position_high_prices.get(ticker, 0)
-                if position_high > 0 and position_high > current_price:
-                    trail_info = f", Trail: {((position_high - current_price) / position_high * 100):.1f}% from position high ₹{position_high:.2f}"
+                # Calculate distance from PSAR
+                if psar_value > 0:
+                    distance_pct = ((current_price - psar_value) / psar_value * 100) if trend == 'LONG' else ((psar_value - current_price) / psar_value * 100)
+                    distance_info = f"{distance_pct:+.1f}% from PSAR"
                 else:
-                    trail_info = ""
+                    distance_info = "calculating"
 
-                atr_display = f"₹{stop_loss:.2f} ({volatility} {multiplier}x, ATR: {atr_pct:.1f}%{trail_info})"
+                psar_display = f"₹{psar_value:.2f} ({trend} trend, AF: {af:.3f}, {distance_info})"
             else:
-                atr_display = "Calculating..."
-                current_price = self.current_prices.get(ticker, entry_price)
-            
-            # Get SMA20 hourly data for this ticker
-            sma20_info = self.sma20_hourly_data.get(ticker, {})
-            if sma20_info:
-                violations = sma20_info.get('sma20_violations', 0)
-                sma20_ratio = sma20_info.get('sma20_above_ratio', 0)
-                sma20_display = f" | SMA20: {violations} viol, {sma20_ratio:.0%} above"
-                
-                # Add warning indicators
-                if violations >= 1 or sma20_ratio < 0.9:
-                    sma20_display += " ⚠️"
-            else:
-                sma20_display = ""
+                psar_display = "Waiting for tick data..."
+
+            # Calculate tick buffer status
+            tick_count = len(self.tick_buffers.get(ticker, []))
+            tick_status = f" | Ticks: {tick_count}/{self.tick_aggregate_size}"
+            if tick_count >= self.tick_aggregate_size:
+                tick_status += " ✓"
 
             current_value = current_price * qty
             profit_loss = current_value - investment
@@ -2160,7 +2481,7 @@ class PSARWatchdog:
             total_current_value += current_value
 
             self.logger.info(f"{ticker}: {qty} shares @ ₹{entry_price:.2f} | Current: ₹{current_price:.2f} | "
-                           f"P/L: ₹{profit_loss:.2f} ({profit_pct:.2f}%) | ATR Stop: {atr_display}{sma20_display}")
+                           f"P/L: ₹{profit_loss:.2f} ({profit_pct:.2f}%) | PSAR: {psar_display}{tick_status}")
 
         # Calculate overall performance
         total_profit_loss = total_current_value - total_investment
@@ -2270,34 +2591,36 @@ def main():
         logger.setLevel(logging.DEBUG)
     
     # Log start of execution
-    logger.info(f"===== ATR-Based Stop Loss Watchdog Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
+    logger.info(f"===== PSAR-Based Stop Loss Watchdog Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
     if args.orders_file:
         logger.info(f"Orders file: {args.orders_file}")
     else:
-        logger.info("Monitoring ALL CNC positions from Zerodha account")
+        logger.info(f"Monitoring all {args.product_type} positions from Zerodha account")
     logger.info(f"User: {user_name}")
-    
+    logger.info(f"Product Type Filter: {args.product_type}")
+
     try:
         # Load Daily config
         config = load_daily_config()
-        
+
         # Get user credentials
         user_credentials = get_user_from_config(user_name, config)
         if not user_credentials:
             logger.error(f"Invalid or incomplete credentials for user {user_name}. Need api_key, api_secret, and access_token.")
             return 1
-        
+
         # Verify orders file exists if provided
         if args.orders_file and not os.path.exists(args.orders_file):
             logger.error(f"Orders file not found: {args.orders_file}")
             return 1
 
         # Create watchdog instance
-        watchdog = SLWatchdog(
+        watchdog = PSARWatchdog(
             user_credentials=user_credentials,
             config=config,
             orders_file=args.orders_file,
-            price_poll_interval=args.poll_interval
+            price_poll_interval=args.poll_interval,
+            product_type=args.product_type
         )
         
         # Start the watchdog
@@ -2322,7 +2645,7 @@ def main():
         # Ensure proper cleanup
         if 'watchdog' in locals():
             watchdog.stop()
-        logger.info(f"===== ATR-Based Stop Loss Watchdog Stopped at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
+        logger.info(f"===== PSAR-Based Stop Loss Watchdog Stopped at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
     
     return 0
 

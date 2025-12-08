@@ -266,3 +266,203 @@ python src/validation/generate_report.py
 - ✅ Historical backfill completed (39 days)
 - ✅ LaunchAgent configured for 5-minute collection during market hours
 - 🚧 Ready for Phase 3 (Model Training) with current dataset
+
+---
+
+## 🎯 ML Prediction System - Priority Roadmap
+
+### Week 1: Foundation Fixes
+**Timeline**: Days 1-5
+**Focus**: Get predictions running without errors
+
+#### Day 1: Data Quality
+- [ ] Fix NULL handling in feature pipeline
+- [ ] Populate missing data points
+- [ ] Validate data completeness
+
+#### Day 2: Prediction Pipeline
+- [ ] Get predictions running end-to-end
+- [ ] Fix any runtime errors
+- [ ] Validate output format
+
+#### Days 3-4: Validation Methodology
+- [ ] Fix train/test split methodology
+- [ ] Implement proper cross-validation
+- [ ] Address data leakage issues
+
+#### Day 5: Model Retraining
+- [ ] Retrain with proper validation
+- [ ] Baseline model performance
+- [ ] Document metrics
+
+### Week 2: Monitoring & Dashboard
+**Timeline**: Days 6-10
+**Focus**: Deploy working system with visibility
+
+#### Days 6-7: Monitoring Implementation
+- [ ] Implement model monitoring
+- [ ] Add prediction logging
+- [ ] Create alert system
+
+#### Day 8: Dashboard Deployment
+- [ ] Deploy working dashboard
+- [ ] Show live predictions
+- [ ] Add performance metrics
+
+#### Days 9-10: Feedback Loop
+- [ ] Add feedback collection
+- [ ] Implement data persistence
+- [ ] Create retraining trigger
+
+### Weeks 3-4: Optimization
+**Timeline**: Days 11-20
+**Focus**: Production hardening
+
+- [ ] Feature improvements
+- [ ] Model optimization
+- [ ] Performance tuning
+- [ ] Production hardening
+- [ ] Documentation
+
+### 📊 Success Metrics
+
+**Immediate Goals**:
+- Predictions running without errors
+- No NULL/NaN issues in pipeline
+
+**Week 1 Targets**:
+- Model accuracy: 70-85% (realistic baseline)
+- Clean validation methodology
+- Reproducible results
+
+**Week 2 Targets**:
+- Dashboard showing live predictions
+- Monitoring alerts functional
+- Feedback loop operational
+
+**Month 1 Target**:
+- Stable production system
+- Automated retraining
+- Performance tracking
+
+### 🛠️ Tools & Infrastructure
+
+**Required Tools**:
+1. **MLflow** - For experiment tracking and model versioning
+2. **Grafana** - For monitoring dashboards and alerting
+3. **PostgreSQL** - Better than SQLite for production scale
+4. **Redis** - For caching predictions and reducing latency
+5. **Airflow** - For pipeline orchestration and scheduling
+
+**Implementation Priority**:
+1. Start with MLflow (experiment tracking)
+2. Add PostgreSQL (data persistence)
+3. Implement Redis (performance optimization)
+4. Deploy Grafana (monitoring)
+5. Integrate Airflow (orchestration)
+
+---
+
+## 📊 Service Redundancy Analysis (2025-10-06)
+
+### Current State: 7 Errored Services
+All services showing Exit -15 (SIGTERM - terminated during cleanup/token refresh)
+
+**Services analyzed**:
+1. hourly-breakout-alerts (Exit: -15, PID: 39708)
+2. hourly-short-tracker-service (Exit: -15, PID: 39711)
+3. hourly-tracker-service (Exit: -15, PID: 39781)
+4. hourly-tracker-dashboard (Exit: -15, PID: 39782)
+5. hourly-short-tracker-dashboard (Exit: -9, PID: 39783)
+6. short-momentum-tracker (Exit: -15, PID: 39852)
+7. vsr-tracker-enhanced (Exit: -15, PID: 39853)
+
+### Analysis Results
+
+#### TRUE REDUNDANCIES (4 services)
+1. **hourly-tracker-service** (Long_Reversal_Hourly tracker)
+   - Uses VSR_Momentum_Scanner functions
+   - Tracks minute data for VSR calculation
+   - Outputs to: `logs/hourly_tracker/`
+   - **Redundant with**: vsr-tracker-enhanced
+
+2. **hourly-short-tracker-service** (Short_Reversal_Hourly tracker)
+   - Identical VSR calculation logic to hourly-tracker-service
+   - Tracks short positions with same methodology
+   - Outputs to: `logs/hourly_short_tracker/`
+   - **Redundant with**: vsr-tracker-enhanced (can handle shorts)
+
+3. **short-momentum-tracker** (Short_Reversal_Daily tracker)
+   - Tracks 3-day persistence for shorts
+   - Calculates momentum scores
+   - **Redundant with**: hourly-short-tracker-service
+
+4. **hourly-short-tracker-dashboard** (Port 3004)
+   - Parses hourly_short_tracker logs
+   - Categorizes by negative momentum
+   - **Redundant with**: hourly-tracker-dashboard (can show both)
+
+#### UNIQUE SERVICES (3 services - KEEP)
+1. **vsr-tracker-enhanced** ✅
+   - Enhanced VSR tracker with 3-day persistence
+   - Liquidity metrics integration
+   - Handles both long/short positions
+   - Most comprehensive tracker
+   - **Status**: Keep as primary tracker
+
+2. **hourly-tracker-dashboard** (Port 3002) ✅
+   - Web dashboard for VSR data
+   - Real-time ticker monitoring
+   - Persistence tier categorization
+   - **Status**: Keep and enhance for both long/short
+
+3. **hourly-breakout-alerts** ✅
+   - Monitors hourly breakout patterns
+   - Price crosses above previous hourly close
+   - Telegram alerts for trend continuation
+   - **Unique logic**: Breakout-based (not VSR-based)
+   - **Status**: Keep - provides unique functionality
+
+### Consolidation Recommendation
+
+**FROM**: 7 services → **TO**: 3 services
+
+#### Services to Archive (4):
+- ❌ hourly-tracker-service
+- ❌ hourly-short-tracker-service
+- ❌ short-momentum-tracker
+- ❌ hourly-short-tracker-dashboard
+
+#### Services to Keep (3):
+- ✅ vsr-tracker-enhanced (primary VSR tracker)
+- ✅ hourly-tracker-dashboard (unified dashboard)
+- ✅ hourly-breakout-alerts (unique breakout logic)
+
+#### Enhancement Needed:
+1. **vsr-tracker-enhanced**: Verify short position handling
+2. **hourly-tracker-dashboard**: Add long/short tabs to UI
+
+### Risk Assessment
+
+**LOW RISK**:
+- All trackers use identical VSR_Momentum_Scanner functions
+- vsr-tracker-enhanced already has full VSR logic
+- Dashboards only parse log files (safe to merge)
+
+**MEDIUM RISK**:
+- Need to verify vsr-tracker-enhanced handles shorts properly
+- Dashboard template updates required for long/short views
+
+**MITIGATION**:
+- Archive old services (don't delete files)
+- Keep backup plists in scheduler/plists/
+- Test consolidated services before removing old ones
+
+### Implementation Status
+- **Decision**: HOLD OFF (2025-10-06)
+- **Reason**: Analysis complete, awaiting approval
+- **Next Steps**: Available when ready to consolidate
+
+---
+
+*Analysis completed: 2025-10-06*

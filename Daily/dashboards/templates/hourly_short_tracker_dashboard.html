@@ -254,6 +254,7 @@
             font-size: 12px;
         }
     </style>
+<!-- Liquidity display integrated -->
 </head>
 <body>
     <div class="container">
@@ -468,6 +469,7 @@
         function refreshData() {
             fetchData();
         }
+        // Liquidity data integrated via API
         
         function showTickerDetails(ticker) {
             // For now, just log - can be expanded to show detailed view
@@ -488,5 +490,41 @@
             }
         });
     </script>
+
+    <script src="/static/liquidity-widget.js"></script>
+
+    <!-- Liquidity Display Example -->
+    <script>
+    // Example: Add liquidity info to ticker displays
+    async function enhanceWithLiquidity(tickerElement, ticker) {
+        const liquidityData = await window.liquidityWidget.fetchLiquidityData(ticker);
+        if (liquidityData) {
+            // Add simple badge
+            const badge = window.liquidityWidget.createSimpleBadge(liquidityData);
+            tickerElement.insertAdjacentHTML('beforeend', badge);
+            
+            // Or add detailed card (for expanded views)
+            // const card = window.liquidityWidget.createDetailedCard(liquidityData);
+            // tickerElement.insertAdjacentHTML('afterend', card);
+        }
+    }
+    
+    // Call this when displaying tickers
+    // enhanceWithLiquidity(element, 'RELIANCE');
+    
+        // Liquidity color helper
+        function getLiquidityColor(grade) {
+            const colors = {
+                'A+': '#00c853', 'A': '#4caf50',
+                'B+': '#8bc34a', 'B': '#cddc39', 
+                'C+': '#ffeb3b', 'C': '#ffc107',
+                'D+': '#ff9800', 'D': '#ff6b35',
+                'E+': '#f44336', 'E': '#e91e63',
+                'F': '#9e9e9e'
+            };
+            return colors[grade] || colors['F'];
+        }
+</script>
+    
 </body>
 </html>

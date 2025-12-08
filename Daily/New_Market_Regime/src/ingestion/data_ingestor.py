@@ -42,13 +42,21 @@ class MarketDataIngestor:
         # Paths to existing data sources
         self.base_path = '/Users/maverick/PycharmProjects/India-TS/Daily'
         
-        # Scanner result paths
+        # Scanner result paths - Updated with correct paths
+        # KC files are optional - they provide additional trend signals but not essential
         self.scanner_paths = {
-            'long_reversal': f'{self.base_path}/results/Long_Reversal_Daily_*.xlsx',
-            'short_reversal': f'{self.base_path}/results-s/Short_Reversal_Daily_*.xlsx',
-            'kc_upper': f'{self.base_path}/results/KC_Upper_Limit_Trending_*.xlsx',
-            'kc_lower': f'{self.base_path}/results/KC_Lower_Limit_Trending_*.xlsx',
-            'vsr_hourly': f'{self.base_path}/scanners/Hourly/VSR_*.xlsx'
+            # Daily scanners (REQUIRED)
+            'long_reversal_daily': f'{self.base_path}/results/Long_Reversal_Daily_*.xlsx',
+            'short_reversal_daily': f'{self.base_path}/results-s/Short_Reversal_Daily_*.xlsx',
+            
+            # Hourly scanners (REQUIRED)
+            'long_reversal_hourly': f'{self.base_path}/results-h/Long_Reversal_Hourly_*.xlsx',
+            'short_reversal_hourly': f'{self.base_path}/results-s-h/Short_Reversal_Hourly_*.xlsx',
+            
+            # Optional scanners - will be used if available
+            # 'kc_upper': f'{self.base_path}/FNO/Long/KC_Upper_Limit_Trending_FNO_*.xlsx',
+            # 'kc_lower': f'{self.base_path}/FNO/Short/KC_Lower_Limit_Trending_FNO_*.xlsx',
+            # 'vsr_hourly': f'{self.base_path}/scanners/Hourly/VSR_*.xlsx'
         }
         
         # Database paths
@@ -266,9 +274,9 @@ class MarketDataIngestor:
                 'market_breadth': breadth_data,
                 'regime_predictions': regime_data,
                 'scanner_summary': {
-                    'total_scanners': len(scanner_data),
-                    'scanners': list(scanner_data.keys()),
-                    'last_update': max([d['timestamp'] for d in scanner_data.values()])
+                    'total_scanners': len(scanner_data) if scanner_data else 0,
+                    'scanners': list(scanner_data.keys()) if scanner_data else [],
+                    'last_update': max([d['timestamp'] for d in scanner_data.values()]) if scanner_data else datetime.now()
                 }
             }
             

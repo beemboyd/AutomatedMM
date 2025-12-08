@@ -30,19 +30,35 @@ from dashboards.market_breadth_momentum_widget import get_market_breadth_momentu
 
 # Import ML integration with scheduling support
 try:
-    # Try to import scheduled version first
-    from ml_dashboard_integration_scheduled import get_ml_insights, get_ml_alerts, get_ml_performance
+    # Try to import new ML prediction API integration first
+    from ml_dashboard_integration_new import (
+        get_ml_regime_prediction, 
+        get_ml_insights, 
+        get_ml_alerts, 
+        get_ml_performance,
+        format_ml_display_data
+    )
     ML_AVAILABLE = True
-    logger.info("Using scheduled ML integration")
+    ML_NEW_API = True
+    logger.info("Using new ML prediction API integration")
 except ImportError:
     try:
-        # Fallback to regular version
-        from ml_dashboard_integration import get_ml_insights, get_ml_alerts, get_ml_performance
+        # Try to import scheduled version
+        from ml_dashboard_integration_scheduled import get_ml_insights, get_ml_alerts, get_ml_performance
         ML_AVAILABLE = True
-        logger.info("Using regular ML integration")
+        ML_NEW_API = False
+        logger.info("Using scheduled ML integration")
     except ImportError:
-        ML_AVAILABLE = False
-        logger.warning("ML integration not available - joblib module may be missing")
+        try:
+            # Fallback to regular version
+            from ml_dashboard_integration import get_ml_insights, get_ml_alerts, get_ml_performance
+            ML_AVAILABLE = True
+            ML_NEW_API = False
+            logger.info("Using regular ML integration")
+        except ImportError:
+            ML_AVAILABLE = False
+            ML_NEW_API = False
+            logger.warning("ML integration not available - joblib module may be missing")
 
 app = Flask(__name__)
 
@@ -388,8 +404,9 @@ ENHANCED_DASHBOARD_HTML = '''
             <p class="text-center mt-2 mb-0">Real-time Market Analysis & Recommendations</p>
         </div>
     </div>
-    
+
     <div class="container">
+
         <!-- Current Regime Section -->
         <div class="row mb-4">
             <div class="col-lg-8">
@@ -995,7 +1012,70 @@ ENHANCED_DASHBOARD_HTML = '''
         
         <!-- Multi-Timeframe Analysis Section Removed - Needs more historical data -->
         <!-- Section will be re-enabled once sufficient historical data is accumulated -->
-        
+        <!-- ML Market Regime Prediction Section -->
+        <div class="card mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-3 text-center">
+                        <h3 class="text-white mb-2">🤖 ML Market Regime</h3>
+                        <div id="mlRegimeBadge" class="regime-badge" style="background: rgba(255,255,255,0.2); font-size: 2rem;">
+                            <span id="mlRegimeIcon">⏳</span>
+                            <span id="mlRegimeLabel">Loading...</span>
+                        </div>
+                        <div class="mt-2">
+                            <span class="badge" style="background: rgba(255,255,255,0.3); font-size: 1rem;">
+                                Confidence: <span id="mlRegimeConfidence">--</span>%
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-white">
+                            <h5 class="mb-3">📊 Key Metrics</h5>
+                            <div class="mb-2">
+                                <small class="d-block">L/S Ratio</small>
+                                <strong style="font-size: 1.3rem;" id="mlLSRatio">--</strong>
+                            </div>
+                            <div class="mb-2">
+                                <small class="d-block">Breadth Volatility</small>
+                                <strong style="font-size: 1.3rem;" id="mlBreadthVol">--</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-white">
+                            <h5 class="mb-3">📈 Market Indicators</h5>
+                            <div class="mb-2">
+                                <small class="d-block">Market Breadth</small>
+                                <strong style="font-size: 1.3rem;" id="mlMarketBreadth">--</strong>%
+                            </div>
+                            <div class="mb-2">
+                                <small class="d-block">Trend Strength</small>
+                                <strong style="font-size: 1.3rem;" id="mlTrendStrength">--</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-white">
+                            <h5 class="mb-3">⚙️ Model Status</h5>
+                            <div class="mb-2">
+                                <small class="d-block">Model Version</small>
+                                <strong id="mlModelVersion">--</strong>
+                            </div>
+                            <div class="mb-2">
+                                <small class="d-block">Accuracy</small>
+                                <strong id="mlModelAccuracy">--</strong>%
+                            </div>
+                            <div class="mt-2">
+                                <a href="http://localhost:8082" target="_blank" class="btn btn-sm btn-light">
+                                    <i class="fas fa-external-link-alt"></i> ML Dashboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Reversal Patterns Section -->
         <div class="row mt-4">
             <div class="col-12">
@@ -3098,6 +3178,60 @@ ENHANCED_DASHBOARD_HTML = '''
                 
                 const data = await response.json();
                 
+                // Update ML Regime Prediction Banner (New!)
+                if (data.prediction) {
+                    const regime = data.prediction.regime;
+                    const confidence = data.prediction.confidence;
+                    
+                    // Update regime label and icon
+                    const regimeLabel = document.getElementById('mlRegimeLabel');
+                    const regimeIcon = document.getElementById('mlRegimeIcon');
+                    const regimeBadge = document.getElementById('mlRegimeBadge');
+                    
+                    if (regimeLabel) {
+                        regimeLabel.textContent = regime;
+                        
+                        // Set icon and color based on regime
+                        if (regime === 'Bullish') {
+                            regimeIcon.textContent = '📈';
+                            regimeBadge.style.background = '#28a745';
+                            regimeBadge.style.color = 'white';
+                        } else if (regime === 'Bearish') {
+                            regimeIcon.textContent = '📉';
+                            regimeBadge.style.background = '#dc3545';
+                            regimeBadge.style.color = 'white';
+                        } else if (regime === 'Neutral') {
+                            regimeIcon.textContent = '➡️';
+                            regimeBadge.style.background = '#ffc107';
+                            regimeBadge.style.color = 'black';
+                        } else {
+                            regimeIcon.textContent = '❓';
+                            regimeBadge.style.background = 'rgba(255,255,255,0.2)';
+                            regimeBadge.style.color = 'white';
+                        }
+                    }
+                    
+                    // Update confidence
+                    const confEl = document.getElementById('mlRegimeConfidence');
+                    if (confEl) {
+                        confEl.textContent = (confidence * 100).toFixed(1);
+                    }
+                }
+                
+                // Update key metrics
+                if (data.features) {
+                    document.getElementById('mlLSRatio').textContent = data.features.ls_ratio || '--';
+                    document.getElementById('mlBreadthVol').textContent = data.features.breadth_volatility || '--';
+                    document.getElementById('mlMarketBreadth').textContent = data.features.market_breadth || '--';
+                    document.getElementById('mlTrendStrength').textContent = data.features.trend_strength || '--';
+                }
+                
+                // Update model info
+                if (data.model_info) {
+                    document.getElementById('mlModelVersion').textContent = data.model_info.version || '--';
+                    document.getElementById('mlModelAccuracy').textContent = data.model_info.accuracy || '--';
+                }
+                
                 // Update strategy recommendation
                 const strategyEl = document.getElementById('mlStrategy');
                 const strategyBox = document.getElementById('mlStrategyBox');
@@ -3124,11 +3258,15 @@ ENHANCED_DASHBOARD_HTML = '''
                     }
                 }
                 
-                // Update expected returns
-                document.getElementById('mlLongPnL').textContent = 
-                    `${data.strategy.long_expected_pnl.toFixed(2)}%`;
-                document.getElementById('mlShortPnL').textContent = 
-                    `${data.strategy.short_expected_pnl.toFixed(2)}%`;
+                // Update expected returns (if available)
+                if (data.strategy && data.strategy.long_expected_pnl !== undefined) {
+                    document.getElementById('mlLongPnL').textContent =
+                        `${data.strategy.long_expected_pnl.toFixed(2)}%`;
+                }
+                if (data.strategy && data.strategy.short_expected_pnl !== undefined) {
+                    document.getElementById('mlShortPnL').textContent =
+                        `${data.strategy.short_expected_pnl.toFixed(2)}%`;
+                }
                 
                 // Update market conditions
                 if (data.market_conditions) {
@@ -4079,8 +4217,21 @@ def api_ml_insights():
         return jsonify({'error': 'ML integration not available'}), 503
     
     try:
-        insights = get_ml_insights()
-        return jsonify(insights)
+        if ML_NEW_API:
+            # Get comprehensive insights from new API
+            insights = get_ml_insights()
+            # Format for dashboard display
+            display_data = format_ml_display_data()
+            # Merge both for comprehensive response
+            response = {
+                **insights,
+                'display': display_data
+            }
+            return jsonify(response)
+        else:
+            # Use old integration
+            insights = get_ml_insights()
+            return jsonify(insights)
     except Exception as e:
         logger.error(f"Error getting ML insights: {e}")
         return jsonify({'error': str(e)}), 500

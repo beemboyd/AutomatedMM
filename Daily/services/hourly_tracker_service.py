@@ -33,11 +33,15 @@ from scanners.VSR_Momentum_Scanner import (
     get_sector_for_ticker,
     DataCache,
     fetch_data_kite,
-    interval_mapping
+    interval_mapping,
+    calculate_liquidity_metrics
 )
 
 # Import Telegram notifier
 from alerts.telegram_notifier import TelegramNotifier
+
+# Import liquidity cache
+from services.liquidity_cache import LiquidityCache
 
 class HourlyTracker:
     """Hourly tracker for Long Reversal Hourly scanner results"""
@@ -45,6 +49,7 @@ class HourlyTracker:
     def __init__(self, user_name='Sai', enable_telegram=True):
         self.user_name = user_name
         self.data_cache = DataCache()
+        self.liquidity_cache = LiquidityCache(ttl_hours=1)  # Cache liquidity for 1 hour
         self.last_ticker_file = None
         self.last_file_check_time = None
         self.file_check_interval = 300  # Check for new files every 5 minutes

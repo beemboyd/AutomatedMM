@@ -13,8 +13,9 @@ import datetime
 import logging
 from collections import defaultdict
 import re
+import requests
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app)
 
 # Setup logging
@@ -130,6 +131,27 @@ def parse_hourly_logs(hours=2):
     
     return trending_tickers
 
+def fetch_liquidity_data(tickers):
+    """Fetch liquidity data for multiple tickers from the API"""
+    liquidity_data = {}
+    
+    # Fetch individually since batch API returns null for uncached data
+    for ticker in tickers:
+        try:
+            response = requests.get(
+                f'http://localhost:5555/liquidity/{ticker}',
+                timeout=2
+            )
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('data'):
+                    liquidity_data[ticker] = result['data']
+        except Exception as e:
+            logger.debug(f"Error fetching liquidity for {ticker}: {e}")
+            continue
+    
+    return liquidity_data
+
 def get_latest_ticker_data(trending_tickers):
     """Get the most recent data for each ticker"""
     latest_data = {}
@@ -148,9 +170,10 @@ def get_latest_ticker_data(trending_tickers):
     
     return latest_data
 
-def categorize_tickers(latest_data, persistence_data=None):
+def categorize_tickers(latest_data, persistence_data=None, liquidity_data=None):
     """Categorize tickers based on criteria and persistence tiers"""
     categories = {
+        'liquid_stocks': [],  # Grade B+ and above (high liquidity) with positive momentum
         'perfect_scores': [],
         'high_vsr': [],
         'high_momentum': [],
@@ -169,6 +192,13 @@ def categorize_tickers(latest_data, persistence_data=None):
         if data.get('momentum', 0) <= 0:
             continue
             
+        # Add liquidity info if available
+        if liquidity_data and ticker in liquidity_data:
+            liq = liquidity_data[ticker]
+            data['liquidity_grade'] = liq.get('liquidity_grade', 'F')
+            data['liquidity_score'] = liq.get('liquidity_score', 0)
+            data['avg_turnover_cr'] = liq.get('avg_daily_turnover_cr', 0)
+        
         # Add persistence info if available
         if persistence_data and 'tickers' in persistence_data:
             ticker_persistence = persistence_data['tickers'].get(ticker, {})
@@ -196,6 +226,11 @@ def categorize_tickers(latest_data, persistence_data=None):
         # Add to all tickers (only positive momentum)
         categories['all_tickers'].append(data)
         
+        # Liquid stocks - Grade B+ and above with positive momentum
+        liquidity_grade = data.get('liquidity_grade', 'F')
+        if liquidity_grade in ['A', 'A+', 'B', 'B+'] and data.get('momentum', 0) > 0:
+            categories['liquid_stocks'].append(data)
+        
         # Categorize (only positive momentum tickers)
         if data['score'] == 100:
             categories['perfect_scores'].append(data)
@@ -214,6 +249,13 @@ def categorize_tickers(latest_data, persistence_data=None):
         if 'persistence' in category:
             # Sort persistence tiers by number of alerts
             categories[category].sort(key=lambda x: x.get('persistence_alerts', 0), reverse=True)
+        elif category == 'liquid_stocks':
+            # Sort liquid stocks by persistence (alerts), then score, then momentum
+            categories[category].sort(key=lambda x: (
+                x.get('persistence_alerts', 0),  # Higher persistence first
+                x['score'],  # Higher score second
+                x.get('momentum', 0)  # Higher momentum third
+            ), reverse=True)
         else:
             categories[category].sort(key=lambda x: x['score'], reverse=True)
     
@@ -251,7 +293,14 @@ def get_trending_tickers():
         # Parse logs
         trending_tickers = parse_hourly_logs(hours=2)
         latest_data = get_latest_ticker_data(trending_tickers)
-        categories = categorize_tickers(latest_data, persistence_data)
+        
+        # Fetch liquidity data for all tickers
+        liquidity_data = {}
+        if latest_data:
+            tickers = list(latest_data.keys())
+            liquidity_data = fetch_liquidity_data(tickers)
+        
+        categories = categorize_tickers(latest_data, persistence_data, liquidity_data)
         
         # Also load state file for additional data
         state = load_state_file()

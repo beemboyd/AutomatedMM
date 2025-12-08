@@ -64,7 +64,10 @@ def parse_vsr_logs(hours=2):
         'occurrences': 0,
         'last_seen': None,
         'scores': [],
-        'days_tracked': 0  # New field for enhanced tracker
+        'days_tracked': 0,  # New field for enhanced tracker
+        'liquidity_grade': 'F',  # Liquidity grade
+        'liquidity_score': 0,  # Liquidity score
+        'avg_turnover_cr': 0.0  # Average turnover in Crores
     })
     
     # Get current time
@@ -98,18 +101,24 @@ def parse_vsr_logs(hours=2):
     # Pattern to match VSR tracker log lines
     # Basic format: ... | Build: X | Trend: Y | Sector: Z
     # Enhanced format: ... | Build: X | Trend: Y | Days: N | Sector: Z
-    pattern_basic = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Sector:\s*(.+)'
-    pattern_enhanced = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Days:\s*(\d+)\s*\|\s*Sector:\s*(.+)'
+    # Enhanced with liquidity: ... | Build: X | Trend: Y | Days: N | Alerts: N | Liq: G(S) | TO: ₹XCr | Sector: Z
+    pattern_basic = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.-]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Sector:\s*(.+)'
+    pattern_enhanced = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.-]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Days:\s*(\d+)\s*\|\s*Sector:\s*(.+)'
+    pattern_liquidity = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+).*\[(\w+)\]\s+(\S+)\s+\|\s+Score:\s*(\d+)\s*\|\s*VSR:\s*([\d.]+)\s*\|\s*Price:\s*₹([\d,.]+)\s*\|\s*Vol:\s*([\d,]+)\s*\|\s*Momentum:\s*([\d.-]+)%\s*\|\s*Build:\s*(?:📈)?(\d*)\s*\|\s*Trend:\s*([^|]+)\|\s*Days:\s*(\d+)\s*\|\s*Alerts:\s*(\d+)\s*\|\s*Liq:\s*([A-F][+]?)\((\d+)\)\s*\|\s*TO:\s*₹([\d.]+)Cr\s*\|\s*Sector:\s*(.+)'
     
     with open(log_file, 'r') as f:
         for line in f:
-            # Try enhanced pattern first
-            match = re.match(pattern_enhanced, line)
-            is_enhanced = True
+            # Try liquidity pattern first (most specific)
+            match = re.match(pattern_liquidity, line)
+            pattern_type = 'liquidity'
             if not match:
-                # Fall back to basic pattern
-                match = re.match(pattern_basic, line)
-                is_enhanced = False
+                # Try enhanced pattern
+                match = re.match(pattern_enhanced, line)
+                pattern_type = 'enhanced'
+                if not match:
+                    # Fall back to basic pattern
+                    match = re.match(pattern_basic, line)
+                    pattern_type = 'basic'
             
             if match:
                 timestamp_str = match.group(1)
@@ -130,11 +139,26 @@ def parse_vsr_logs(hours=2):
                 build = int(match.group(9)) if match.group(9) else 0
                 trend = match.group(10).strip()
                 
-                if is_enhanced:
+                if pattern_type == 'liquidity':
                     days_tracked = int(match.group(11))
+                    alerts = int(match.group(12))  # NEW: Alerts field
+                    liquidity_grade = match.group(13)
+                    liquidity_score = int(match.group(14))
+                    avg_turnover_cr = float(match.group(15))
+                    sector = match.group(16).strip()
+                elif pattern_type == 'enhanced':
+                    days_tracked = int(match.group(11))
+                    alerts = 0  # Not in enhanced format
+                    liquidity_grade = 'F'  # Default values
+                    liquidity_score = 0
+                    avg_turnover_cr = 0.0
                     sector = match.group(12).strip()
-                else:
-                    days_tracked = 0  # Not available in basic format
+                else:  # basic
+                    days_tracked = 0
+                    alerts = 0  # Not in basic format
+                    liquidity_grade = 'F'
+                    liquidity_score = 0
+                    avg_turnover_cr = 0.0
                     sector = match.group(11).strip()
                 
                 # Update ticker data
@@ -149,6 +173,19 @@ def parse_vsr_logs(hours=2):
                 data['trend'] = trend
                 data['sector'] = sector
                 data['days_tracked'] = days_tracked
+                
+                # Only update liquidity data if we have valid liquidity info
+                # Don't overwrite existing liquidity with default values from summary lines
+                if liquidity_grade != 'F' or liquidity_score > 0 or avg_turnover_cr > 0:
+                    data['liquidity_grade'] = liquidity_grade
+                    data['liquidity_score'] = liquidity_score
+                    data['avg_turnover_cr'] = avg_turnover_cr
+                elif 'liquidity_grade' not in data or data['liquidity_grade'] == 'F':
+                    # Only set defaults if no liquidity data exists
+                    data['liquidity_grade'] = liquidity_grade
+                    data['liquidity_score'] = liquidity_score
+                    data['avg_turnover_cr'] = avg_turnover_cr
+                
                 data['occurrences'] += 1
                 data['last_seen'] = timestamp
                 data['scores'].append(score)
@@ -228,6 +265,7 @@ def get_trending_tickers():
     
     # Categorize tickers
     categories = {
+        'liquid_stocks': [],  # Grade C and above (high liquidity)
         'high_scores': [],  # Score >= 50
         'high_vsr': [],     # VSR >= 1.0
         'positive_momentum': [],  # Momentum > 0
@@ -239,6 +277,11 @@ def get_trending_tickers():
     
     for ticker in tickers_list:
         categories['all_tickers'].append(ticker)
+        
+        # Liquid stocks - Grade B+ and above (A+, A, B+, B grades only) with positive momentum
+        liquidity_grade = ticker.get('liquidity_grade', 'F')
+        if liquidity_grade in ['A', 'A+', 'B', 'B+'] and ticker['momentum'] > 0:
+            categories['liquid_stocks'].append(ticker)
         
         # High persistence leaders - show ALL with >30 alerts regardless of momentum
         if ticker['occurrences'] > 30:
@@ -262,7 +305,14 @@ def get_trending_tickers():
     
     # Sort each category
     for category in categories:
-        if category == 'high_vsr':
+        if category == 'liquid_stocks':
+            # Sort by persistence (occurrences), then by score, then by momentum
+            categories[category].sort(key=lambda x: (
+                -x.get('occurrences', 0),  # Higher persistence first
+                -x['score'],  # Higher score first
+                -x['momentum']  # Higher momentum first
+            ))
+        elif category == 'high_vsr':
             categories[category].sort(key=lambda x: x['vsr'], reverse=True)
         elif category == 'positive_momentum':
             categories[category].sort(key=lambda x: x['momentum'], reverse=True)

@@ -17,6 +17,18 @@ import sys
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import audit logger
+try:
+    from alerts.vsr_telegram_audit import get_audit_logger
+    AUDIT_ENABLED = True
+except ImportError:
+    try:
+        from vsr_telegram_audit import get_audit_logger
+        AUDIT_ENABLED = True
+    except ImportError:
+        AUDIT_ENABLED = False
+        logging.warning("VSR audit logger not available - audit logging disabled")
+
 class TelegramNotifier:
     """Handles Telegram notifications for trading alerts"""
     
@@ -63,7 +75,16 @@ class TelegramNotifier:
         
         # IST timezone
         self.IST = pytz.timezone('Asia/Kolkata')
-        
+
+        # Initialize audit logger
+        self.audit_logger = None
+        if AUDIT_ENABLED:
+            try:
+                self.audit_logger = get_audit_logger()
+                self.logger.info("VSR audit logger initialized")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize audit logger: {e}")
+
         if not self.enabled:
             self.logger.info("Telegram notifications are disabled in config")
         elif not self.bot_token or not self.chat_id:
@@ -307,48 +328,78 @@ _Found {len(high_momentum_tickers)} high momentum tickers_
     def send_momentum_alert(self, ticker_data: Dict) -> bool:
         """Send high momentum alert for a single ticker"""
         ticker = ticker_data.get('ticker', '')
-        
+
         if not ticker:
             return False
-        
+
         # Check cooldown
         if not self.should_send_notification(ticker):
             self.logger.debug(f"Skipping notification for {ticker} - in cooldown period")
             return False
-        
+
         # Format and send message
         message = self.format_momentum_alert(ticker_data)
         success = self.send_message(message)
-        
+
         if success:
             # Update sent notifications
             self.sent_notifications[ticker] = datetime.now()
             # Update counters
             self.hourly_alert_count += 1
             self.daily_alert_count += 1
-        
+
+            # Audit log the alert (async, non-blocking)
+            if self.audit_logger:
+                try:
+                    # Extract last alert info from last_3_alerts if available
+                    last_3_alerts = ticker_data.get('last_3_alerts', [])
+                    last_alert_date = last_3_alerts[0].get('date') if last_3_alerts else None
+                    last_alert_price = last_3_alerts[0].get('price') if last_3_alerts else None
+
+                    self.audit_logger.log_alert(
+                        ticker=ticker,
+                        alert_type='HIGH_MOMENTUM',
+                        message=message,
+                        score=ticker_data.get('score'),
+                        momentum=ticker_data.get('momentum'),
+                        current_price=ticker_data.get('price'),
+                        liquidity_grade=ticker_data.get('liquidity_grade') or ticker_data.get('Liquidity_Grade'),
+                        alerts_last_30_days=ticker_data.get('alerts_last_30_days'),
+                        days_tracked=ticker_data.get('days_tracked'),
+                        last_alert_date=last_alert_date,
+                        last_alert_price=last_alert_price,
+                        metadata={
+                            'building': ticker_data.get('building', False),
+                            'trend': ticker_data.get('trend', ''),
+                            'avg_turnover_cr': ticker_data.get('avg_turnover_cr') or ticker_data.get('Avg_Turnover_Cr', 0),
+                            'bot_name': self.bot_name
+                        }
+                    )
+                except Exception as e:
+                    self.logger.error(f"Error auditing alert for {ticker}: {e}")
+
         return success
     
     def send_batch_momentum_alert(self, high_momentum_tickers: List[Dict]) -> bool:
         """Send batch alert for multiple high momentum tickers"""
         if not high_momentum_tickers:
             return False
-        
+
         # Filter out tickers in cooldown
         new_alerts = []
         for ticker_data in high_momentum_tickers:
             ticker = ticker_data.get('ticker', '')
             if ticker and self.should_send_notification(ticker):
                 new_alerts.append(ticker_data)
-        
+
         if not new_alerts:
             self.logger.debug("No new alerts to send - all tickers in cooldown")
             return False
-        
+
         # Format and send message
         message = self.format_batch_alert(new_alerts)
         success = self.send_message(message)
-        
+
         if success:
             # Update sent notifications
             current_time = datetime.now()
@@ -356,7 +407,42 @@ _Found {len(high_momentum_tickers)} high momentum tickers_
                 ticker = ticker_data.get('ticker', '')
                 if ticker:
                     self.sent_notifications[ticker] = current_time
-        
+
+            # Audit log the batch alert (async, non-blocking)
+            if self.audit_logger:
+                try:
+                    # Log each ticker in the batch
+                    for ticker_data in new_alerts:
+                        ticker = ticker_data.get('ticker', '')
+                        if not ticker:
+                            continue
+
+                        # Extract last alert info from penultimate_alert_date/price
+                        last_alert_date = ticker_data.get('penultimate_alert_date')
+                        last_alert_price = ticker_data.get('penultimate_alert_price')
+
+                        self.audit_logger.log_alert(
+                            ticker=ticker,
+                            alert_type='BATCH',
+                            message=message,  # Full batch message for context
+                            score=ticker_data.get('score'),
+                            momentum=ticker_data.get('momentum'),
+                            current_price=ticker_data.get('price'),
+                            liquidity_grade=ticker_data.get('liquidity_grade') or ticker_data.get('Liquidity_Grade'),
+                            alerts_last_30_days=ticker_data.get('alerts_last_30_days'),
+                            days_tracked=ticker_data.get('days_tracked'),
+                            last_alert_date=last_alert_date,
+                            last_alert_price=last_alert_price,
+                            metadata={
+                                'batch_size': len(new_alerts),
+                                'trend': ticker_data.get('trend', ''),
+                                'avg_turnover_cr': ticker_data.get('avg_turnover_cr') or ticker_data.get('Avg_Turnover_Cr', 0),
+                                'bot_name': self.bot_name
+                            }
+                        )
+                except Exception as e:
+                    self.logger.error(f"Error auditing batch alert: {e}")
+
         return success
     
     def send_daily_summary(self, summary_data: Dict) -> bool:

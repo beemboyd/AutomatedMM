@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 VSR Efficiency Analyzer
-Analyzes VSR Daily Dashboard alerts over the last 10 business days
+Analyzes VSR Daily Dashboard alerts over the last 3 business days
 Generates Excel reports for long and short positions
 """
 
@@ -16,20 +16,31 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
 import numpy as np
+import time
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class VSREfficiencyAnalyzer:
-    def __init__(self, lookback_days=10):
+    def __init__(self, lookback_days=3, output_subfolder=None):
         """Initialize the analyzer with lookback period"""
         self.lookback_days = lookback_days
         self.base_dir = "/Users/maverick/PycharmProjects/India-TS/Daily"
-        self.output_dir = os.path.join(self.base_dir, "analysis", "Efficiency")
-        
+
+        # Set output directory with optional subfolder
+        if output_subfolder:
+            self.output_dir = os.path.join(self.base_dir, "analysis", "Efficiency", output_subfolder)
+        else:
+            self.output_dir = os.path.join(self.base_dir, "analysis", "Efficiency")
+
         # Ensure output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # Rate limiting parameters
+        self.api_calls_count = 0
+        self.last_api_call_time = 0
+        self.rate_limit = 2  # 2 TPS (transactions per second)
         
         # Calculate date range
         self.end_date = datetime.now()
@@ -62,7 +73,10 @@ class VSREfficiencyAnalyzer:
             os.path.join(self.base_dir, "results"),
             os.path.join(self.base_dir, "results-h"),
             os.path.join(self.base_dir, "results-s"),
-            os.path.join(self.base_dir, "results-s-h")
+            os.path.join(self.base_dir, "results-s-h"),
+            os.path.join(self.base_dir, "FNO", "Long", "Liquid"),
+            os.path.join(self.base_dir, "FNO", "Short", "Liquid"),
+            os.path.join(self.base_dir, "FNO", "scanners", "Hourly")
         ]
         
         business_days = self.get_business_days()
@@ -97,8 +111,21 @@ class VSREfficiencyAnalyzer:
                 for short_file in short_files:
                     self.parse_reversal_excel(short_file, day, "short")
     
+    def throttle_request(self):
+        """Implement rate limiting at 2 TPS"""
+        current_time = time.time()
+        time_since_last_call = current_time - self.last_api_call_time
+
+        if time_since_last_call < (1.0 / self.rate_limit):
+            sleep_time = (1.0 / self.rate_limit) - time_since_last_call
+            time.sleep(sleep_time)
+
+        self.last_api_call_time = time.time()
+        self.api_calls_count += 1
+
     def parse_vsr_excel(self, filepath, date):
         """Parse VSR Excel file to extract ticker alerts"""
+        # Note: Throttling removed as this is local file read, not API call
         try:
             filename = os.path.basename(filepath)
             # Extract time from filename (e.g., VSR_20250808_093037.xlsx)
@@ -147,6 +174,7 @@ class VSREfficiencyAnalyzer:
     
     def parse_reversal_excel(self, filepath, date, signal_type):
         """Parse Long/Short Reversal Excel files"""
+        # Note: Throttling removed as this is local file read, not API call
         try:
             filename = os.path.basename(filepath)
             # Extract time from filename
@@ -195,54 +223,39 @@ class VSREfficiencyAnalyzer:
             logger.warning(f"Error parsing {filepath}: {e}")
     
     def parse_persistence_files(self):
-        """Parse VSR persistence JSON files for additional alert data"""
+        """Parse VSR persistence JSON files for additional metadata only"""
+        # NOTE: Persistence files don't contain price data, so we only use them
+        # to enrich existing alerts with additional metadata like scores
         persistence_files = [
             os.path.join(self.base_dir, "data", "vsr_ticker_persistence.json"),
             os.path.join(self.base_dir, "data", "vsr_ticker_persistence_hourly_long.json"),
             os.path.join(self.base_dir, "data", "short_momentum", "vsr_ticker_persistence_hourly_short.json")
         ]
-        
+
         for persist_file in persistence_files:
             if not os.path.exists(persist_file):
                 continue
-                
+
             try:
                 with open(persist_file, 'r') as f:
                     data = json.load(f)
-                    
+
                 tickers = data.get('tickers', {})
-                
+
                 for ticker, info in tickers.items():
-                    first_seen = info.get('first_seen', '')
-                    if first_seen:
-                        try:
-                            first_date = datetime.strptime(first_seen, "%Y-%m-%d")
-                            
-                            # Check if within our date range
-                            if first_date >= self.start_date:
-                                # Determine if long or short based on file path
-                                if 'short' in persist_file:
-                                    target_dict = self.short_alerts
-                                else:
-                                    target_dict = self.long_alerts
-                                
-                                if ticker not in target_dict:
-                                    target_dict[ticker] = {
-                                        'first_alert_time': first_date,
-                                        'first_price': 0,  # Price not available in persistence
-                                        'alert_count': info.get('days_tracked', 1),
-                                        'all_alerts': [],
-                                        'max_score': info.get('max_score', 0),
-                                        'avg_score': info.get('avg_score', 0)
-                                    }
-                                else:
-                                    # Update with persistence data
-                                    target_dict[ticker]['max_score'] = info.get('max_score', 0)
-                                    target_dict[ticker]['avg_score'] = info.get('avg_score', 0)
-                                    
-                        except Exception as e:
-                            logger.debug(f"Error parsing date for {ticker}: {e}")
-                            
+                    # Determine target dictionary based on file path
+                    if 'short' in persist_file:
+                        target_dict = self.short_alerts
+                    else:
+                        target_dict = self.long_alerts
+
+                    # Only update if ticker already exists (from Excel files with prices)
+                    if ticker in target_dict:
+                        # Enrich with persistence metadata
+                        target_dict[ticker]['max_score'] = info.get('max_score', 0)
+                        target_dict[ticker]['avg_score'] = info.get('avg_score', 0)
+                        target_dict[ticker]['days_tracked_persistence'] = info.get('days_tracked', 0)
+
             except Exception as e:
                 logger.warning(f"Error parsing persistence file {persist_file}: {e}")
     
@@ -251,34 +264,53 @@ class VSREfficiencyAnalyzer:
         if not alerts_dict:
             logger.warning(f"No {signal_type} alerts found for the period")
             return None
-            
+
         # Convert to DataFrame
         report_data = []
-        
+
         for ticker, data in alerts_dict.items():
+            # Skip tickers with 0 price (likely from persistence files without price data)
+            if not data.get('first_price', 0):
+                continue
+
             row = {
                 'Ticker': ticker,
                 'First Alert Date': data['first_alert_time'].strftime('%Y-%m-%d') if isinstance(data['first_alert_time'], datetime) else str(data['first_alert_time']),
                 'First Alert Time': data['first_alert_time'].strftime('%H:%M:%S') if isinstance(data['first_alert_time'], datetime) else '',
-                'First Price': round(data['first_price'], 2) if data['first_price'] else 0,
-                'Alert Count': data['alert_count'],
-                'Max Score': data.get('max_score', 0),
-                'Avg Score': round(data.get('avg_score', 0), 2)
+                'First Price': round(data['first_price'], 2),
+                'Alert Count': data['alert_count']
             }
-            
+
             # Add latest alert info if available
             if data['all_alerts']:
-                latest = data['all_alerts'][-1]
-                row['Latest Alert Time'] = latest['time'].strftime('%Y-%m-%d %H:%M:%S') if isinstance(latest['time'], datetime) else str(latest['time'])
-                row['Latest Price'] = round(latest['price'], 2) if latest['price'] else 0
-                
-                # Calculate price change (as decimal for percentage format)
-                if data['first_price'] and latest['price']:
-                    price_change = (latest['price'] - data['first_price']) / data['first_price']
-                    row['Price Change %'] = round(price_change, 4)  # Keep as decimal (0.05 = 5%)
+                # Find the last alert with a non-zero price
+                latest_with_price = None
+                for alert in reversed(data['all_alerts']):
+                    if alert.get('price', 0) > 0:
+                        latest_with_price = alert
+                        break
+
+                if latest_with_price:
+                    row['Latest Alert Time'] = latest_with_price['time'].strftime('%Y-%m-%d %H:%M:%S') if isinstance(latest_with_price['time'], datetime) else str(latest_with_price['time'])
+                    row['Latest Price'] = round(latest_with_price['price'], 2)
+
+                    # Calculate price change
+                    if data['first_price'] and latest_with_price['price']:
+                        # For short positions, profit comes from price decrease
+                        if signal_type == 'short':
+                            price_change = (data['first_price'] - latest_with_price['price']) / data['first_price']
+                        else:
+                            # For long positions, profit comes from price increase
+                            price_change = (latest_with_price['price'] - data['first_price']) / data['first_price']
+                        row['Price Change %'] = round(price_change * 100, 2)  # Convert to percentage
+                    else:
+                        row['Price Change %'] = 0
                 else:
+                    # No alert with price found, use defaults
+                    row['Latest Alert Time'] = ''
+                    row['Latest Price'] = data['first_price']  # Use first price as fallback
                     row['Price Change %'] = 0
-            
+
             report_data.append(row)
         
         # Create DataFrame and sort by alert count
@@ -315,10 +347,8 @@ class VSREfficiencyAnalyzer:
                         cell.number_format = '#,##0.00'
                     elif c_idx == 5:  # Alert Count
                         cell.number_format = '#,##0'
-                    elif 'Score' in headers[c_idx-1]:
-                        cell.number_format = '#,##0.00'
                     elif 'Price Change' in headers[c_idx-1]:
-                        cell.number_format = '+#,##0.00%;-#,##0.00%'
+                        cell.number_format = '+#,##0.00;-#,##0.00'  # Already in percentage format
                         # Color code based on positive/negative
                         if value > 0:
                             cell.font = Font(color="008000")  # Green
@@ -394,13 +424,15 @@ class VSREfficiencyAnalyzer:
 def main():
     """Main entry point"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='VSR Efficiency Analyzer')
-    parser.add_argument('--days', type=int, default=10, 
+    parser.add_argument('--days', type=int, default=10,
                        help='Number of business days to analyze (default: 10)')
+    parser.add_argument('--output-folder', type=str, default=None,
+                       help='Output subfolder within Efficiency directory (e.g., "monthly")')
     args = parser.parse_args()
-    
-    analyzer = VSREfficiencyAnalyzer(lookback_days=args.days)
+
+    analyzer = VSREfficiencyAnalyzer(lookback_days=args.days, output_subfolder=args.output_folder)
     long_report, short_report = analyzer.run_analysis()
     
     if long_report or short_report:

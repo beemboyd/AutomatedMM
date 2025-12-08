@@ -314,7 +314,6 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
         message = f"""{urgency} <b>Hourly {alert_type}</b>
 
 🎯 <b>{ticker}</b>
-📊 VSR Ratio: {vsr_ratio:.1f}x
 📈 Momentum: {momentum:.1f}%
 {liquidity_info}🎯 Pattern: {pattern}
 ⏰ Time: {ticker_data['time']}
@@ -356,11 +355,10 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
         
         for ticker_data in sorted_batch[:10]:  # Top 10
             ticker = ticker_data['ticker']
-            vsr_ratio = ticker_data['vsr_ratio']
             momentum = ticker_data['momentum']
             liq_grade = ticker_data.get('liquidity_grade', ticker_data.get('Liquidity_Grade', 'N/A'))
-            
-            message += f"• <b>{ticker}</b> - VSR: {vsr_ratio:.1f}x, Mom: {momentum:.1f}%, Liq: {liq_grade}\n"
+
+            message += f"• <b>{ticker}</b> - Mom: {momentum:.1f}%, Liq: {liq_grade}\n"
         
         if len(sorted_batch) > 10:
             message += f"\n<i>...and {len(sorted_batch) - 10} more signals</i>"
@@ -434,12 +432,11 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
         
         for result in sorted_batch[:10]:  # Top 10
             ticker = result['ticker']
-            score = result['score']
             momentum = result['momentum']
             liq_grade = result.get('liquidity_grade', result.get('Liquidity_Grade', 'N/A'))
             turnover = result.get('avg_turnover_cr', result.get('Avg_Turnover_Cr', 0))
-            
-            message += f"• <b>{ticker}</b> - Score: {score}, Mom: {momentum:.1f}%, Liq: {liq_grade} ({turnover:.1f}Cr)\n"
+
+            message += f"• <b>{ticker}</b> - Mom: {momentum:.1f}%, Liq: {liq_grade} ({turnover:.1f}Cr)\n"
         
         if len(sorted_batch) > 10:
             message += f"\n<i>...and {len(sorted_batch) - 10} more signals</i>"
