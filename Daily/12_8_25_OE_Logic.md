@@ -13,9 +13,11 @@
 3. [SL Watchdog (PSAR-based)](#sl-watchdog-psar-based)
 4. [Configuration Parameters](#configuration-parameters)
 5. [Data Flow](#data-flow)
-6. [How to Run Daily](#how-to-run-daily)
-7. [Scheduled Jobs Reference](#scheduled-jobs-reference)
-8. [Quick Reference Commands](#quick-reference-commands)
+6. [Step-by-Step: Turn On Auto Order Management](#step-by-step-turn-on-auto-order-management)
+7. [SL Watchdog Dashboard](#sl-watchdog-dashboard)
+8. [How to Run Daily](#how-to-run-daily)
+9. [Scheduled Jobs Reference](#scheduled-jobs-reference)
+10. [Quick Reference Commands](#quick-reference-commands)
 
 ---
 
@@ -309,6 +311,248 @@ Position Size (shares) = Capital per Position / Stock Price
 5. Trail stop loss upward as position_high increases
 6. Execute exit when price <= stop loss
 7. Partial exits at profit targets
+
+---
+
+## Step-by-Step: Turn On Auto Order Management
+
+### Complete Daily Startup Checklist
+
+Follow these steps **every trading day** to enable the auto order management system:
+
+---
+
+### Step 1: Refresh Zerodha Token (Before 9:00 AM)
+
+```bash
+# 1a. Login to Zerodha Kite and get new access token
+# (Manual step - login to kite.zerodha.com)
+
+# 1b. Update token in config.ini
+nano /Users/maverick/PycharmProjects/India-TS/Daily/config.ini
+# Update access_token under [API_CREDENTIALS_Sai] section
+
+# 1c. Refresh all services with new token
+cd /Users/maverick/PycharmProjects/India-TS/Daily
+./refresh_token_services.sh
+```
+
+---
+
+### Step 2: Verify Configuration Settings
+
+```bash
+# Check critical settings
+grep -E "dry_run|psar_watchdog_enabled|capital_deployment_percent" /Users/maverick/PycharmProjects/India-TS/Daily/config.ini
+```
+
+**Required settings for LIVE trading:**
+```ini
+[DEFAULT]
+psar_watchdog_enabled = yes
+capital_deployment_percent = 1.0    # Adjust as needed (1% = conservative)
+
+[PSAR]
+dry_run = no                        # MUST be 'no' for live orders
+```
+
+---
+
+### Step 3: Install/Load All Required Plists
+
+```bash
+# Install all plists from backup
+python /Users/maverick/PycharmProjects/India-TS/Daily/scheduler/install_plists.py
+
+# Verify critical jobs are loaded
+launchctl list | grep -E 'india-ts.*(sl_watchdog|vsr|long_reversal|synch)'
+```
+
+**Expected output:**
+```
+-    0    com.india-ts.sl_watchdog_start
+-    0    com.india-ts.sl_watchdog_stop
+-    0    com.india-ts.vsr-momentum-scanner
+-    0    com.india-ts.vsr-shutdown
+-    0    com.india-ts.long_reversal_daily
+-    0    com.india-ts.synch_zerodha_local
+```
+
+---
+
+### Step 4: Start VSR Services (Before 9:15 AM)
+
+```bash
+# Start VSR Tracker Service
+python /Users/maverick/PycharmProjects/India-TS/Daily/services/vsr_tracker_service_enhanced.py --user Sai --interval 60 &
+
+# Start VSR Dashboard (port 3001)
+python /Users/maverick/PycharmProjects/India-TS/Daily/dashboards/vsr_tracker_dashboard.py &
+
+# Verify VSR Dashboard is running
+curl -s http://localhost:3001/api/trending-tickers | head -c 200
+```
+
+---
+
+### Step 5: Start SL Watchdog Dashboard (Port 2001)
+
+```bash
+# Start the dashboard
+python /Users/maverick/PycharmProjects/India-TS/Daily/dashboards/sl_watchdog_dashboard.py &
+
+# OR use the start script
+cd /Users/maverick/PycharmProjects/India-TS/Daily/dashboards
+./start_sl_watchdog_dashboard.sh
+
+# Access at: http://localhost:2001
+```
+
+---
+
+### Step 6: Start SL Watchdog (At 9:15 AM or manually)
+
+```bash
+# Option A: Let scheduled job start automatically at 9:15 AM
+# (Already configured in com.india-ts.sl_watchdog_start)
+
+# Option B: Start manually
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/start_all_sl_watchdogs.py
+
+# Option C: Start PSAR watchdog directly for specific product type
+python /Users/maverick/PycharmProjects/India-TS/Daily/portfolio/SL_watchdog_PSAR.py --product-type CNC
+```
+
+---
+
+### Step 7: Verify System is Running
+
+```bash
+# Check all processes
+ps aux | grep -E "(SL_watchdog|vsr_tracker|vsr_dashboard)" | grep -v grep
+
+# Check SL Watchdog logs
+tail -f /Users/maverick/PycharmProjects/India-TS/Daily/logs/sl_watchdog_master.log
+
+# Check dashboard
+open http://localhost:2001
+```
+
+---
+
+### Step 8: Place Orders (Manual or Scheduled)
+
+```bash
+# Manual order execution (interactive)
+python /Users/maverick/PycharmProjects/India-TS/Daily/trading/place_orders_daily_long_vsr.py
+
+# OR VSR momentum orders
+python /Users/maverick/PycharmProjects/India-TS/Daily/trading/place_orders_vsr_momentum.py --user Sai --mode LIVE
+```
+
+---
+
+### Quick One-Liner Startup (After Token Refresh)
+
+```bash
+# Run all startup commands in sequence
+cd /Users/maverick/PycharmProjects/India-TS/Daily && \
+./refresh_token_services.sh && \
+python scheduler/install_plists.py && \
+python services/vsr_tracker_service_enhanced.py --user Sai --interval 60 & \
+python dashboards/vsr_tracker_dashboard.py & \
+python dashboards/sl_watchdog_dashboard.py & \
+python portfolio/start_all_sl_watchdogs.py
+```
+
+---
+
+### Daily Schedule Summary
+
+| Time | Action | Method |
+|------|--------|--------|
+| 8:00 AM | Refresh Zerodha token | Manual |
+| 8:30 AM | Run `refresh_token_services.sh` | Manual |
+| 9:00 AM | Start VSR services | Manual or plist |
+| 9:15 AM | SL Watchdog starts | Automatic (plist) |
+| 9:15 AM | Long Reversal scanner starts | Automatic (plist) |
+| 9:15 AM | Position sync starts | Automatic (plist) |
+| 9:15-3:30 PM | Monitor via dashboard | http://localhost:2001 |
+| 3:30 PM | SL Watchdog stops | Automatic (plist) |
+| 3:30 PM | VSR services stop | Automatic (plist) |
+
+---
+
+## SL Watchdog Dashboard
+
+### Overview
+
+The SL Watchdog Dashboard provides real-time monitoring of stop-loss watchdog logs with start/stop controls.
+
+### Access Details
+
+| Property | Value |
+|----------|-------|
+| **URL** | http://localhost:2001 |
+| **Port** | 2001 |
+| **Script** | `Daily/dashboards/sl_watchdog_dashboard.py` |
+| **Template** | `Daily/dashboards/templates/sl_watchdog_dashboard.html` |
+
+### Starting the Dashboard
+
+```bash
+# Option 1: Direct Python
+python /Users/maverick/PycharmProjects/India-TS/Daily/dashboards/sl_watchdog_dashboard.py
+
+# Option 2: Start script
+cd /Users/maverick/PycharmProjects/India-TS/Daily/dashboards
+./start_sl_watchdog_dashboard.sh
+
+# Option 3: Background process
+nohup python /Users/maverick/PycharmProjects/India-TS/Daily/dashboards/sl_watchdog_dashboard.py > /dev/null 2>&1 &
+```
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Real-time Logs** | Last 300 lines of watchdog logs |
+| **User Selection** | Dropdown to switch between users |
+| **Start/Stop Controls** | Launch or terminate watchdog |
+| **Status Indicator** | Running/stopped state display |
+| **Manual Refresh** | Update logs on demand |
+| **Color-coded Logs** | Visual distinction by log type |
+
+### Log Color Coding
+
+| Color | Log Type |
+|-------|----------|
+| 🔴 Red | Errors and stop loss triggers |
+| 🟡 Yellow | Warnings (2% peak drop alerts) |
+| 🟢 Green | Buy orders |
+| Light Red | Sell orders |
+| Gray | Debug info (ATR, trailing stops) |
+
+### Dashboard Controls
+
+1. **User Dropdown**: Select user to view logs for
+2. **Start Watchdog**: Launch SL watchdog for selected user
+3. **Stop Watchdog**: Terminate SL watchdog for selected user
+4. **Refresh Button**: Manually reload logs
+5. **Status Indicator**: Shows current running state
+
+### Troubleshooting Dashboard
+
+```bash
+# Check if port 2001 is in use
+lsof -i :2001
+
+# Kill existing process
+lsof -ti:2001 | xargs kill -9
+
+# Check dashboard logs
+tail -f /Users/maverick/PycharmProjects/India-TS/Daily/logs/sl_watchdog_dashboard.log
+```
 
 ---
 
