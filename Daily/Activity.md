@@ -1,5 +1,45 @@
 # Activity Log
 
+## 2025-12-09 10:15 IST - Claude
+**Created VSR Alert Performance Checker Service**
+
+**Purpose:**
+- Daily service that runs at 9:30 AM to identify STRONG BUY candidates
+- Checks if tickers alerted in past 5 days are trading above their alerted price
+- Sends Telegram alert with list of performing tickers
+
+**New Files Created:**
+1. `Daily/alerts/vsr_alert_performance_checker.py` - Main service
+2. `Daily/scheduler/plists/com.india-ts.vsr-alert-performance.plist` - Scheduler
+
+**Features:**
+- Queries audit_vsr.db for alerts from past N days (default: 5)
+- Gets first alert price for each ticker in the period
+- Fetches current prices via Kite API
+- Identifies tickers trading above alerted price
+- Sends formatted Telegram alert with:
+  - Ticker symbol
+  - Alert date (e.g., "2d ago (07 Dec)")
+  - Alerted price
+  - Current price
+  - Gain percentage
+  - Liquidity grade
+
+**Schedule:**
+- Runs daily at 9:30 AM IST (Mon-Fri)
+- Plist installed to ~/Library/LaunchAgents/
+
+**Usage:**
+```bash
+# Normal run
+python3 alerts/vsr_alert_performance_checker.py --user Sai --days 5
+
+# Test mode (no Telegram)
+python3 alerts/vsr_alert_performance_checker.py --test --days 5
+```
+
+---
+
 ## 2025-12-09 10:10 IST - Claude
 **Fixed VSR Telegram Alerts - Negative Momentum Filtering & Alert History**
 
