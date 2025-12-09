@@ -1,5 +1,37 @@
 # Activity Log
 
+## 2025-12-09 10:10 IST - Claude
+**Fixed VSR Telegram Alerts - Negative Momentum Filtering & Alert History**
+
+**Problem Identified:**
+- CANFINHOME received LONG alerts despite having -3.1% negative momentum
+- Root cause 1: `check_high_momentum()` used `abs()` which converted -3.1% to 3.1%
+- Root cause 2: `last_3_alerts` not included in result dictionary, preventing alert history display
+
+**Fixes Applied:**
+
+1. **vsr_telegram_service_enhanced.py** (line 371-390):
+   - Added explicit check: `if direction == 'LONG' and raw_momentum < 0: return False`
+   - Now filters out LONG alerts for tickers with negative momentum before applying `abs()`
+
+2. **vsr_tracker_service_enhanced.py** (lines 305, 335):
+   - Added extraction: `last_3_alerts = persistence_stats.get('last_3_alerts', []) if persistence_stats else []`
+   - Added to result dictionary: `'last_3_alerts': last_3_alerts`
+   - This enables telegram_notifier.py to display previous alert dates in messages
+
+**Files Modified:**
+- `Daily/alerts/vsr_telegram_service_enhanced.py`
+- `Daily/services/vsr_tracker_service_enhanced.py`
+
+**Services Restarted:**
+- vsr_telegram_service_enhanced.py
+
+**Impact:**
+- Tickers with negative momentum will no longer receive LONG direction alerts
+- Telegram alerts will now properly display alert history (last 3 alerts with dates/prices)
+
+---
+
 ## 2025-12-08 10:05 IST - Claude
 **Implemented Atomic Write Fix for VSR Persistence File**
 

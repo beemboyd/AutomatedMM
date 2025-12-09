@@ -370,17 +370,23 @@ Time: {datetime.now().strftime('%I:%M %p')}"""
     
     def check_high_momentum(self, result):
         """Check if result has high momentum worthy of alert"""
-        momentum = abs(result.get('momentum', 0))
+        raw_momentum = result.get('momentum', 0)
         score = result.get('score', 0)
         ticker = result.get('ticker', '')
-        
-        # Filter out negative momentum tickers from high momentum (long) alerts
         direction = result.get('direction', 'LONG')
+
+        # For LONG direction alerts, filter out negative momentum
+        if direction == 'LONG' and raw_momentum < 0:
+            self.logger.debug(f"Filtering out {ticker} from LONG alert - negative momentum {raw_momentum:.1f}%")
+            return False
+
+        # Filter out negative momentum tickers from high momentum (long) alerts
         if direction == 'LONG' and ticker in self.negative_momentum_tickers:
             self.logger.debug(f"Filtering out {ticker} from high momentum alert - ticker is in negative momentum list")
             return False
-        
-        # Check momentum and score thresholds
+
+        # Check momentum and score thresholds (use abs for threshold comparison)
+        momentum = abs(raw_momentum)
         return momentum >= self.momentum_threshold and score >= self.score_threshold
     
     def log_result(self, result):

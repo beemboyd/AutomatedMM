@@ -302,6 +302,7 @@ class EnhancedVSRTracker:
             first_seen = persistence_stats['first_seen'] if persistence_stats else None
             penultimate_alert_date = persistence_stats.get('penultimate_alert_date') if persistence_stats else None
             penultimate_alert_price = persistence_stats.get('penultimate_alert_price') if persistence_stats else None
+            last_3_alerts = persistence_stats.get('last_3_alerts', []) if persistence_stats else []
 
             # Safely extract liquidity data (handle None case)
             if liquidity_metrics:
@@ -331,6 +332,7 @@ class EnhancedVSRTracker:
                 'first_seen': first_seen,
                 'penultimate_alert_date': penultimate_alert_date,
                 'penultimate_alert_price': penultimate_alert_price,
+                'last_3_alerts': last_3_alerts,
                 'liquidity_grade': liquidity_grade,
                 'liquidity_score': liquidity_score,
                 'avg_turnover_cr': avg_turnover_cr,
