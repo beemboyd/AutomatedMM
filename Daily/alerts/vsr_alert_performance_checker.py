@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 class VSRAlertPerformanceChecker:
     """Checks performance of past VSR alerts and identifies STRONG BUY candidates"""
 
-    def __init__(self, user_name: str = 'Sai', lookback_days: int = 5):
+    def __init__(self, user_name: str = 'Sai', lookback_days: int = 8):
         """
         Initialize the performance checker.
 
@@ -229,6 +229,11 @@ class VSRAlertPerformanceChecker:
         for alert in alerts:
             ticker = alert['ticker']
             alerted_price = alert['alerted_price']
+
+            # Skip invalid data types (some older records may have corrupt data)
+            if not isinstance(alerted_price, (int, float)) or alerted_price <= 0:
+                logger.warning(f"Skipping {ticker}: invalid alerted_price type {type(alerted_price)}")
+                continue
 
             if ticker not in current_prices:
                 continue
