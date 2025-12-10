@@ -91,17 +91,32 @@ class VSRAlertPerformanceChecker:
             logger.error(f"Error initializing Kite Connect: {e}")
             return None
 
+    def get_business_days_ago(self, num_days: int) -> datetime:
+        """
+        Calculate the date that is N business days ago (excludes weekends).
+        """
+        current_date = datetime.now(self.IST)
+        business_days_counted = 0
+
+        while business_days_counted < num_days:
+            current_date -= timedelta(days=1)
+            # Monday = 0, Sunday = 6; skip Saturday (5) and Sunday (6)
+            if current_date.weekday() < 5:
+                business_days_counted += 1
+
+        return current_date
+
     def get_alerts_from_past_days(self) -> List[Dict]:
         """
-        Get unique alerts from the past N days.
+        Get unique alerts from the past N business days.
         Returns only the first alert for each ticker (earliest alert price).
         """
         alerts = []
 
         try:
-            # Calculate date range
+            # Calculate date range (business days)
             end_date = datetime.now(self.IST)
-            start_date = end_date - timedelta(days=self.lookback_days)
+            start_date = self.get_business_days_ago(self.lookback_days)
 
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -154,7 +169,7 @@ class VSRAlertPerformanceChecker:
 
             conn.close()
 
-            logger.info(f"Found {len(alerts)} unique tickers alerted in past {self.lookback_days} days")
+            logger.info(f"Found {len(alerts)} unique tickers alerted in past {self.lookback_days} business days")
             return alerts
 
         except Exception as e:
@@ -272,7 +287,7 @@ class VSRAlertPerformanceChecker:
 
         # Build message
         message = f"""🚀 <b>STRONG BUY SIGNALS</b> 🚀
-<i>Alerts from past {self.lookback_days} days trading higher</i>
+<i>Alerts from past {self.lookback_days} business days trading higher</i>
 
 """
 
