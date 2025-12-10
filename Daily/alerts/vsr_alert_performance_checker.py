@@ -3,7 +3,7 @@
 VSR Alert Performance Checker
 
 Runs daily at 9:30 AM to check if alerted tickers from the past 5 days
-are currently trading above their alerted price. Sends STRONG BUY signal
+are currently trading above their alerted price. Sends BUY RADAR CANDIDATES
 via Telegram for tickers that are performing well.
 
 Author: Claude
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class VSRAlertPerformanceChecker:
-    """Checks performance of past VSR alerts and identifies STRONG BUY candidates"""
+    """Checks performance of past VSR alerts and identifies BUY RADAR candidates"""
 
     def __init__(self, user_name: str = 'Sai', lookback_days: int = 8):
         """
@@ -206,7 +206,7 @@ class VSRAlertPerformanceChecker:
     def identify_strong_buys(self) -> List[Dict]:
         """
         Identify tickers trading above their alerted price.
-        Returns list of STRONG BUY candidates.
+        Returns list of BUY RADAR candidates.
         """
         strong_buys = []
 
@@ -258,7 +258,7 @@ class VSRAlertPerformanceChecker:
         # Sort by gain percentage (highest first)
         strong_buys.sort(key=lambda x: x['gain_pct'], reverse=True)
 
-        logger.info(f"Found {len(strong_buys)} STRONG BUY candidates")
+        logger.info(f"Found {len(strong_buys)} BUY RADAR candidates")
         return strong_buys
 
     def format_alert_date(self, alert_date_str: str) -> str:
@@ -281,9 +281,9 @@ class VSRAlertPerformanceChecker:
             return alert_date_str[:10]
 
     def send_strong_buy_alert(self, strong_buys: List[Dict]) -> bool:
-        """Send Telegram alert for STRONG BUY candidates"""
+        """Send Telegram alert for BUY RADAR candidates"""
         if not strong_buys:
-            logger.info("No STRONG BUY signals to send")
+            logger.info("No BUY RADAR candidates to send")
             return False
 
         if not self.telegram.is_configured():
@@ -291,7 +291,7 @@ class VSRAlertPerformanceChecker:
             return False
 
         # Build message
-        message = f"""🚀 <b>STRONG BUY SIGNALS</b> 🚀
+        message = f"""🎯 <b>BUY RADAR CANDIDATES</b> 🎯
 <i>Alerts from past {self.lookback_days} business days trading higher</i>
 
 """
@@ -328,9 +328,9 @@ class VSRAlertPerformanceChecker:
         success = self.telegram.send_message(message, parse_mode='HTML')
 
         if success:
-            logger.info(f"Sent STRONG BUY alert with {len(strong_buys)} tickers")
+            logger.info(f"Sent BUY RADAR alert with {len(strong_buys)} tickers")
         else:
-            logger.error("Failed to send STRONG BUY alert")
+            logger.error("Failed to send BUY RADAR alert")
 
         return success
 
@@ -356,7 +356,7 @@ class VSRAlertPerformanceChecker:
 
                 return success
             else:
-                logger.info("No STRONG BUY signals found")
+                logger.info("No BUY RADAR candidates found")
                 return True
 
         except Exception as e:
@@ -380,7 +380,7 @@ def main():
     if args.test:
         # Test mode - just identify candidates without sending
         strong_buys = checker.identify_strong_buys()
-        print(f"\nFound {len(strong_buys)} STRONG BUY candidates:\n")
+        print(f"\nFound {len(strong_buys)} BUY RADAR candidates:\n")
         for buy in strong_buys:
             print(f"  {buy['ticker']}: Alert ₹{buy['alerted_price']:.2f} -> "
                   f"Now ₹{buy['current_price']:.2f} (+{buy['gain_pct']:.1f}%)")
