@@ -455,9 +455,13 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
         # Get direction from sim_config
         direction = sim_config.get('direction', 'long')
 
+        # Get charges rate from config
+        charges_per_leg_pct = sim_config.get('charges_per_leg_pct', 0.15)
+
         # Build positions list with real-time prices
         positions = []
         total_unrealized_pnl = 0
+        total_invested = 0
         for trade in open_trades:
             ticker = trade['ticker']
             entry_price = trade['entry_price'] or 0
@@ -471,6 +475,7 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
                 unrealized_pnl = (entry_price - current_price) * quantity
 
             position_value = entry_price * quantity
+            total_invested += position_value
             unrealized_pnl_pct = (unrealized_pnl / position_value * 100) if position_value > 0 else 0
             total_unrealized_pnl += unrealized_pnl
 
@@ -484,6 +489,19 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
                 'stop_loss': trade['stop_loss'] or 0,
                 'kc_lower': trade['kc_lower'] or 0
             })
+
+        # Calculate total charges paid (entry charges for open positions)
+        # Entry charges = invested_value × charges_per_leg_pct / 100
+        total_entry_charges = total_invested * (charges_per_leg_pct / 100)
+
+        # Add exit charges from closed trades (approximation: same as entry charges)
+        total_closed_value = sum(
+            (t.get('entry_price', 0) or 0) * (t.get('quantity', 0) or 0)
+            for t in closed_trades
+        )
+        total_exit_charges = total_closed_value * (charges_per_leg_pct / 100) * 2  # Entry + Exit
+
+        total_charges = total_entry_charges + total_exit_charges
 
         return render_template_string(
             DASHBOARD_HTML,
@@ -502,7 +520,7 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
             unrealized_pnl=total_unrealized_pnl,
             total_pnl=stats.get('total_pnl', 0) + total_unrealized_pnl,
             total_pnl_pct=portfolio_state.get('total_pnl_pct', 0),
-            total_charges=0,  # TODO: Track
+            total_charges=total_charges,
 
             # Trade stats
             total_trades=stats.get('total_trades', 0),
