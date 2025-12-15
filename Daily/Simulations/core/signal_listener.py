@@ -62,22 +62,31 @@ class VSRSignalListener:
     - Short signals: Short_Reversal_Daily scans (same as Telegram alerts)
     """
 
-    def __init__(self, config: Dict, signal_type: str = 'long'):
+    def __init__(self, config: Dict, signal_type: str = 'long', sim_id: str = None):
         """
         Initialize signal listener
 
         Args:
             config: Configuration dictionary
             signal_type: 'long' or 'short' - determines which data source to read
+            sim_id: Simulation ID to get specific entry filter settings
         """
         self.config = config
         self.signal_type = signal_type
-        self.telegram_config = config.get('telegram', {})
 
-        # For Long Reversal Daily, min_score is based on conditions met (e.g., 5/7 = 71%)
-        # Default: 5/7 conditions = ~71% score
-        self.min_score = self.telegram_config.get('min_score', 70)
-        self.min_momentum = self.telegram_config.get('min_momentum', 0)  # Momentum_5D can be negative
+        # Get min_score from simulation config entry_filter, or use defaults
+        # Long Reversal uses X/7 scoring (5/7 = 71.4%), Short uses X/11 (6/11 = 54.5%)
+        # Default: 70% for longs (5/7), 50% for shorts (6/11 passes)
+        default_min_score = 70 if signal_type == 'long' else 50
+
+        if sim_id:
+            sim_config = config.get('simulations', {}).get(sim_id, {})
+            entry_filter = sim_config.get('entry_filter', {})
+            self.min_score = entry_filter.get('min_score', default_min_score)
+            self.min_momentum = entry_filter.get('min_momentum', 0)
+        else:
+            self.min_score = default_min_score
+            self.min_momentum = 0  # Momentum_5D can be negative
 
         # Data paths based on signal type
         self.base_path = Path(__file__).parent.parent.parent
@@ -306,15 +315,18 @@ class ManualSignalInjector:
 _signal_listeners = {}
 
 
-def get_signal_listener(config: Dict = None, signal_type: str = 'long') -> VSRSignalListener:
+def get_signal_listener(config: Dict = None, signal_type: str = 'long', sim_id: str = None) -> VSRSignalListener:
     """Get or create signal listener for the specified type"""
     global _signal_listeners
 
-    if signal_type not in _signal_listeners:
+    # Use sim_id as key if provided, otherwise just signal_type
+    key = sim_id if sim_id else signal_type
+
+    if key not in _signal_listeners:
         if config is None:
             config_path = Path(__file__).parent.parent / 'config' / 'simulation_config.json'
             with open(config_path, 'r') as f:
                 config = json.load(f)
-        _signal_listeners[signal_type] = VSRSignalListener(config, signal_type)
+        _signal_listeners[key] = VSRSignalListener(config, signal_type, sim_id)
 
-    return _signal_listeners[signal_type]
+    return _signal_listeners[key]

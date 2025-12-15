@@ -46,9 +46,9 @@ class BaseSimulationRunner(BaseSimulationEngine):
             atr_multiplier=kc_config.get('atr_multiplier', 2.0)
         )
 
-        # Get signal listener based on direction (long vs short)
+        # Get signal listener based on direction (long vs short) with sim_id for config lookup
         signal_type = self.direction  # 'long' or 'short' from simulation_engine
-        self.signal_listener = get_signal_listener(config, signal_type=signal_type)
+        self.signal_listener = get_signal_listener(config, signal_type=signal_type, sim_id=sim_id)
 
         # Running state
         self._stop_event = Event()
@@ -129,13 +129,19 @@ class BaseSimulationRunner(BaseSimulationEngine):
         if self.portfolio.open_position_count >= self.max_positions:
             return False, "Max positions reached"
 
-        # Check minimum score
-        min_score = self.config.get('telegram', {}).get('min_score', 60)
+        # Check minimum score - use entry_filter from simulation config
+        entry_filter = self.sim_config.get('entry_filter', {})
+        # For shorts (X/11 scoring), default to 50%. For longs (X/7), default to 70%
+        default_min_score = 70 if self.direction == 'long' else 50
+        min_score = entry_filter.get('min_score', default_min_score)
         if signal.get('vsr_score', 0) < min_score:
             return False, f"Score {signal.get('vsr_score')} below minimum {min_score}"
 
         # Check minimum momentum
-        min_momentum = self.config.get('telegram', {}).get('min_momentum', 3.0)
+        # For longs: we want positive momentum (bullish), default to 3.0
+        # For shorts: negative momentum is expected (bearish), so we skip momentum check or use very negative threshold
+        default_min_momentum = 3.0 if self.direction == 'long' else -100.0
+        min_momentum = entry_filter.get('min_momentum', default_min_momentum)
         if signal.get('vsr_momentum', 0) < min_momentum:
             return False, f"Momentum {signal.get('vsr_momentum')} below minimum {min_momentum}"
 

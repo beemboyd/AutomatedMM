@@ -8,15 +8,52 @@ import logging
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from flask import Flask, render_template_string, jsonify, request
 
 # Add parent paths
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from core.database_manager import SimulationDatabase
 
 logger = logging.getLogger(__name__)
+
+
+def fetch_current_prices(tickers: List[str]) -> Dict[str, float]:
+    """Fetch current prices for a list of tickers from Kite API"""
+    if not tickers:
+        return {}
+
+    prices = {}
+    try:
+        import configparser
+        from kiteconnect import KiteConnect
+
+        # Load credentials from config.ini (same as keltner_calculator)
+        config = configparser.ConfigParser()
+        config_path = Path(__file__).parent.parent.parent / 'config.ini'
+        config.read(config_path)
+
+        credential_section = 'API_CREDENTIALS_Sai'
+        api_key = config.get(credential_section, 'api_key')
+        access_token = config.get(credential_section, 'access_token')
+
+        kite = KiteConnect(api_key=api_key)
+        kite.set_access_token(access_token)
+
+        symbols = [f"NSE:{t}" for t in tickers]
+        ltp_data = kite.ltp(symbols)
+
+        for symbol, data in ltp_data.items():
+            ticker = symbol.replace("NSE:", "")
+            prices[ticker] = data.get('last_price', 0)
+
+    except Exception as e:
+        logger.warning(f"Could not fetch real-time prices: {e}")
+        # Return empty dict, caller will use entry prices
+
+    return prices
 
 # Dashboard HTML template
 DASHBOARD_HTML = """
@@ -411,16 +448,39 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
         open_trades = db.get_open_trades()
         closed_trades = db.get_closed_trades(limit=20)
 
-        # Build positions list
+        # Fetch current prices for all open positions
+        open_tickers = [t['ticker'] for t in open_trades if t.get('ticker')]
+        current_prices = fetch_current_prices(open_tickers)
+
+        # Get direction from sim_config
+        direction = sim_config.get('direction', 'long')
+
+        # Build positions list with real-time prices
         positions = []
+        total_unrealized_pnl = 0
         for trade in open_trades:
+            ticker = trade['ticker']
+            entry_price = trade['entry_price'] or 0
+            quantity = trade['quantity'] or 0
+            current_price = current_prices.get(ticker, entry_price)
+
+            # Calculate unrealized P&L based on direction
+            if direction == 'long':
+                unrealized_pnl = (current_price - entry_price) * quantity
+            else:  # short
+                unrealized_pnl = (entry_price - current_price) * quantity
+
+            position_value = entry_price * quantity
+            unrealized_pnl_pct = (unrealized_pnl / position_value * 100) if position_value > 0 else 0
+            total_unrealized_pnl += unrealized_pnl
+
             positions.append({
-                'ticker': trade['ticker'],
-                'entry_price': trade['entry_price'] or 0,
-                'current_price': trade['entry_price'] or 0,  # TODO: Get real-time price
-                'quantity': trade['quantity'] or 0,
-                'unrealized_pnl': 0,  # TODO: Calculate
-                'unrealized_pnl_pct': 0,
+                'ticker': ticker,
+                'entry_price': entry_price,
+                'current_price': current_price,
+                'quantity': quantity,
+                'unrealized_pnl': unrealized_pnl,
+                'unrealized_pnl_pct': unrealized_pnl_pct,
                 'stop_loss': trade['stop_loss'] or 0,
                 'kc_lower': trade['kc_lower'] or 0
             })
@@ -439,8 +499,8 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
             cash=portfolio_state.get('cash', global_config.get('initial_capital', 10000000)),
             invested=portfolio_state.get('invested', 0),
             realized_pnl=stats.get('total_pnl', 0),
-            unrealized_pnl=0,  # TODO: Calculate from positions
-            total_pnl=portfolio_state.get('total_pnl', 0),
+            unrealized_pnl=total_unrealized_pnl,
+            total_pnl=stats.get('total_pnl', 0) + total_unrealized_pnl,
             total_pnl_pct=portfolio_state.get('total_pnl_pct', 0),
             total_charges=0,  # TODO: Track
 
