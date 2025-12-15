@@ -1,0 +1,105 @@
+{
+    "global": {
+        "initial_capital": 10000000,
+        "position_size_pct": 5.0,
+        "max_positions": 20,
+        "trading_start_time": "09:15",
+        "trading_end_time": "15:30",
+        "eod_close_time": "15:15",
+        "data_source": "kite"
+    },
+    "charges": {
+        "long_per_leg_pct": 0.15,
+        "short_per_leg_pct": 0.035
+    },
+    "simulations": {
+        "sim_1": {
+            "name": "Long + KC Lower SL",
+            "port": 4001,
+            "enabled": true,
+            "description": "Long positions with fixed Stop Loss at Keltner Channel Lower band (Daily)",
+            "direction": "long",
+            "sl_type": "kc_lower",
+            "signal_source": "vsr_long",
+            "signal_dashboard": "http://localhost:3001",
+            "charges_per_leg_pct": 0.15,
+            "can_hold_overnight": true,
+            "entry_filter": {
+                "min_score": 60,
+                "min_momentum": 3.0
+            }
+        },
+        "sim_2": {
+            "name": "Long + PSAR Dynamic SL",
+            "port": 4002,
+            "enabled": true,
+            "description": "Long positions with dynamic Stop Loss using Parabolic SAR",
+            "direction": "long",
+            "sl_type": "psar",
+            "signal_source": "vsr_long",
+            "signal_dashboard": "http://localhost:3001",
+            "charges_per_leg_pct": 0.15,
+            "can_hold_overnight": true,
+            "entry_filter": {
+                "min_score": 60,
+                "min_momentum": 3.0
+            }
+        },
+        "sim_3": {
+            "name": "Short + KC Upper SL",
+            "port": 4003,
+            "enabled": true,
+            "description": "Short positions with fixed Stop Loss at Keltner Channel Upper band - Intraday Only",
+            "direction": "short",
+            "sl_type": "kc_upper",
+            "signal_source": "vsr_short",
+            "signal_dashboard": "http://localhost:3003",
+            "charges_per_leg_pct": 0.035,
+            "can_hold_overnight": false,
+            "eod_close_required": true,
+            "entry_filter": {
+                "min_score": 60,
+                "min_momentum": 3.0
+            }
+        },
+        "sim_4": {
+            "name": "Short + PSAR Dynamic SL",
+            "port": 4004,
+            "enabled": true,
+            "description": "Short positions with dynamic Stop Loss using Parabolic SAR - Intraday Only",
+            "direction": "short",
+            "sl_type": "psar",
+            "signal_source": "vsr_short",
+            "signal_dashboard": "http://localhost:3003",
+            "charges_per_leg_pct": 0.035,
+            "can_hold_overnight": false,
+            "eod_close_required": true,
+            "entry_filter": {
+                "min_score": 60,
+                "min_momentum": 3.0
+            }
+        }
+    },
+    "keltner_channel": {
+        "ema_period": 20,
+        "atr_period": 10,
+        "atr_multiplier": 2.0
+    },
+    "psar": {
+        "af_start": 0.02,
+        "af_increment": 0.02,
+        "af_max": 0.2
+    },
+    "signal_sources": {
+        "vsr_long": {
+            "persistence_file": "vsr_ticker_persistence.json",
+            "hourly_scan_path": "scanners/Hourly",
+            "dashboard_port": 3001
+        },
+        "vsr_short": {
+            "persistence_file": "data/short_momentum/latest_short_momentum.json",
+            "hourly_scan_path": "data/short_momentum",
+            "dashboard_port": 3003
+        }
+    }
+}
