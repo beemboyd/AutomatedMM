@@ -406,7 +406,10 @@ class BaseSimulationEngine(ABC):
             return False
 
         now = datetime.now().time()
-        eod_time = time(15, 15)  # 3:15 PM
+        # Get EOD close time from config (default 15:00 = 3 PM)
+        eod_time_str = self.global_config.get('eod_close_time', '15:00')
+        hour, minute = map(int, eod_time_str.split(':'))
+        eod_time = time(hour, minute)
 
         if now >= eod_time and self.portfolio.open_position_count > 0:
             logger.info(f"EOD close triggered for {self.sim_id} - closing {self.portfolio.open_position_count} positions")
