@@ -225,6 +225,7 @@ DASHBOARD_HTML = """
         <div class="meta">
             <div>Simulation ID: <span class="sim-id">{{ sim_id }}</span></div>
             <div>Port: {{ port }}</div>
+            <div>Started: <span style="color: #4ecca3;">{{ simulation_started }}</span></div>
             <div>Last Updated: {{ last_updated }}</div>
             <button class="refresh-btn" onclick="location.reload()">Refresh</button>
         </div>
@@ -440,6 +441,9 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
 
     db = SimulationDatabase(sim_id)
 
+    # Track when this simulation dashboard started
+    simulation_started = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
     @app.route('/')
     def index():
         # Get current data
@@ -509,6 +513,7 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
             sim_name=sim_config.get('name', f'Simulation {sim_id}'),
             port=sim_config.get('port', 4001),
             description=sim_config.get('description', ''),
+            simulation_started=simulation_started,
             last_updated=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
 
             # Portfolio metrics
