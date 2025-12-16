@@ -430,6 +430,33 @@ DASHBOARD_HTML = """
 """
 
 
+def get_first_trade_timestamp(sim_id: str) -> Optional[str]:
+    """Get the timestamp of the first trade for this simulation"""
+    try:
+        db_path = Path(__file__).parent.parent / "data" / f"simulation_{sim_id}.db"
+        if not db_path.exists():
+            return None
+
+        import sqlite3
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("SELECT MIN(entry_timestamp) FROM trades WHERE entry_timestamp IS NOT NULL")
+        result = cursor.fetchone()
+        conn.close()
+
+        if result and result[0]:
+            # Parse and reformat to consistent format
+            ts = result[0]
+            # Handle various timestamp formats
+            if 'T' in ts:
+                ts = ts.replace('T', ' ')
+            return ts[:19]  # Return YYYY-MM-DD HH:MM:SS format
+        return None
+    except Exception as e:
+        logger.warning(f"Could not get first trade timestamp: {e}")
+        return None
+
+
 def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
     """Create Flask app for a simulation dashboard"""
     app = Flask(__name__)
@@ -440,9 +467,6 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
     global_config = config.get('global', {})
 
     db = SimulationDatabase(sim_id)
-
-    # Track when this simulation dashboard started
-    simulation_started = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     @app.route('/')
     def index():
@@ -513,7 +537,7 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
             sim_name=sim_config.get('name', f'Simulation {sim_id}'),
             port=sim_config.get('port', 4001),
             description=sim_config.get('description', ''),
-            simulation_started=simulation_started,
+            simulation_started=get_first_trade_timestamp(sim_id) or "No trades yet",
             last_updated=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
 
             # Portfolio metrics
