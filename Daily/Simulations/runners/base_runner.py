@@ -46,8 +46,9 @@ class BaseSimulationRunner(BaseSimulationEngine):
             atr_multiplier=kc_config.get('atr_multiplier', 2.0)
         )
 
-        # Get signal listener based on direction (long vs short) with sim_id for config lookup
-        signal_type = self.direction  # 'long' or 'short' from simulation_engine
+        # Get signal listener based on signal_type config or direction
+        # signal_type can be 'long', 'long_daily', or 'short'
+        signal_type = self.sim_config.get('signal_type', self.direction)
         self.signal_listener = get_signal_listener(config, signal_type=signal_type, sim_id=sim_id)
 
         # Running state

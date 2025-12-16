@@ -77,7 +77,7 @@ class VSRSignalListener:
         # Get min_score from simulation config entry_filter, or use defaults
         # Long Reversal uses X/7 scoring (5/7 = 71.4%), Short uses X/11 (6/11 = 54.5%)
         # Default: 70% for longs (5/7), 50% for shorts (6/11 passes)
-        default_min_score = 70 if signal_type == 'long' else 50
+        default_min_score = 70 if signal_type in ('long', 'long_daily') else 50
 
         if sim_id:
             sim_config = config.get('simulations', {}).get(sim_id, {})
@@ -95,6 +95,10 @@ class VSRSignalListener:
             # Long Reversal Hourly outputs - same source as Telegram alerts
             self.scan_path = self.base_path / 'results-h'
             self.scan_pattern = 'Long_Reversal_Hourly_*.xlsx'
+        elif signal_type == 'long_daily':
+            # Long Reversal Daily (FNO Liquid) - daily timeframe signals
+            self.scan_path = self.base_path / 'FNO' / 'Long' / 'Liquid'
+            self.scan_pattern = 'Long_Reversal_Daily_*.xlsx'
         else:  # short
             # Short Reversal Daily (FNO Liquid) - intraday short candidates
             self.scan_path = self.base_path / 'FNO' / 'Short' / 'Liquid'
