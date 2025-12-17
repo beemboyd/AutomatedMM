@@ -48,13 +48,22 @@ class KeltnerChannelCalculator:
             logger.info("Kite connection initialized for KC calculator")
 
     def _get_instrument_token(self, ticker: str) -> Optional[int]:
-        """Get instrument token for a ticker"""
+        """Get numeric instrument token for a ticker"""
         self._init_kite()
         try:
-            # Try NSE first
-            instruments = self.kite.ltp([f"NSE:{ticker}"])
-            if instruments:
-                return list(instruments.keys())[0]
+            # Check cache first
+            cache_key = f"token_{ticker}"
+            if cache_key in self._cache:
+                return self._cache[cache_key]
+
+            # Get instruments and find the ticker
+            instruments = self.kite.instruments('NSE')
+            for inst in instruments:
+                if inst['tradingsymbol'] == ticker:
+                    self._cache[cache_key] = inst['instrument_token']
+                    return inst['instrument_token']
+
+            logger.warning(f"Could not find instrument token for {ticker}")
         except Exception as e:
             logger.warning(f"Could not get instrument token for {ticker}: {e}")
         return None
@@ -63,11 +72,17 @@ class KeltnerChannelCalculator:
         """Fetch daily OHLC data for a ticker"""
         self._init_kite()
         try:
+            # Get numeric instrument token first
+            instrument_token = self._get_instrument_token(ticker)
+            if not instrument_token:
+                logger.warning(f"No instrument token for {ticker}")
+                return None
+
             to_date = datetime.now()
             from_date = to_date - timedelta(days=days + 10)  # Extra days for buffer
 
             data = self.kite.historical_data(
-                instrument_token=f"NSE:{ticker}",
+                instrument_token=instrument_token,
                 from_date=from_date.strftime('%Y-%m-%d'),
                 to_date=to_date.strftime('%Y-%m-%d'),
                 interval='day'
