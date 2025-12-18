@@ -353,7 +353,7 @@ DASHBOARD_HTML = """
                     <th>Value</th>
                     <th>P&L</th>
                     <th>Stop Loss</th>
-                    <th>KC Lower</th>
+                    <th>Target (9%)</th>
                 </tr>
             </thead>
             <tbody>
@@ -369,7 +369,7 @@ DASHBOARD_HTML = """
                         ({{ "{:+.1f}".format(pos.unrealized_pnl_pct) }}%)
                     </td>
                     <td class="negative">₹{{ "{:.2f}".format(pos.stop_loss) }}</td>
-                    <td>₹{{ "{:.2f}".format(pos.kc_lower) }}</td>
+                    <td class="positive">₹{{ "{:.2f}".format(pos.target) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -515,7 +515,7 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
                 'unrealized_pnl': unrealized_pnl,
                 'unrealized_pnl_pct': unrealized_pnl_pct,
                 'stop_loss': trade['stop_loss'] or 0,
-                'kc_lower': trade['kc_lower'] or 0
+                'target': trade['target'] or (entry_price * 1.09 if direction == 'long' else entry_price * 0.91)
             })
 
         # Calculate total charges paid (entry charges for open positions)
