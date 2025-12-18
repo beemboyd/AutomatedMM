@@ -126,6 +126,10 @@ class BaseSimulationRunner(BaseSimulationEngine):
         if ticker in self.portfolio.positions:
             return False, "Already have position"
 
+        # Check if ticker was already traded today (prevent re-entry same day)
+        if self.db.was_traded_today(ticker):
+            return False, "Already traded today"
+
         # Check max positions
         if self.portfolio.open_position_count >= self.max_positions:
             return False, "Max positions reached"

@@ -310,6 +310,18 @@ class SimulationDatabase:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def was_traded_today(self, ticker: str) -> bool:
+        """Check if ticker was already traded today (entry exists)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            today = datetime.now().strftime('%Y-%m-%d')
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM trades
+                WHERE ticker = ? AND date(entry_timestamp) = ?
+            """, (ticker, today))
+            result = cursor.fetchone()
+            return result['count'] > 0 if result else False
+
     def log_signal(self, ticker: str, timestamp: str, signal_type: str = None,
                    price: float = None, vsr_score: float = None,
                    vsr_momentum: float = None, pattern: str = None,
