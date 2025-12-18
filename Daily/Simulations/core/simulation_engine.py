@@ -242,12 +242,18 @@ class BaseSimulationEngine(ABC):
             metadata={'direction': self.direction, 'sl_type': self.sl_type, **(metadata or {})}
         )
 
+        # Target at 9% from entry price
+        if self.direction == 'long':
+            target = entry_price * 1.09  # 9% above entry for longs
+        else:
+            target = entry_price * 0.91  # 9% below entry for shorts
+
         self.db.execute_trade(
             trade_id=trade_id,
             entry_price=entry_price,
             quantity=quantity,
             stop_loss=stop_loss,
-            target=kc_data.get('upper') if self.direction == 'long' else kc_data.get('lower'),
+            target=target,
             kc_lower=kc_data.get('lower'),
             kc_upper=kc_data.get('upper'),
             kc_middle=kc_data.get('middle')
@@ -264,7 +270,7 @@ class BaseSimulationEngine(ABC):
             entry_price=entry_price,
             quantity=quantity,
             stop_loss=stop_loss,
-            target=kc_data.get('upper') if self.direction == 'long' else kc_data.get('lower'),
+            target=target,  # 9% from entry price
             kc_lower=kc_data.get('lower', 0),
             kc_upper=kc_data.get('upper', 0),
             kc_middle=kc_data.get('middle', 0),
