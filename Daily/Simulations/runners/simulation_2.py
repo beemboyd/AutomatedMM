@@ -1,11 +1,11 @@
 """
-Simulation 2: Long + PSAR Dynamic SL
+Simulation 2: Long + KC Middle SL
 VSR Trading Simulation
 
 Strategy:
 - Direction: LONG positions only
 - Entry: VSR Long signals from dashboard (localhost:3001)
-- Stop Loss: Dynamic trailing using Parabolic SAR
+- Stop Loss: Fixed at Keltner Channel Middle (SMA20) - tighter than KC Lower
 - Charges: 0.15% per leg
 - Can hold overnight: Yes
 """
@@ -21,20 +21,20 @@ from typing import Dict, Tuple
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from runners.base_runner import BaseSimulationRunner
-from core.psar_calculator import get_psar_calculator
+from core.keltner_calculator import get_kc_calculator
 
 logger = logging.getLogger(__name__)
 
 
 class Simulation2Runner(BaseSimulationRunner):
     """
-    Simulation 2: Long + PSAR Dynamic SL
+    Simulation 2: Long + KC Middle SL
 
-    - Long positions with dynamic trailing Stop Loss using Parabolic SAR
+    - Long positions with fixed Stop Loss at Keltner Channel Middle (SMA20)
+    - Tighter stops than KC Lower = faster loss cutting
     - Signals from VSR Long tracker (port 3001)
     - Charges: 0.15% per leg (0.30% round trip)
     - Can hold overnight
-    - PSAR trail updates on each price check
     """
 
     def __init__(self):
@@ -43,19 +43,11 @@ class Simulation2Runner(BaseSimulationRunner):
             config = json.load(f)
         super().__init__('sim_2', config)
 
-        # Initialize PSAR calculator
-        psar_config = config.get('psar', {})
-        self.psar_calculator = get_psar_calculator(
-            af_start=psar_config.get('af_start', 0.02),
-            af_increment=psar_config.get('af_increment', 0.02),
-            af_max=psar_config.get('af_max', 0.2)
-        )
-
-        logger.info(f"Simulation 2 initialized: LONG + PSAR Dynamic SL")
+        logger.info(f"Simulation 2 initialized: LONG + KC Middle SL")
 
     def should_enter(self, signal: Dict) -> Tuple[bool, str]:
         """
-        Entry logic for Simulation 2 (Long + PSAR)
+        Entry logic for Simulation 2 (Long + KC Middle)
         """
         can_enter, reason = super().should_enter(signal)
         if not can_enter:
@@ -65,39 +57,9 @@ class Simulation2Runner(BaseSimulationRunner):
 
     def _get_stop_loss(self, kc_data: Dict, entry_price: float) -> float:
         """
-        Initial stop loss at KC Lower, then trail with PSAR
+        Stop loss at Keltner Channel Middle (SMA20) - tighter than KC Lower
         """
-        return kc_data.get('lower', entry_price * 0.95)
-
-    def update_psar_trailing_stops(self):
-        """
-        Update trailing stops for all positions using PSAR
-        """
-        for ticker, position in self.portfolio.positions.items():
-            try:
-                psar_data = self.psar_calculator.get_psar_values(ticker, 'day', use_cache=False)
-                if psar_data and psar_data['trend'] == 1:  # Only trail in uptrend
-                    new_stop = psar_data['psar']
-                    self.update_trailing_stop(ticker, new_stop)
-            except Exception as e:
-                logger.warning(f"Error updating PSAR stop for {ticker}: {e}")
-
-    def _price_update_loop(self, interval: int = 60):
-        """Override to include PSAR trailing stop updates"""
-        while not self._stop_event.is_set():
-            try:
-                if self.portfolio.positions:
-                    # Update PSAR trailing stops
-                    self.update_psar_trailing_stops()
-
-                    # Then check stops and prices
-                    prices = self._fetch_current_prices()
-                    if prices:
-                        self.update_prices_and_check_exits(prices)
-            except Exception as e:
-                logger.error(f"Error in price update loop: {e}")
-
-            self._stop_event.wait(interval)
+        return kc_data.get('middle', entry_price * 0.97)
 
 
 def main():
@@ -117,7 +79,7 @@ def main():
     runner = Simulation2Runner()
 
     import argparse
-    parser = argparse.ArgumentParser(description='Simulation 2: Long + PSAR Dynamic SL')
+    parser = argparse.ArgumentParser(description='Simulation 2: Long + KC Middle SL')
     parser.add_argument('--once', action='store_true', help='Run single iteration')
     parser.add_argument('--eod', action='store_true', help='Run end of day processing')
     parser.add_argument('--reset', action='store_true', help='Reset simulation')
