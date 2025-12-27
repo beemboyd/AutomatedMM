@@ -1,5 +1,40 @@
 # Activity Log
 
+## 2025-12-27 18:21 IST - Claude
+**Created Daily Efficiency Report from Telegram Alerts**
+
+**Purpose:**
+- Measures performance of Telegram alerts by comparing first alert price to current price
+- Provides clear visibility into how well Telegram alerts are performing
+
+**New File Created:**
+- `Daily/analysis/daily_efficiency_report.py` - Main report generator
+
+**Data Flow:**
+- Source: `Daily/data/audit_vsr.db` (telegram_alerts table)
+- Output: `Daily/analysis/Efficiency/Daily_Efficiency_Long_YYYYMMDD.xlsx`
+
+**Features:**
+- Reads first Telegram alert per ticker in lookback period (default: 10 days)
+- Fetches current prices from Zerodha API
+- Calculates price change % (Long position perspective)
+- Generates formatted Excel with:
+  - Ticker, First Alert Date/Time, First Price, Current Price
+  - Price Change %, Score, Momentum %, Liquidity, Alert Count
+  - Summary statistics (win rate, avg change, best/worst performers)
+
+**Usage:**
+```bash
+python3 Daily/analysis/daily_efficiency_report.py --days 10
+```
+
+**Initial Results (Dec 17-27, 2025):**
+- 64 tickers analyzed
+- Win Rate: 53.1%
+- Top: ASHAPURMIN (+15.35%), SILVERBEES (+15.08%), SILVER (+14.21%)
+
+---
+
 ## 2025-12-09 10:15 IST - Claude
 **Created VSR Alert Performance Checker Service**
 
