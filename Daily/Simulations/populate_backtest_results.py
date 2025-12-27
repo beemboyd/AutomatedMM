@@ -72,7 +72,6 @@ def populate_simulation(sim_id: str, excel_path: str, initial_capital: float = 1
         pnl = float(row['P&L'])
         pnl_pct = float(row['P&L %']) if 'P&L %' in row else 0
         days_held = int(row['Days Held']) if 'Days Held' in row else 0
-        overnight_charges = float(row.get('Overnight Charges', 0))
 
         # Calculate quantity
         quantity = int(position_value / entry_price) if entry_price > 0 else 0

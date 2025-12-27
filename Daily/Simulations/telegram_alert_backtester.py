@@ -148,9 +148,9 @@ class TelegramAlertBacktester:
         self.price_cache = {}
         self.td_cache = {}  # Cache for TD indicator calculations
 
-        # Rate limiting (2 TPS to avoid "Too many requests" errors)
+        # Rate limiting (1 TPS to avoid "Too many requests" errors from Zerodha)
         self.last_api_call = 0
-        self.rate_limit = 2
+        self.rate_limit = 1
 
         # TD Indicator Calculator
         self.td_calculator = TDIndicatorCalculator()
