@@ -69,7 +69,6 @@ class OpenPosition:
     stop_loss: float  # Current stop loss level
     kc_lower: float
     kc_middle: float
-    overnight_charges: float = 0.0  # Accumulated overnight charges
     tdst_support: float = 0.0  # TDST Support level (dynamic, updated as new setups form)
     # Tranche exit tracking for TD strategy (3-tier: 30%, 45%, 25%)
     original_quantity: int = 0  # Original full quantity at entry
@@ -109,8 +108,7 @@ class ClosedTrade:
     days_held: int
     kc_lower_at_entry: float
     kc_middle_at_entry: float
-    overnight_charges: float = 0.0  # Total overnight charges incurred
-    tranche: str = ""  # "TRANCHE_1" or "TRANCHE_2" for TD strategy partial exits
+    tranche: str = ""  # "TRANCHE_1", "TRANCHE_2", or "TRANCHE_3" for TD strategy partial exits
 
 
 class TelegramAlertBacktester:
@@ -119,7 +117,7 @@ class TelegramAlertBacktester:
     """
 
     def __init__(self, initial_capital: float = 10000000, position_size_pct: float = 5.0,
-                 charges_per_leg_pct: float = 0.1, overnight_charge_pct: float = 0.2,
+                 charges_per_leg_pct: float = 0.1,
                  lookback_days: int = 60, margin_pct: float = 100.0):
         """
         Initialize backtester
@@ -128,14 +126,12 @@ class TelegramAlertBacktester:
             initial_capital: Starting capital (default 1 Crore)
             position_size_pct: Position size as % of portfolio (default 5%)
             charges_per_leg_pct: Trading charges per leg (default 0.1%, round trip 0.2%)
-            overnight_charge_pct: Overnight holding charge % (default 0.2%)
             lookback_days: Days to look back for alerts
             margin_pct: Margin allowed as % of capital (default 100% = 2x leverage)
         """
         self.initial_capital = initial_capital
         self.position_size_pct = position_size_pct
         self.charges_per_leg_pct = charges_per_leg_pct
-        self.overnight_charge_pct = overnight_charge_pct
         self.lookback_days = lookback_days
         self.margin_pct = margin_pct
         self.max_capital = initial_capital * (1 + margin_pct / 100)
@@ -480,7 +476,6 @@ class TelegramAlertBacktester:
         open_positions: Dict[str, OpenPosition] = {}
         closed_trades: List[ClosedTrade] = []
         total_charges = 0.0
-        total_overnight_charges = 0.0
 
         # Generate all trading days
         current_date = start_date
@@ -545,9 +540,7 @@ class TelegramAlertBacktester:
                                 entry_charges = (pos.entry_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
                                 # Exit charges (0.1% of exit transaction value)
                                 exit_charges = (exit_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
-                                # Allocate 30% of overnight charges to this tranche
-                                tranche_overnight = pos.overnight_charges * 0.30
-                                net_pnl = gross_pnl - entry_charges - exit_charges - tranche_overnight
+                                net_pnl = gross_pnl - entry_charges - exit_charges
 
                                 closed_trades.append(ClosedTrade(
                                     ticker=ticker,
@@ -563,7 +556,6 @@ class TelegramAlertBacktester:
                                     days_held=days_held,
                                     kc_lower_at_entry=pos.kc_lower,
                                     kc_middle_at_entry=pos.kc_middle,
-                                    overnight_charges=round(tranche_overnight, 2),
                                     tranche="TRANCHE_1"
                                 ))
 
@@ -579,7 +571,6 @@ class TelegramAlertBacktester:
                                 pos.quantity = pos.original_quantity - tranche1_qty
                                 pos.position_value = pos.entry_price * pos.quantity
                                 pos.position_state = 2  # De-risked (70%)
-                                pos.overnight_charges = pos.overnight_charges * 0.70
 
                     # Check Tranche 2 exit (45%) - if tranche 1 done but not tranche 2
                     if pos.tranche1_exited and not pos.tranche2_exited and pos.position_state == 2:
@@ -595,9 +586,7 @@ class TelegramAlertBacktester:
                                 entry_charges = (pos.entry_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
                                 # Exit charges (0.1% of exit transaction value)
                                 exit_charges = (exit_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
-                                # Allocate proportional overnight charges
-                                tranche_overnight = pos.overnight_charges * (tranche2_qty / pos.quantity)
-                                net_pnl = gross_pnl - entry_charges - exit_charges - tranche_overnight
+                                net_pnl = gross_pnl - entry_charges - exit_charges
 
                                 closed_trades.append(ClosedTrade(
                                     ticker=ticker,
@@ -613,7 +602,6 @@ class TelegramAlertBacktester:
                                     days_held=days_held,
                                     kc_lower_at_entry=pos.kc_lower,
                                     kc_middle_at_entry=pos.kc_middle,
-                                    overnight_charges=round(tranche_overnight, 2),
                                     tranche="TRANCHE_2"
                                 ))
 
@@ -628,7 +616,6 @@ class TelegramAlertBacktester:
                                 pos.quantity = pos.original_quantity - int(pos.original_quantity * 0.30) - tranche2_qty
                                 pos.position_value = pos.entry_price * pos.quantity
                                 pos.position_state = 3  # Runner (25%)
-                                pos.overnight_charges = pos.overnight_charges - tranche_overnight
 
                                 # Mark TDST violated if that was the reason
                                 if "TDST" in reason:
@@ -648,7 +635,7 @@ class TelegramAlertBacktester:
                             entry_charges = (pos.entry_price * tranche3_qty) * (self.charges_per_leg_pct / 100)
                             # Exit charges (0.1% of exit transaction value)
                             exit_charges = (exit_price * tranche3_qty) * (self.charges_per_leg_pct / 100)
-                            net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
+                            net_pnl = gross_pnl - entry_charges - exit_charges
 
                             closed_trades.append(ClosedTrade(
                                 ticker=ticker,
@@ -664,7 +651,6 @@ class TelegramAlertBacktester:
                                 days_held=days_held,
                                 kc_lower_at_entry=pos.kc_lower,
                                 kc_middle_at_entry=pos.kc_middle,
-                                overnight_charges=round(pos.overnight_charges, 2),
                                 tranche="TRANCHE_3"
                             ))
 
@@ -687,7 +673,7 @@ class TelegramAlertBacktester:
                         entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
                         # Exit charges (0.1% of exit transaction value)
                         exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
-                        net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
+                        net_pnl = gross_pnl - entry_charges - exit_charges
 
                         entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
                         exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
@@ -706,8 +692,7 @@ class TelegramAlertBacktester:
                             exit_reason='EMA50_DELTA_CVD_NEGATIVE',
                             days_held=days_held,
                             kc_lower_at_entry=pos.kc_lower,
-                            kc_middle_at_entry=pos.kc_middle,
-                            overnight_charges=round(pos.overnight_charges, 2)
+                            kc_middle_at_entry=pos.kc_middle
                         ))
 
                         cash += (exit_price * pos.quantity) - exit_charges
@@ -725,7 +710,7 @@ class TelegramAlertBacktester:
                         entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
                         # Exit charges (0.1% of exit transaction value)
                         exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
-                        net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
+                        net_pnl = gross_pnl - entry_charges - exit_charges
 
                         entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
                         exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
@@ -744,8 +729,7 @@ class TelegramAlertBacktester:
                             exit_reason='KC_LOWER_BREACH',
                             days_held=days_held,
                             kc_lower_at_entry=pos.kc_lower,
-                            kc_middle_at_entry=pos.kc_middle,
-                            overnight_charges=round(pos.overnight_charges, 2)
+                            kc_middle_at_entry=pos.kc_middle
                         ))
 
                         cash += (exit_price * pos.quantity) - exit_charges
@@ -775,7 +759,7 @@ class TelegramAlertBacktester:
                         entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
                         # Exit charges (0.1% of exit transaction value)
                         exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
-                        net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
+                        net_pnl = gross_pnl - entry_charges - exit_charges
 
                         entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
                         exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
@@ -794,8 +778,7 @@ class TelegramAlertBacktester:
                             exit_reason=exit_reason,
                             days_held=days_held,
                             kc_lower_at_entry=pos.kc_lower,
-                            kc_middle_at_entry=pos.kc_middle,
-                            overnight_charges=round(pos.overnight_charges, 2)
+                            kc_middle_at_entry=pos.kc_middle
                         ))
 
                         cash += (exit_price * pos.quantity) - exit_charges
@@ -901,13 +884,6 @@ class TelegramAlertBacktester:
                     invested += actual_value
                     total_charges += entry_charges
 
-            # 3. Apply overnight charges to all positions still open at end of day
-            for ticker, pos in open_positions.items():
-                overnight_charge = pos.position_value * (self.overnight_charge_pct / 100)
-                pos.overnight_charges += overnight_charge
-                cash -= overnight_charge
-                total_overnight_charges += overnight_charge
-
             processed += 1
             if processed % 20 == 0:
                 logger.info(f"Processed {processed}/{len(trading_days)} days, {len(open_positions)} open, {len(closed_trades)} closed")
@@ -924,9 +900,6 @@ class TelegramAlertBacktester:
                 current_price = pos.entry_price
                 unrealized_pnl = 0
 
-            # Include overnight charges in unrealized P&L
-            net_unrealized_pnl = unrealized_pnl - pos.overnight_charges
-
             final_open.append({
                 'ticker': ticker,
                 'entry_date': pos.entry_date,
@@ -934,12 +907,11 @@ class TelegramAlertBacktester:
                 'current_price': round(current_price, 2),
                 'quantity': pos.quantity,
                 'position_value': pos.position_value,
-                'unrealized_pnl': round(net_unrealized_pnl, 2),
-                'unrealized_pnl_pct': round((net_unrealized_pnl / pos.position_value) * 100, 2),
+                'unrealized_pnl': round(unrealized_pnl, 2),
+                'unrealized_pnl_pct': round((unrealized_pnl / pos.position_value) * 100, 2),
                 'stop_loss': round(pos.stop_loss, 2),
                 'kc_lower': round(pos.kc_lower, 2),
-                'kc_middle': round(pos.kc_middle, 2),
-                'overnight_charges': round(pos.overnight_charges, 2)
+                'kc_middle': round(pos.kc_middle, 2)
             })
 
         # Calculate summary
@@ -972,8 +944,7 @@ class TelegramAlertBacktester:
             'max_win': max([t.pnl for t in winning_trades]) if winning_trades else 0,
             'max_loss': min([t.pnl for t in losing_trades]) if losing_trades else 0,
             'avg_days_held': np.mean([t.days_held for t in closed_trades]) if closed_trades else 0,
-            'total_charges': total_charges,
-            'total_overnight_charges': total_overnight_charges
+            'total_charges': total_charges
         }
 
         return final_open, closed_trades, summary
@@ -1019,7 +990,6 @@ class TelegramAlertBacktester:
             ["Max Loss", f"₹{summary['max_loss']:,.0f}"],
             ["Avg Days Held", f"{summary['avg_days_held']:.1f}"],
             ["Total Charges", f"₹{summary['total_charges']:,.0f}"],
-            ["Overnight Charges", f"₹{summary['total_overnight_charges']:,.0f}"],
         ]
 
         for row in summary_data:
@@ -1028,7 +998,7 @@ class TelegramAlertBacktester:
         # Open Positions sheet
         ws2 = wb.create_sheet("Open Positions")
         headers = ["Ticker", "Entry Date", "Entry Price", "Current Price", "Quantity",
-                  "Value", "Unrealized P&L", "P&L %", "Overnight Charges", "Stop Loss", "KC Lower", "KC Middle"]
+                  "Value", "Unrealized P&L", "P&L %", "Stop Loss", "KC Lower", "KC Middle"]
         for col, h in enumerate(headers, 1):
             cell = ws2.cell(row=1, column=col, value=h)
             cell.font = header_font
@@ -1043,15 +1013,14 @@ class TelegramAlertBacktester:
             ws2.cell(row=i, column=6, value=pos['position_value'])
             ws2.cell(row=i, column=7, value=pos['unrealized_pnl'])
             ws2.cell(row=i, column=8, value=pos['unrealized_pnl_pct'])
-            ws2.cell(row=i, column=9, value=pos.get('overnight_charges', 0))
-            ws2.cell(row=i, column=10, value=pos['stop_loss'])
-            ws2.cell(row=i, column=11, value=pos['kc_lower'])
-            ws2.cell(row=i, column=12, value=pos['kc_middle'])
+            ws2.cell(row=i, column=9, value=pos['stop_loss'])
+            ws2.cell(row=i, column=10, value=pos['kc_lower'])
+            ws2.cell(row=i, column=11, value=pos['kc_middle'])
 
         # Closed Trades sheet
         ws3 = wb.create_sheet("Trade History")
         headers = ["Ticker", "Entry Date", "Entry Price", "Exit Date", "Exit Price",
-                  "Quantity", "P&L", "P&L %", "Exit Reason", "Days Held", "Overnight Charges"]
+                  "Quantity", "P&L", "P&L %", "Exit Reason", "Days Held"]
         for col, h in enumerate(headers, 1):
             cell = ws3.cell(row=1, column=col, value=h)
             cell.font = header_font
@@ -1068,7 +1037,6 @@ class TelegramAlertBacktester:
             ws3.cell(row=i, column=8, value=trade.pnl_pct)
             ws3.cell(row=i, column=9, value=trade.exit_reason)
             ws3.cell(row=i, column=10, value=trade.days_held)
-            ws3.cell(row=i, column=11, value=trade.overnight_charges)
 
         filepath = self.output_dir / filename
         wb.save(filepath)
@@ -1133,7 +1101,6 @@ def main():
     print(f"{'Return %':<25} {summary1['total_pnl_pct']:>14.2f}% {summary2['total_pnl_pct']:>14.2f}%")
     print(f"{'Avg Days Held':<25} {summary1['avg_days_held']:>14.1f} {summary2['avg_days_held']:>14.1f}")
     print(f"{'Total Charges':<25} ₹{summary1['total_charges']:>14,.0f} ₹{summary2['total_charges']:>14,.0f}")
-    print(f"{'Overnight Charges':<25} ₹{summary1['total_overnight_charges']:>14,.0f} ₹{summary2['total_overnight_charges']:>14,.0f}")
 
     print("\n" + "-" * 65)
     if summary1['total_pnl'] > summary2['total_pnl']:
