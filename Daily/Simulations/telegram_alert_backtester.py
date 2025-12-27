@@ -152,9 +152,9 @@ class TelegramAlertBacktester:
         self.price_cache = {}
         self.td_cache = {}  # Cache for TD indicator calculations
 
-        # Rate limiting
+        # Rate limiting (2 TPS to avoid "Too many requests" errors)
         self.last_api_call = 0
-        self.rate_limit = 3
+        self.rate_limit = 2
 
         # TD Indicator Calculator
         self.td_calculator = TDIndicatorCalculator()
@@ -541,10 +541,13 @@ class TelegramAlertBacktester:
                             if tranche1_qty > 0:
                                 exit_price = current_close
                                 gross_pnl = (exit_price - pos.entry_price) * tranche1_qty
+                                # Entry charges (0.1% of entry transaction value)
+                                entry_charges = (pos.entry_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
+                                # Exit charges (0.1% of exit transaction value)
                                 exit_charges = (exit_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
                                 # Allocate 30% of overnight charges to this tranche
                                 tranche_overnight = pos.overnight_charges * 0.30
-                                net_pnl = gross_pnl - exit_charges - tranche_overnight
+                                net_pnl = gross_pnl - entry_charges - exit_charges - tranche_overnight
 
                                 closed_trades.append(ClosedTrade(
                                     ticker=ticker,
@@ -567,7 +570,7 @@ class TelegramAlertBacktester:
                                 # Update position
                                 cash += (exit_price * tranche1_qty) - exit_charges
                                 invested -= pos.original_value * 0.30
-                                total_charges += exit_charges
+                                total_charges += exit_charges  # Entry charges already tracked at entry
                                 pos.tranche1_exited = True
                                 pos.tranche1_exit_date = date_str
                                 pos.tranche1_exit_price = exit_price
@@ -588,10 +591,13 @@ class TelegramAlertBacktester:
                             if tranche2_qty > 0 and tranche2_qty <= pos.quantity:
                                 exit_price = current_close
                                 gross_pnl = (exit_price - pos.entry_price) * tranche2_qty
+                                # Entry charges (0.1% of entry transaction value)
+                                entry_charges = (pos.entry_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
+                                # Exit charges (0.1% of exit transaction value)
                                 exit_charges = (exit_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
                                 # Allocate proportional overnight charges
                                 tranche_overnight = pos.overnight_charges * (tranche2_qty / pos.quantity)
-                                net_pnl = gross_pnl - exit_charges - tranche_overnight
+                                net_pnl = gross_pnl - entry_charges - exit_charges - tranche_overnight
 
                                 closed_trades.append(ClosedTrade(
                                     ticker=ticker,
@@ -613,7 +619,7 @@ class TelegramAlertBacktester:
 
                                 cash += (exit_price * tranche2_qty) - exit_charges
                                 invested -= pos.original_value * 0.45
-                                total_charges += exit_charges
+                                total_charges += exit_charges  # Entry charges already tracked at entry
                                 pos.tranche2_exited = True
                                 pos.tranche2_exit_date = date_str
                                 pos.tranche2_exit_price = exit_price
@@ -638,8 +644,11 @@ class TelegramAlertBacktester:
                             tranche3_qty = pos.quantity
                             exit_price = current_close
                             gross_pnl = (exit_price - pos.entry_price) * tranche3_qty
+                            # Entry charges (0.1% of entry transaction value)
+                            entry_charges = (pos.entry_price * tranche3_qty) * (self.charges_per_leg_pct / 100)
+                            # Exit charges (0.1% of exit transaction value)
                             exit_charges = (exit_price * tranche3_qty) * (self.charges_per_leg_pct / 100)
-                            net_pnl = gross_pnl - exit_charges - pos.overnight_charges
+                            net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
 
                             closed_trades.append(ClosedTrade(
                                 ticker=ticker,
@@ -661,7 +670,7 @@ class TelegramAlertBacktester:
 
                             cash += (exit_price * tranche3_qty) - exit_charges
                             invested -= pos.position_value
-                            total_charges += exit_charges
+                            total_charges += exit_charges  # Entry charges already tracked at entry
                             pos.position_state = 4  # Flat
                             positions_to_close.append(ticker)
 
@@ -674,8 +683,11 @@ class TelegramAlertBacktester:
                     if cvd_data.get('exit_signal', False):
                         exit_price = current_close
                         gross_pnl = (exit_price - pos.entry_price) * pos.quantity
+                        # Entry charges (0.1% of entry transaction value)
+                        entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
+                        # Exit charges (0.1% of exit transaction value)
                         exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
-                        net_pnl = gross_pnl - exit_charges - pos.overnight_charges
+                        net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
 
                         entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
                         exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
@@ -700,7 +712,7 @@ class TelegramAlertBacktester:
 
                         cash += (exit_price * pos.quantity) - exit_charges
                         invested -= pos.position_value
-                        total_charges += exit_charges
+                        total_charges += exit_charges  # Entry charges already tracked at entry
                         positions_to_close.append(ticker)
 
                 elif exit_type == 'kc_lower':
@@ -709,8 +721,11 @@ class TelegramAlertBacktester:
                     if current_low <= stop_level:
                         exit_price = stop_level
                         gross_pnl = (exit_price - pos.entry_price) * pos.quantity
+                        # Entry charges (0.1% of entry transaction value)
+                        entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
+                        # Exit charges (0.1% of exit transaction value)
                         exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
-                        net_pnl = gross_pnl - exit_charges - pos.overnight_charges
+                        net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
 
                         entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
                         exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
@@ -735,7 +750,7 @@ class TelegramAlertBacktester:
 
                         cash += (exit_price * pos.quantity) - exit_charges
                         invested -= pos.position_value
-                        total_charges += exit_charges
+                        total_charges += exit_charges  # Entry charges already tracked at entry
                         positions_to_close.append(ticker)
 
                 else:
@@ -756,8 +771,11 @@ class TelegramAlertBacktester:
 
                     if stop_hit:
                         gross_pnl = (exit_price - pos.entry_price) * pos.quantity
+                        # Entry charges (0.1% of entry transaction value)
+                        entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
+                        # Exit charges (0.1% of exit transaction value)
                         exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
-                        net_pnl = gross_pnl - exit_charges - pos.overnight_charges
+                        net_pnl = gross_pnl - entry_charges - exit_charges - pos.overnight_charges
 
                         entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
                         exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
@@ -782,7 +800,7 @@ class TelegramAlertBacktester:
 
                         cash += (exit_price * pos.quantity) - exit_charges
                         invested -= pos.position_value
-                        total_charges += exit_charges
+                        total_charges += exit_charges  # Entry charges already tracked at entry
                         positions_to_close.append(ticker)
 
             # Remove fully closed positions
