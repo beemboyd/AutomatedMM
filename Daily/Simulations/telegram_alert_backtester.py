@@ -452,7 +452,7 @@ class TelegramAlertBacktester:
         if exit_type == 'td_strategy':
             sim_name = "Sim 1: TD 3-Tier Tranche Exit"
         elif exit_type == 'delta_cvd':
-            sim_name = "Sim 2: EMA50(Delta CVD) Exit"
+            sim_name = "Sim 2: Delta CVD 2-Tier Exit (75% TD MA I, 25% CVD)"
         elif exit_type == 'kc_lower':
             sim_name = "Sim 1: KC Lower Exit"
         else:
@@ -661,23 +661,102 @@ class TelegramAlertBacktester:
                             positions_to_close.append(ticker)
 
                 elif exit_type == 'delta_cvd':
-                    # Sim 2: Exit when EMA50(Delta CVD) < 0
+                    # Sim 2: 2-Tier Exit System
+                    # Tranche 1 (75%): Close < TD MA I
+                    # Tranche 2 (25%): EMA50(Delta CVD) < 0
+
+                    td_data = self.calculate_td_for_date(ticker, date_str)
                     cvd_data = self.calculate_delta_cvd_for_date(ticker, date_str)
-                    if cvd_data is None:
+                    if td_data is None or cvd_data is None:
                         continue
 
-                    if cvd_data.get('exit_signal', False):
+                    entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
+                    exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
+                    days_held = (exit_dt - entry_dt).days
+
+                    # Check Tranche 1 exit (75%) - Close < TD MA I
+                    if not pos.tranche1_exited and pos.position_state == 1:
+                        td_ma1_value = td_data.get('td_ma1_value', 0.0)
+                        if td_ma1_value > 0 and current_close < td_ma1_value:
+                            # Exit 75% of position
+                            tranche1_qty = int(pos.original_quantity * 0.75)
+                            if tranche1_qty > 0:
+                                exit_price = current_close
+                                gross_pnl = (exit_price - pos.entry_price) * tranche1_qty
+                                entry_charges = (pos.entry_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
+                                exit_charges = (exit_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
+                                net_pnl = gross_pnl - entry_charges - exit_charges
+
+                                closed_trades.append(ClosedTrade(
+                                    ticker=ticker,
+                                    entry_date=pos.entry_date,
+                                    entry_price=pos.entry_price,
+                                    exit_date=date_str,
+                                    exit_price=round(exit_price, 2),
+                                    quantity=tranche1_qty,
+                                    position_value=round(pos.original_value * 0.75, 2),
+                                    pnl=round(net_pnl, 2),
+                                    pnl_pct=round((net_pnl / (pos.original_value * 0.75)) * 100, 2),
+                                    exit_reason='TD_MA1_BREACH',
+                                    days_held=days_held,
+                                    kc_lower_at_entry=pos.kc_lower,
+                                    kc_middle_at_entry=pos.kc_middle,
+                                    tranche="TRANCHE_1"
+                                ))
+
+                                cash += (exit_price * tranche1_qty) - exit_charges
+                                invested -= pos.original_value * 0.75
+                                total_charges += exit_charges
+                                pos.tranche1_exited = True
+                                pos.tranche1_exit_date = date_str
+                                pos.tranche1_exit_price = exit_price
+                                pos.tranche1_pnl = net_pnl
+                                pos.tranche1_reason = 'TD_MA1_BREACH'
+                                pos.quantity = pos.original_quantity - tranche1_qty
+                                pos.position_value = pos.entry_price * pos.quantity
+                                pos.position_state = 2  # Runner (25%)
+
+                    # Check Tranche 2 exit (25%) - EMA50(Delta CVD) < 0
+                    if pos.tranche1_exited and pos.position_state == 2 and pos.quantity > 0:
+                        if cvd_data.get('exit_signal', False):
+                            tranche2_qty = pos.quantity
+                            exit_price = current_close
+                            gross_pnl = (exit_price - pos.entry_price) * tranche2_qty
+                            entry_charges = (pos.entry_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
+                            exit_charges = (exit_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
+                            net_pnl = gross_pnl - entry_charges - exit_charges
+
+                            closed_trades.append(ClosedTrade(
+                                ticker=ticker,
+                                entry_date=pos.entry_date,
+                                entry_price=pos.entry_price,
+                                exit_date=date_str,
+                                exit_price=round(exit_price, 2),
+                                quantity=tranche2_qty,
+                                position_value=round(pos.original_value * 0.25, 2),
+                                pnl=round(net_pnl, 2),
+                                pnl_pct=round((net_pnl / (pos.original_value * 0.25)) * 100, 2),
+                                exit_reason='EMA50_DELTA_CVD_NEGATIVE',
+                                days_held=days_held,
+                                kc_lower_at_entry=pos.kc_lower,
+                                kc_middle_at_entry=pos.kc_middle,
+                                tranche="TRANCHE_2"
+                            ))
+
+                            cash += (exit_price * tranche2_qty) - exit_charges
+                            invested -= pos.position_value
+                            total_charges += exit_charges
+                            pos.position_state = 4  # Flat
+                            positions_to_close.append(ticker)
+
+                    # Also check full exit if EMA50(Delta CVD) < 0 and tranche 1 not exited yet
+                    elif not pos.tranche1_exited and cvd_data.get('exit_signal', False):
+                        # Exit 100% if CVD turns negative before TD MA I breach
                         exit_price = current_close
                         gross_pnl = (exit_price - pos.entry_price) * pos.quantity
-                        # Entry charges (0.1% of entry transaction value)
                         entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
-                        # Exit charges (0.1% of exit transaction value)
                         exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
                         net_pnl = gross_pnl - entry_charges - exit_charges
-
-                        entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
-                        exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
-                        days_held = (exit_dt - entry_dt).days
 
                         closed_trades.append(ClosedTrade(
                             ticker=ticker,
@@ -689,7 +768,7 @@ class TelegramAlertBacktester:
                             position_value=pos.position_value,
                             pnl=round(net_pnl, 2),
                             pnl_pct=round((net_pnl / pos.position_value) * 100, 2),
-                            exit_reason='EMA50_DELTA_CVD_NEGATIVE',
+                            exit_reason='EMA50_DELTA_CVD_NEGATIVE_FULL',
                             days_held=days_held,
                             kc_lower_at_entry=pos.kc_lower,
                             kc_middle_at_entry=pos.kc_middle
@@ -697,7 +776,7 @@ class TelegramAlertBacktester:
 
                         cash += (exit_price * pos.quantity) - exit_charges
                         invested -= pos.position_value
-                        total_charges += exit_charges  # Entry charges already tracked at entry
+                        total_charges += exit_charges
                         positions_to_close.append(ticker)
 
                 elif exit_type == 'kc_lower':
@@ -1077,10 +1156,10 @@ def main():
     open1, closed1, summary1 = backtester.run_simulation('td_strategy')
     backtester.generate_report(open1, closed1, summary1, f"Backtest_Sim1_TD_Tranche_{today}.xlsx")
 
-    # Run Sim 2: Delta CVD Strategy
-    print("\n[2/2] Running Sim 2: EMA50(Delta CVD) Exit...")
+    # Run Sim 2: Delta CVD Strategy with 2-Tier Exit
+    print("\n[2/2] Running Sim 2: Delta CVD 2-Tier Exit...")
     print("       Entry: EMA50(Delta CVD) > 0 AND TDST Resistance broken")
-    print("       Exit: EMA50(Delta CVD) < 0")
+    print("       Exit: 75% @ Close < TD MA I, 25% @ EMA50(Delta CVD) < 0")
     open2, closed2, summary2 = backtester.run_simulation('delta_cvd')
     backtester.generate_report(open2, closed2, summary2, f"Backtest_Sim2_DeltaCVD_{today}.xlsx")
 
