@@ -1,5 +1,42 @@
 # Activity Log
 
+## 2025-12-27 18:29 IST - Claude
+**Created Telegram Alert Backtester for Simulation Comparison**
+
+**Purpose:**
+- Backtest trading strategies using Telegram alerts as entry signals
+- Compare two exit strategies: KC Lower vs KC Middle (SMA20)
+- Measure P&L, win rate, and average holding period
+
+**New File Created:**
+- `Daily/Simulations/telegram_alert_backtester.py` - Backtester engine
+
+**Strategy Comparison:**
+- **Sim 1 (KC Lower)**: Exit when price drops below Keltner Channel Lower Band
+- **Sim 2 (KC Middle)**: Exit when price drops below Keltner Channel Middle (SMA20)
+
+**Backtest Results (Dec 17-27, 2025):**
+
+| Metric | Sim 1 (KC Lower) | Sim 2 (KC Middle) |
+|--------|------------------|-------------------|
+| Total Trades | 27 | 27 |
+| Win Rate | 51.9% | 48.1% |
+| Total P&L | Rs 80,231 | Rs 112,838 |
+| Avg Days Held | 7.9 | 6.3 |
+
+**Key Finding:** KC Middle exit performs better despite lower win rate - cuts losses faster.
+
+**Usage:**
+```bash
+python3 Daily/Simulations/telegram_alert_backtester.py --days 10
+```
+
+**Output Files:**
+- `Daily/analysis/Efficiency/Backtest_Sim1_KC_Lower_YYYYMMDD.xlsx`
+- `Daily/analysis/Efficiency/Backtest_Sim2_KC_Middle_YYYYMMDD.xlsx`
+
+---
+
 ## 2025-12-27 18:21 IST - Claude
 **Created Daily Efficiency Report from Telegram Alerts**
 
