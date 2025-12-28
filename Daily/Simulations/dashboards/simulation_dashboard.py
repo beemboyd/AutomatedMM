@@ -486,7 +486,7 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
         # Get charges rate from config
         charges_per_leg_pct = sim_config.get('charges_per_leg_pct', 0.15)
 
-        # Build positions list with real-time prices
+        # Build positions list with real-time prices (or stored values as fallback)
         positions = []
         total_unrealized_pnl = 0
         total_invested = 0
@@ -494,17 +494,31 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
             ticker = trade['ticker']
             entry_price = trade['entry_price'] or 0
             quantity = trade['quantity'] or 0
-            current_price = current_prices.get(ticker, entry_price)
 
-            # Calculate unrealized P&L based on direction
-            if direction == 'long':
-                unrealized_pnl = (current_price - entry_price) * quantity
-            else:  # short
-                unrealized_pnl = (entry_price - current_price) * quantity
+            # Try real-time price first, else use stored P&L from backtest
+            if ticker in current_prices and current_prices[ticker] > 0:
+                current_price = current_prices[ticker]
+                # Calculate unrealized P&L based on direction
+                if direction == 'long':
+                    unrealized_pnl = (current_price - entry_price) * quantity
+                else:  # short
+                    unrealized_pnl = (entry_price - current_price) * quantity
+                position_value = entry_price * quantity
+                unrealized_pnl_pct = (unrealized_pnl / position_value * 100) if position_value > 0 else 0
+            else:
+                # Use stored P&L from database (backtest data)
+                unrealized_pnl = trade.get('pnl', 0) or 0
+                unrealized_pnl_pct = trade.get('pnl_pct', 0) or 0
+                position_value = entry_price * quantity
+                # Calculate implied current price from stored P&L
+                if quantity > 0 and direction == 'long':
+                    current_price = entry_price + (unrealized_pnl / quantity)
+                elif quantity > 0:  # short
+                    current_price = entry_price - (unrealized_pnl / quantity)
+                else:
+                    current_price = entry_price
 
-            position_value = entry_price * quantity
             total_invested += position_value
-            unrealized_pnl_pct = (unrealized_pnl / position_value * 100) if position_value > 0 else 0
             total_unrealized_pnl += unrealized_pnl
 
             positions.append({
