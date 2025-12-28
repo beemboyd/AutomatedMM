@@ -14,32 +14,53 @@
     },
     "simulations": {
         "sim_1": {
-            "name": "Long + KC Lower SL",
+            "name": "TD 3-Tier Tranche Exit",
             "port": 4001,
             "enabled": true,
-            "description": "Long positions with fixed Stop Loss at Keltner Channel Lower band (Daily)",
+            "description": "Tom DeMark based 3-tier exit strategy with tranched position management",
             "direction": "long",
-            "sl_type": "kc_lower",
+            "sl_type": "td_strategy",
             "signal_source": "vsr_long",
             "signal_dashboard": "http://localhost:3001",
-            "charges_per_leg_pct": 0.15,
+            "charges_per_leg_pct": 0.10,
             "can_hold_overnight": true,
+            "strategy_rules": {
+                "entry": [
+                    "TD MA I active (Close > TD MA I)",
+                    "TD MA II active (Close > TD MA II)"
+                ],
+                "exit": [
+                    "Tranche 1 (30%): Close < TD MA I OR Failed follow-through after Setup 9",
+                    "Tranche 2 (45%): Close < TDST Support OR Close < Setup bars 1-9 lowest low",
+                    "Tranche 3 (25%): Countdown >= 13 + Close < TD MA II, OR Higher low break, OR 30-day time stop"
+                ]
+            },
             "entry_filter": {
                 "min_score": 60,
                 "min_momentum": 3.0
             }
         },
         "sim_2": {
-            "name": "Long + KC Middle SL",
+            "name": "Delta CVD 2-Tier Exit",
             "port": 4002,
             "enabled": true,
-            "description": "Long positions with Stop Loss at Keltner Channel Middle (SMA20) - Tighter stops, faster loss cutting",
+            "description": "Delta CVD momentum strategy with 2-tier exit using TD MA I for early profit taking",
             "direction": "long",
-            "sl_type": "kc_middle",
+            "sl_type": "delta_cvd",
             "signal_source": "vsr_long",
             "signal_dashboard": "http://localhost:3001",
-            "charges_per_leg_pct": 0.15,
+            "charges_per_leg_pct": 0.10,
             "can_hold_overnight": true,
+            "strategy_rules": {
+                "entry": [
+                    "EMA50(Delta CVD) > 0 (Bullish volume momentum)",
+                    "TDST Resistance broken (Price closed above bearish setup resistance)"
+                ],
+                "exit": [
+                    "Tranche 1 (75%): Close < TD MA I (Early de-risking)",
+                    "Tranche 2 (25%): EMA50(Delta CVD) < 0 (Momentum reversal)"
+                ]
+            },
             "entry_filter": {
                 "min_score": 60,
                 "min_momentum": 3.0

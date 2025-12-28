@@ -421,6 +421,29 @@ DASHBOARD_HTML = """
         {% endif %}
     </div>
 
+    <!-- Strategy Rules -->
+    <div class="card">
+        <h3>Strategy Rules</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h4 style="color: #4ecca3; margin-bottom: 10px; font-size: 0.95rem;">📥 Entry Criteria</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #ccc; font-size: 0.85rem; line-height: 1.8;">
+                    {% for rule in entry_rules %}
+                    <li>{{ rule }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div>
+                <h4 style="color: #e94560; margin-bottom: 10px; font-size: 0.95rem;">📤 Exit Criteria</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #ccc; font-size: 0.85rem; line-height: 1.8;">
+                    {% for rule in exit_rules %}
+                    <li>{{ rule }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <div class="footer">
         <p>VSR Trading Simulation | Auto-refresh every 60 seconds</p>
         <p>{{ description }}</p>
@@ -584,7 +607,11 @@ def create_dashboard_app(sim_id: str, config: Dict) -> Flask:
 
             # Positions and trades
             positions=positions,
-            recent_trades=closed_trades
+            recent_trades=closed_trades,
+
+            # Strategy rules
+            entry_rules=sim_config.get('strategy_rules', {}).get('entry', ['No entry rules defined']),
+            exit_rules=sim_config.get('strategy_rules', {}).get('exit', ['No exit rules defined'])
         )
 
     @app.route('/api/summary')
