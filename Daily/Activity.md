@@ -1,5 +1,36 @@
 # Activity Log
 
+## 2025-12-29 11:35 IST - Claude
+**Created TD MA II Filter Dashboard (Port 3005)**
+
+**Purpose:**
+- Filter VSR alerts using Tom DeMark MA II Blue conditions
+- Show only tickers where both Fast and Slow MAs are rising (Blue)
+- Identify entries where Fast MA > Slow MA (entry valid)
+
+**New File Created:**
+- `Daily/dashboards/td_ma2_filter_dashboard.py` - Dashboard at port 3005
+
+**TD MA II Logic (from PineScript):**
+- **MA2 Fast (3-SMA)**: Blue when `smaFast - smaFast[2] >= 0` (rising over 2 bars)
+- **MA2 Slow (34-SMA)**: Blue when `smaSlow - smaSlow[1] >= 0` (rising over 1 bar)
+- **Entry Valid**: Both Blue AND Fast > Slow
+
+**Startup Scripts Updated:**
+- `Daily/refresh_token_services.sh` - Added dashboard startup and port checks
+- `Daily/pre_market_setup_robust.sh` - Added verification and URLs
+
+**Dashboard Features:**
+- Fetches VSR tickers from localhost:3001
+- Calculates TD MA II Blue status using historical daily data
+- Shows "Entry Valid" tickers (both MAs blue + fast > slow)
+- Shows "Both Blue" tickers (both MAs rising)
+- Auto-refreshes every 60 seconds
+
+**Access:** http://localhost:3005
+
+---
+
 ## 2025-12-27 18:29 IST - Claude
 **Created Telegram Alert Backtester for Simulation Comparison**
 

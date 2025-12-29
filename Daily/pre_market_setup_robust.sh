@@ -347,6 +347,12 @@ else
     log_message "⚠ Hourly Short Dashboard not detected on port 3004"
 fi
 
+if lsof -i :3005 | grep LISTEN > /dev/null 2>&1; then
+    log_message "✓ TD MA II Filter Dashboard running on port 3005"
+else
+    log_message "⚠ TD MA II Filter Dashboard not detected on port 3005"
+fi
+
 if lsof -i :2002 | grep LISTEN > /dev/null 2>&1; then
     log_message "✓ PDH Breakout Tracker running on port 2002"
 else
@@ -421,9 +427,10 @@ log_message "========================================="
 log_message ""
 log_message "Dashboard URLs:"
 log_message "  VSR Dashboard: http://localhost:3001"
-log_message "  Hourly Tracker: http://localhost:3002" 
+log_message "  Hourly Tracker: http://localhost:3002"
 log_message "  Short Momentum: http://localhost:3003"
 log_message "  Hourly Short: http://localhost:3004"
+log_message "  TD MA II Filter: http://localhost:3005"
 log_message "  Market Breadth: http://localhost:8080"
 log_message ""
 log_message "Log file: ${LOG_FILE}"
@@ -443,6 +450,7 @@ echo "{
         \"hourly_tracker\": \"http://localhost:3002\",
         \"short_momentum\": \"http://localhost:3003\",
         \"hourly_short\": \"http://localhost:3004\",
+        \"td_ma2_filter\": \"http://localhost:3005\",
         \"pdh_breakout\": \"http://localhost:2002\",
         \"market_breadth\": \"http://localhost:8080\"
     }
