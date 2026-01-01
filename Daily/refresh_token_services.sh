@@ -272,29 +272,51 @@ else
     print_status "WARNING" "Alert Volume Tracker may not be running on port 2002"
 fi
 
-# Step 9: Force initial data generation
+# Step 9: Restart Simulations
 log_message ""
-log_message "Step 9: Forcing initial data generation"
+log_message "Step 9: Restarting Simulations"
+
+SIMULATIONS_DIR="${DAILY_DIR}/Simulations"
+if [ -f "${SIMULATIONS_DIR}/start_simulations.sh" ]; then
+    cd "${SIMULATIONS_DIR}"
+    ./start_simulations.sh > /dev/null 2>&1
+    sleep 3
+    sim_count=$(pgrep -f "simulation_[0-9]\.py" | wc -l | tr -d ' ')
+    if [ "$sim_count" -gt 0 ]; then
+        print_status "SUCCESS" "Simulations restarted (${sim_count} runners active)"
+    else
+        print_status "WARNING" "Simulations may not have started properly"
+    fi
+    cd "${DAILY_DIR}"
+else
+    print_status "WARNING" "Simulations start script not found"
+fi
+
+# Step 10: Force initial data generation
+log_message ""
+log_message "Step 10: Forcing initial data generation"
 
 # Run a VSR scan to populate data
 python3 scanners/VSR_Momentum_Scanner.py -u Sai > /dev/null 2>&1 &
 print_status "SUCCESS" "Initiated VSR scan for data population"
 
-# Step 10: Final verification
+# Step 11: Final verification
 log_message ""
-log_message "Step 10: Final service verification"
+log_message "Step 11: Final service verification"
 sleep 5
 
 # Count running services
 telegram_count=$(pgrep -f "telegram" | wc -l)
 tracker_count=$(pgrep -f "tracker_service" | wc -l)
-dashboard_count=$(lsof -i :3001,:3002,:3003,:3004,:3005,:2002 | grep LISTEN | wc -l)
+dashboard_count=$(lsof -i :3001,:3002,:3003,:3004,:3005,:2002 2>/dev/null | grep LISTEN | wc -l)
+simulation_count=$(pgrep -f "simulation_[0-9]\.py" | wc -l)
 
 log_message "========================================="
 log_message "Token Refresh Complete"
 log_message "Telegram Services: ${telegram_count} running"
 log_message "Tracker Services: ${tracker_count} running"
 log_message "Dashboards: ${dashboard_count} running"
+log_message "Simulations: ${simulation_count} running"
 log_message "========================================="
 
 print_status "SUCCESS" "All services restarted with new token"
@@ -306,5 +328,11 @@ echo "  Short Momentum:        http://localhost:3003"
 echo "  Hourly Short:          http://localhost:3004"
 echo "  TD MA II Filter:       http://localhost:3005"
 echo "  Alert Volume Tracker:  http://localhost:2002"
+echo ""
+echo "Simulation Dashboards:"
+echo "  Sim 1 (MA2 2-Tier):    http://localhost:4001"
+echo "  Sim 2 (Delta CVD):     http://localhost:4002"
+echo "  Sim 5 (TickFlow 1K):   http://localhost:4005"
+echo "  Sim 6 (TD MA2 Filter): http://localhost:4006"
 echo ""
 echo "Check logs at: ${LOG_FILE}"

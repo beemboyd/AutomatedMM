@@ -31,9 +31,9 @@ class KeltnerChannelCalculator:
         self._cache = {}  # Cache KC values by ticker
         self._cache_timestamp = {}  # Track when cache was updated
 
-    def _init_kite(self):
-        """Initialize Kite connection"""
-        if self.kite is None:
+    def _init_kite(self, force_refresh: bool = False):
+        """Initialize Kite connection. Set force_refresh=True to reload credentials."""
+        if self.kite is None or force_refresh:
             config = configparser.ConfigParser()
             config_path = Path(__file__).parent.parent.parent / 'config.ini'
             config.read(config_path)
@@ -68,7 +68,7 @@ class KeltnerChannelCalculator:
             logger.warning(f"Could not get instrument token for {ticker}: {e}")
         return None
 
-    def _fetch_daily_data(self, ticker: str, days: int = 50) -> Optional[pd.DataFrame]:
+    def _fetch_daily_data(self, ticker: str, days: int = 50, retry_on_token_error: bool = True) -> Optional[pd.DataFrame]:
         """Fetch daily OHLC data for a ticker"""
         self._init_kite()
         try:
@@ -99,6 +99,12 @@ class KeltnerChannelCalculator:
             return df
 
         except Exception as e:
+            error_str = str(e).lower()
+            # Retry with fresh credentials if token error
+            if retry_on_token_error and ('invalid token' in error_str or 'access_token' in error_str):
+                logger.warning(f"Token error for {ticker}, refreshing credentials...")
+                self._init_kite(force_refresh=True)
+                return self._fetch_daily_data(ticker, days, retry_on_token_error=False)
             logger.error(f"Error fetching daily data for {ticker}: {e}")
             return None
 

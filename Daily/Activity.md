@@ -1,5 +1,136 @@
 # Activity Log
 
+## 2026-01-01 10:50 IST - Claude
+**Added Auto-Refresh Token Handling for Simulations**
+
+**Changes:**
+1. **refresh_token_services.sh** - Added Step 9 to restart simulations automatically when token is refreshed
+   - Calls `Simulations/start_simulations.sh` after other services restart
+   - Adds simulation count to final summary
+   - Adds simulation dashboard URLs to output
+
+2. **Simulations/core/psar_calculator.py** - Added token refresh on error
+   - `_init_kite(force_refresh=True)` parameter to reload credentials
+   - `_fetch_data()` now retries with fresh token on "invalid token" errors
+
+3. **Simulations/core/keltner_calculator.py** - Added token refresh on error
+   - Same fix as PSAR calculator for consistency
+
+**Impact:**
+- Running `./Daily/refresh_token_services.sh` now automatically restarts simulations with the new token
+- Simulations can self-heal if they encounter stale token errors
+
+---
+
+## 2025-12-31 14:51 IST - Claude
+**Modified Simulations 5 & 6 with New Signal Sources and MA2 Crossover Exit**
+
+**Purpose:**
+- Reconfigure Sim 5 to use TickFlow 1K tick section signals (port 6063)
+- Reconfigure Sim 6 to use TD MA2 Filter signals (port 3005)
+- Both simulations now exit when TD MA2 Fast < TD MA2 Slow
+
+**Files Modified:**
+- `Simulations/runners/simulation_5.py` - TickFlow 1K + MA2 Crossover Exit
+- `Simulations/runners/simulation_6.py` - TD MA2 Filter + MA2 Crossover Exit
+- `Simulations/core/signal_listener.py` - Added TickflowSignalListener class
+- `Simulations/config/simulation_config.json` - Updated sim_5 and sim_6 configs
+- `/Users/maverick/PycharmProjects/TBT_India_TS/Tick/tickflow_dashboard.py` - Added `/api/1k-tickers` endpoint
+
+**Simulation 5 (Port 4005) - TickFlow 1K + MA2 Crossover Exit:**
+- **Signal Source**: TickFlow Dashboard 1K tick section (http://localhost:6063/api/1k-tickers)
+- **Entry Criteria**: RED (CVD MA50) > 0 & WM > 0 & WM > 9EMA(WM)
+- **Trading Start**: 9:30 AM on weekdays only
+- **Exit**: TD MA2 Fast (3-SMA) closes below TD MA2 Slow (34-SMA)
+- **Stop Loss**: Keltner Channel Lower (initial protection)
+- **Charges**: 0.10% per leg
+
+**Simulation 6 (Port 4006) - TD MA2 Filter + MA2 Crossover Exit:**
+- **Signal Source**: TD MA2 Filter Dashboard (http://localhost:3005/api/filtered-tickers)
+- **Entry Criteria**: Both MA2 Fast and Slow Blue with Fast > Slow
+- **Exit**: TD MA2 Fast (3-SMA) closes below TD MA2 Slow (34-SMA)
+- **Stop Loss**: Keltner Channel Lower (initial protection)
+- **Charges**: 0.10% per leg
+
+**API Endpoint Added to TickFlow Dashboard:**
+```python
+@server.route('/api/1k-tickers')
+def api_1k_tickers():
+    """Returns tickers from 1K tick section (RED>0 & WM>0 & WM>9EMA)"""
+```
+
+**Deployment Status:**
+- Both simulations reset and running successfully
+- Sim 5: Fetching from TickFlow 1K (0 signals at market close)
+- Sim 6: Opened 9 positions (INDUSTOWER, CHAMBLFERT, CRAFTSMAN, GRAPHITE, FORCEMOT, NTPC, GODREJCP, NESTLEIND, EPL)
+
+---
+
+## 2025-12-30 15:45 IST - Claude
+**Created Simulation 7: TD MA II Filter + 2-Tier Exit (Port 4007)**
+
+**Purpose:**
+- New simulation using TD MA II Filter Dashboard (3005) as signal source
+- Same 2-tier exit strategy as Sim 1 (MA2 Fast/Slow crossover)
+- Skips exhausted tickers (EXHAUSTED, CONFIRMED levels)
+
+**Files Created/Modified:**
+- `Simulations/runners/simulation_7.py` - New simulation runner
+- `Simulations/core/signal_listener.py` - Added TDMA2FilterSignalListener class
+- `Simulations/config/simulation_config.json` - Added sim_7 configuration
+
+**Strategy Rules:**
+- **Entry**: TD MA II Filter entry_valid tickers (Both Blue + Fast > Slow)
+- **Exit**:
+  - Tranche 1 (75%): MA2 Fast closes below MA2 Slow
+  - Tranche 2 (25%): MA2 Slow turns red (falling)
+- **Stop Loss**: Keltner Channel Lower (initial protection)
+- **Charges**: 0.10% per leg
+- **Can Hold Overnight**: Yes
+
+**Initial Deployment (15:50 IST):**
+- 20 positions opened
+- Total Invested: ₹99,77,816
+- Cash Remaining: ₹12,206
+- Daily P&L: +₹6,317
+- Tickers: JMFINANCIL, ICICIPRULI, HONASA, M&MFIN, JSL, ADANIENSOL, HAPPYFORGE, GRASIM, FORCEMOT, AUBANK, GODREJCP, MSUMI, NYKAA, IIFL, CANBK, NATIONALUM, NMDC, ASHOKLEY, ABCAPITAL, EMAMILTD
+
+**Dashboard URL:** http://localhost:4007
+
+---
+
+## 2025-12-29 12:15 IST - Claude
+**Added TD Exhaustion Detection to TD MA II Filter Dashboard (Port 3005)**
+
+**Purpose:**
+- Detect Tom DeMark exhaustion signals to identify overextended trends
+- Warn when tickers are approaching or at exhaustion levels
+
+**Exhaustion Stack Implemented:**
+1. **TD Setup 9**: Close > Close[4] for 9 consecutive bars → MATURING
+2. **TD Countdown**: After Setup 9, count bars where Close >= High[2] (non-consecutive)
+   - Countdown 11-12 → VULNERABLE
+   - Countdown 13 → EXHAUSTED
+3. **Confirmation Signals**:
+   - TD MA I failure (5-SMA of lows not active)
+   - Stall detection (range compression)
+   - TDST Support broken → CONFIRMED exhaustion
+
+**Data Displayed:**
+- Exhaustion Level: NONE, MATURING, VULNERABLE, EXHAUSTED, CONFIRMED
+- Setup progress (X/9)
+- Countdown progress (X/13)
+- TD MA I status (Active/Failed)
+- TDST Support level and break status
+- Exhaustion signals list
+
+**Current Findings (12:16 IST):**
+- HINDCOPPER: MATURING (Setup 9/9, CD 2/13)
+- DEEPAKNTR: MATURING (Setup 9/9, CD 1/13)
+- Several tickers building setups (6/9, 5/9)
+
+---
+
 ## 2025-12-29 11:35 IST - Claude
 **Created TD MA II Filter Dashboard (Port 3005)**
 
