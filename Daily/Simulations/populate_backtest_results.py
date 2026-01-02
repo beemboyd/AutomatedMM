@@ -204,7 +204,9 @@ def main():
     base_dir = Path(__file__).parent.parent / "analysis" / "Efficiency"
 
     # Find latest backtest files (check multiple patterns for Sim 1)
-    sim1_files = list(base_dir.glob("Backtest_Sim1_TD_Tranche_*.xlsx"))
+    sim1_files = list(base_dir.glob("Backtest_Sim1_MA2_Crossover_*.xlsx"))
+    if not sim1_files:
+        sim1_files = list(base_dir.glob("Backtest_Sim1_TD_Tranche_*.xlsx"))
     if not sim1_files:
         sim1_files = list(base_dir.glob("Backtest_Sim1_TD_Strategy_*.xlsx"))
     if not sim1_files:

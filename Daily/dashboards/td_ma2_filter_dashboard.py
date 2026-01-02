@@ -128,9 +128,203 @@ def fetch_historical_data(ticker: str, days: int = 60) -> Optional[pd.DataFrame]
         return None
 
 
+def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
+    """
+    Calculate full Tom DeMark exhaustion stack:
+
+    1. TD Setup 9 → maturity (not exhaustion)
+    2. Countdown >= 11 → vulnerability
+    3. Countdown 13 → exhaustion condition
+    4. Stall + TD MA failure → exhaustion confirmation
+    5. TDST break → trend invalidation
+
+    Also calculates TD MA I and TD MA II status for confirmation.
+    """
+    result = {
+        # TD Setup
+        'setup_count': 0,
+        'setup_complete': False,
+        'bars_since_setup9': 0,
+
+        # TD Countdown
+        'countdown': 0,
+        'countdown_complete': False,
+
+        # TD MA I (5-SMA of lows, triggered when low > highest low of 12 bars)
+        'td_ma1_active': False,
+        'td_ma1_value': 0.0,
+
+        # TDST Support
+        'tdst_support': 0.0,
+        'tdst_active': False,
+        'tdst_broken': False,
+
+        # Stall detection
+        'stall_detected': False,
+        'range_compression': False,
+
+        # Exhaustion assessment
+        'exhaustion_level': 'NONE',  # NONE, MATURING, VULNERABLE, EXHAUSTED, CONFIRMED
+        'exhaustion_signals': []
+    }
+
+    if df is None or len(df) < 20:
+        return result
+
+    try:
+        # ========== TD SETUP 9 (Bullish) ==========
+        # Condition: Close > Close[4] for 9 consecutive bars
+        df['setup_cond'] = df['close'] > df['close'].shift(4)
+
+        setup_count = 0
+        setup_complete = False
+        setup_bar9_idx = None
+        setup_lowest_low = 0.0
+
+        for i in range(4, len(df)):
+            if df['setup_cond'].iloc[i]:
+                setup_count += 1
+                if setup_count == 1:
+                    setup_lowest_low = df['low'].iloc[i]
+                elif setup_count <= 9:
+                    setup_lowest_low = min(setup_lowest_low, df['low'].iloc[i])
+                if setup_count == 9:
+                    setup_complete = True
+                    setup_bar9_idx = i
+            else:
+                setup_count = 0
+                setup_lowest_low = 0.0
+
+        result['setup_count'] = min(setup_count, 9)
+        result['setup_complete'] = setup_complete
+
+        # ========== TD COUNTDOWN 13 (Bullish) ==========
+        # After Setup 9, count bars where Close >= High[2]
+        # Bars don't need to be consecutive
+        countdown = 0
+        if setup_bar9_idx is not None:
+            result['bars_since_setup9'] = len(df) - 1 - setup_bar9_idx
+
+            for i in range(setup_bar9_idx + 1, len(df)):
+                if i >= 2 and df['close'].iloc[i] >= df['high'].iloc[i-2]:
+                    countdown += 1
+                    if countdown >= 13:
+                        break
+
+        result['countdown'] = countdown
+        result['countdown_complete'] = countdown >= 13
+
+        # ========== TD MA I (Bullish) ==========
+        # Trigger: Low > Lowest low of prior 12 bars
+        # Value: 5-bar SMA of lows
+        # Duration: 4 bars, extends if re-triggered
+        df['lowest_low_12'] = df['low'].shift(1).rolling(window=12).min()
+        df['td_ma1_trigger'] = df['low'] > df['lowest_low_12']
+        df['td_ma1_sma'] = df['low'].rolling(window=5).mean()
+
+        # Check if TD MA I is currently active (within 4 bars of last trigger)
+        td_ma1_active = False
+        td_ma1_value = 0.0
+        bars_remaining = 0
+
+        for i in range(max(12, len(df) - 10), len(df)):  # Check last 10 bars
+            if df['td_ma1_trigger'].iloc[i]:
+                bars_remaining = 4
+                td_ma1_value = float(df['td_ma1_sma'].iloc[i])
+            elif bars_remaining > 0:
+                bars_remaining -= 1
+
+        td_ma1_active = bars_remaining > 0
+        result['td_ma1_active'] = td_ma1_active
+        result['td_ma1_value'] = round(td_ma1_value, 2)
+
+        # ========== TDST SUPPORT ==========
+        # Lowest low of Setup bars 1-4
+        if setup_bar9_idx is not None and setup_bar9_idx >= 8:
+            setup_start = setup_bar9_idx - 8
+            setup_bar4 = setup_bar9_idx - 5
+            tdst_support = float(df['low'].iloc[setup_start:setup_bar4+1].min())
+            result['tdst_support'] = round(tdst_support, 2)
+            result['tdst_active'] = True
+
+            # Check if TDST is broken (close below support)
+            latest_close = float(df['close'].iloc[-1])
+            if latest_close < tdst_support:
+                result['tdst_broken'] = True
+                result['tdst_active'] = False
+
+        # ========== STALL DETECTION ==========
+        # Look for range compression and loss of directional progress
+        if len(df) >= 5:
+            recent_ranges = df['high'].iloc[-5:] - df['low'].iloc[-5:]
+            avg_recent_range = recent_ranges.mean()
+            prior_ranges = df['high'].iloc[-10:-5] - df['low'].iloc[-10:-5] if len(df) >= 10 else recent_ranges
+            avg_prior_range = prior_ranges.mean()
+
+            # Range compression: recent ranges < 70% of prior ranges
+            if avg_prior_range > 0 and avg_recent_range < avg_prior_range * 0.7:
+                result['range_compression'] = True
+
+            # Check for overlapping closes (stall)
+            recent_closes = df['close'].iloc[-5:]
+            close_range = recent_closes.max() - recent_closes.min()
+            if avg_recent_range > 0 and close_range < avg_recent_range * 0.5:
+                result['stall_detected'] = True
+
+        # ========== EXHAUSTION ASSESSMENT ==========
+        signals = []
+
+        # Level 1: Maturing (Setup 9 complete)
+        if setup_complete:
+            signals.append("Setup 9 Complete")
+
+        # Level 2: Vulnerable (Countdown 11-12)
+        if countdown >= 11 and countdown < 13:
+            signals.append(f"Countdown {countdown}/13")
+
+        # Level 3: Exhausted (Countdown 13)
+        if countdown >= 13:
+            signals.append("Countdown 13 Complete")
+
+        # Confirmation signals
+        if not td_ma1_active and setup_complete:
+            signals.append("TD MA I Failed")
+
+        if result['stall_detected']:
+            signals.append("Stall Detected")
+
+        if result['range_compression']:
+            signals.append("Range Compression")
+
+        if result['tdst_broken']:
+            signals.append("TDST Broken")
+
+        result['exhaustion_signals'] = signals
+
+        # Determine exhaustion level
+        if result['tdst_broken']:
+            result['exhaustion_level'] = 'CONFIRMED'
+        elif countdown >= 13 and (not td_ma1_active or result['stall_detected']):
+            result['exhaustion_level'] = 'EXHAUSTED'
+        elif countdown >= 13:
+            result['exhaustion_level'] = 'EXHAUSTED'
+        elif countdown >= 11:
+            result['exhaustion_level'] = 'VULNERABLE'
+        elif setup_complete:
+            result['exhaustion_level'] = 'MATURING'
+        else:
+            result['exhaustion_level'] = 'NONE'
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error calculating exhaustion: {e}")
+        return result
+
+
 def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
     """
-    Calculate TD MA II Blue conditions
+    Calculate TD MA II Blue conditions + Exhaustion status
 
     From PineScript:
     - smaFast = ta.sma(close, 3)
@@ -142,7 +336,7 @@ def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
     - Entry Valid: Fast Blue AND Slow Blue AND Fast > Slow
 
     Returns:
-        Dict with MA2 state and values
+        Dict with MA2 state, values, and exhaustion status
     """
     if df is None or len(df) < 35:
         return {
@@ -186,6 +380,9 @@ def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
         pct_above_fast = float((close - ma2_fast) / ma2_fast * 100) if ma2_fast > 0 else 0.0
         pct_above_slow = float((close - ma2_slow) / ma2_slow * 100) if ma2_slow > 0 else 0.0
 
+        # Calculate exhaustion status
+        exhaustion = calculate_td_exhaustion(df)
+
         return {
             'valid': True,
             'close': round(float(close), 2),
@@ -199,7 +396,16 @@ def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
             'fast_above_slow': fast_above_slow,
             'entry_valid': entry_valid,
             'pct_above_fast': round(pct_above_fast, 2),
-            'pct_above_slow': round(pct_above_slow, 2)
+            'pct_above_slow': round(pct_above_slow, 2),
+            # Exhaustion data
+            'setup_count': exhaustion['setup_count'],
+            'countdown': exhaustion['countdown'],
+            'exhaustion_level': exhaustion['exhaustion_level'],
+            'exhaustion_signals': exhaustion['exhaustion_signals'],
+            'td_ma1_active': exhaustion['td_ma1_active'],
+            'tdst_support': exhaustion['tdst_support'],
+            'tdst_broken': exhaustion['tdst_broken'],
+            'stall_detected': exhaustion['stall_detected']
         }
 
     except Exception as e:
@@ -459,6 +665,37 @@ HTML_TEMPLATE = '''
         .ma-badge.blue-bg { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
         .ma-badge.red-bg { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
         .ma-badge.green-bg { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+        .ma-badge.yellow-bg { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+        .ma-badge.orange-bg { background: rgba(249, 115, 22, 0.2); color: #f97316; border: 1px solid #f97316; }
+        .ma-badge.purple-bg { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid #a855f7; }
+
+        .exhaustion-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #444;
+        }
+        .exhaustion-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            font-weight: bold;
+        }
+        .exhaustion-none { background: rgba(107, 114, 128, 0.2); color: #6b7280; border: 1px solid #6b7280; }
+        .exhaustion-maturing { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
+        .exhaustion-vulnerable { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+        .exhaustion-exhausted { background: rgba(249, 115, 22, 0.2); color: #f97316; border: 1px solid #f97316; }
+        .exhaustion-confirmed { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
+
+        .signal-tag {
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 0.65em;
+            background: rgba(255, 255, 255, 0.1);
+            color: #999;
+        }
 
         .refresh-btn {
             background: #4ecca3;
@@ -509,10 +746,34 @@ HTML_TEMPLATE = '''
     <script>
         let currentData = null;
 
+        function getExhaustionClass(level) {
+            const classes = {
+                'NONE': 'exhaustion-none',
+                'MATURING': 'exhaustion-maturing',
+                'VULNERABLE': 'exhaustion-vulnerable',
+                'EXHAUSTED': 'exhaustion-exhausted',
+                'CONFIRMED': 'exhaustion-confirmed'
+            };
+            return classes[level] || 'exhaustion-none';
+        }
+
+        function getExhaustionIcon(level) {
+            const icons = {
+                'NONE': '',
+                'MATURING': '📊',
+                'VULNERABLE': '⚠️',
+                'EXHAUSTED': '🔥',
+                'CONFIRMED': '🛑'
+            };
+            return icons[level] || '';
+        }
+
         function createTickerElement(ticker) {
             const fastColor = ticker.fast_blue ? 'blue' : 'red';
             const slowColor = ticker.slow_blue ? 'blue' : 'red';
             const entryColor = ticker.entry_valid ? 'green' : 'yellow';
+            const exhaustionLevel = ticker.exhaustion_level || 'NONE';
+            const exhaustionSignals = ticker.exhaustion_signals || [];
 
             return `
                 <div class="ticker-item">
@@ -523,6 +784,15 @@ HTML_TEMPLATE = '''
                             <span class="ma-badge ${ticker.slow_blue ? 'blue-bg' : 'red-bg'}">Slow ${ticker.slow_blue ? 'Blue' : 'Red'}</span>
                         </div>
                         ${ticker.entry_valid ? '<span class="ma-badge green-bg" style="margin-top:4px;">ENTRY VALID</span>' : ''}
+                        ${exhaustionLevel !== 'NONE' ? `
+                        <div class="exhaustion-row">
+                            <span class="exhaustion-badge ${getExhaustionClass(exhaustionLevel)}">
+                                ${getExhaustionIcon(exhaustionLevel)} ${exhaustionLevel}
+                            </span>
+                            ${ticker.countdown > 0 ? `<span class="signal-tag">CD: ${ticker.countdown}/13</span>` : ''}
+                            ${ticker.setup_count > 0 ? `<span class="signal-tag">Setup: ${ticker.setup_count}/9</span>` : ''}
+                        </div>
+                        ` : ''}
                     </div>
                     <div class="ticker-details">
                         <div class="detail-item">
@@ -550,14 +820,19 @@ HTML_TEMPLATE = '''
                             <span class="detail-value ${slowColor}">₹${ticker.ma2_slow?.toFixed(2) || 'N/A'}</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-label">vs Slow</span>
-                            <span class="detail-value ${ticker.pct_above_slow > 0 ? 'green' : 'red'}">${ticker.pct_above_slow?.toFixed(1)}%</span>
+                            <span class="detail-label">TD MA I</span>
+                            <span class="detail-value ${ticker.td_ma1_active ? 'green' : 'red'}">${ticker.td_ma1_active ? 'Active' : 'Failed'}</span>
                         </div>
                         <div class="detail-item">
-                            <span class="detail-label">Liq</span>
-                            <span class="detail-value">${ticker.liquidity_grade || 'F'}</span>
+                            <span class="detail-label">TDST</span>
+                            <span class="detail-value ${ticker.tdst_broken ? 'red' : ''}">${ticker.tdst_support > 0 ? '₹' + ticker.tdst_support : 'N/A'}${ticker.tdst_broken ? ' ❌' : ''}</span>
                         </div>
                     </div>
+                    ${exhaustionSignals.length > 0 ? `
+                    <div style="grid-column: 1 / -1; margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
+                        ${exhaustionSignals.map(sig => `<span class="signal-tag">${sig}</span>`).join('')}
+                    </div>
+                    ` : ''}
                 </div>
             `;
         }

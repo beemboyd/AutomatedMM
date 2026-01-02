@@ -439,17 +439,73 @@ class TelegramAlertBacktester:
         self.price_cache[cache_key] = result
         return result
 
+    def calculate_ma2_for_date(self, ticker: str, target_date: str) -> Optional[Dict]:
+        """
+        Calculate MA2 Fast/Slow crossover data for a specific date
+
+        Entry: Both MA2 Fast and MA2 Slow are "blue" (price > both MAs)
+        Exit: MA2 Fast < MA2 Slow (bearish crossover)
+
+        Args:
+            ticker: Stock symbol
+            target_date: Date string in YYYY-MM-DD format
+
+        Returns:
+            Dict with ma2_fast, ma2_slow, entry_valid (both blue), exit_signal
+        """
+        cache_key = f"ma2_{ticker}_{target_date}"
+        if cache_key in self.price_cache:
+            return self.price_cache[cache_key]
+
+        target_dt = datetime.strptime(target_date, '%Y-%m-%d')
+        from_date = (target_dt - timedelta(days=60)).strftime('%Y-%m-%d')
+        to_date = (target_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+
+        df = self.get_historical_data(ticker, from_date, to_date)
+        if df is None or len(df) < 25:
+            return None
+
+        # Calculate MA2 crossover indicators
+        df = self.td_calculator.calculate_ma2_crossover(df)
+
+        if target_date not in df.index:
+            return None
+
+        row = df.loc[target_date]
+        result = {
+            'close': row['close'],
+            'low': row['low'],
+            'high': row['high'],
+            'ma2_fast': float(row.get('ma2_fast', 0.0)),
+            'ma2_slow': float(row.get('ma2_slow', 0.0)),
+            'ma2_fast_blue': bool(row.get('ma2_fast_blue', False)),
+            'ma2_slow_blue': bool(row.get('ma2_slow_blue', False)),
+            'ma2_both_blue': bool(row.get('ma2_both_blue', False)),
+            'ma2_fast_above_slow': bool(row.get('ma2_fast_above_slow', False)),
+            'ma2_entry_valid': bool(row.get('ma2_entry_valid', False)),  # Entry: Slow blue + Fast above Slow + Fast blue
+            'ma2_fast_below_slow': bool(row.get('ma2_fast_below_slow', False)),
+            'ma2_tranche1_exit': bool(row.get('ma2_tranche1_exit', False)),  # Tranche 1 (75%): Fast < Slow
+            'ma2_slow_red': bool(row.get('ma2_slow_red', False)),
+            'ma2_tranche2_exit': bool(row.get('ma2_tranche2_exit', False)),  # Tranche 2 (25%): Slow turns red
+            'ma2_exit_signal': bool(row.get('ma2_exit_signal', False))  # Full exit: Slow turns red
+        }
+
+        self.price_cache[cache_key] = result
+        return result
+
     def run_simulation(self, exit_type: str) -> Tuple[List[OpenPosition], List[ClosedTrade], Dict]:
         """
         Run day-by-day simulation
 
         Args:
-            exit_type: 'td_strategy' (3-tier tranche), 'delta_cvd', 'kc_lower' or 'kc_middle'
+            exit_type: 'ma2_crossover', 'delta_cvd', 'kc_lower' or 'kc_middle'
 
         Returns:
             Tuple of (open_positions, closed_trades, portfolio_summary)
         """
-        if exit_type == 'td_strategy':
+        if exit_type == 'ma2_crossover':
+            sim_name = "Sim 1: MA2 Fast/Slow 2-Tier Exit"
+        elif exit_type == 'td_strategy':
             sim_name = "Sim 1: TD 3-Tier Tranche Exit"
         elif exit_type == 'delta_cvd':
             sim_name = "Sim 2: Delta CVD 2-Tier Exit (75% TD MA I, 25% CVD)"
@@ -497,7 +553,123 @@ class TelegramAlertBacktester:
                 current_low = kc_data['low']
                 current_close = kc_data['close']
 
-                if exit_type == 'td_strategy':
+                if exit_type == 'ma2_crossover':
+                    # MA2 Crossover Strategy: 2-Tier Exit System
+                    # Tranche 1 (75%): MA2 Fast closes below MA2 Slow
+                    # Tranche 2 (25%): MA2 Slow turns red (falling)
+                    ma2_data = self.calculate_ma2_for_date(ticker, date_str)
+                    if ma2_data is None:
+                        continue
+
+                    entry_dt = datetime.strptime(pos.entry_date, '%Y-%m-%d')
+                    exit_dt = datetime.strptime(date_str, '%Y-%m-%d')
+                    days_held = (exit_dt - entry_dt).days
+
+                    # Check Tranche 1 exit (75%) - MA2 Fast < MA2 Slow
+                    if not pos.tranche1_exited and pos.position_state == 1:
+                        if ma2_data.get('ma2_tranche1_exit', False):
+                            # Exit 75% of position
+                            tranche1_qty = int(pos.original_quantity * 0.75)
+                            if tranche1_qty > 0:
+                                exit_price = current_close
+                                gross_pnl = (exit_price - pos.entry_price) * tranche1_qty
+                                entry_charges = (pos.entry_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
+                                exit_charges = (exit_price * tranche1_qty) * (self.charges_per_leg_pct / 100)
+                                net_pnl = gross_pnl - entry_charges - exit_charges
+
+                                closed_trades.append(ClosedTrade(
+                                    ticker=ticker,
+                                    entry_date=pos.entry_date,
+                                    entry_price=pos.entry_price,
+                                    exit_date=date_str,
+                                    exit_price=round(exit_price, 2),
+                                    quantity=tranche1_qty,
+                                    position_value=round(pos.original_value * 0.75, 2),
+                                    pnl=round(net_pnl, 2),
+                                    pnl_pct=round((net_pnl / (pos.original_value * 0.75)) * 100, 2),
+                                    exit_reason='MA2_FAST_BELOW_SLOW',
+                                    days_held=days_held,
+                                    kc_lower_at_entry=pos.kc_lower,
+                                    kc_middle_at_entry=pos.kc_middle,
+                                    tranche="TRANCHE_1"
+                                ))
+
+                                cash += (exit_price * tranche1_qty) - exit_charges
+                                invested -= pos.original_value * 0.75
+                                total_charges += exit_charges
+                                pos.tranche1_exited = True
+                                pos.tranche1_exit_date = date_str
+                                pos.tranche1_exit_price = exit_price
+                                pos.tranche1_pnl = net_pnl
+                                pos.tranche1_reason = 'MA2_FAST_BELOW_SLOW'
+                                pos.quantity = pos.original_quantity - tranche1_qty
+                                pos.position_value = pos.entry_price * pos.quantity
+                                pos.position_state = 2  # Runner (25%)
+
+                    # Check Tranche 2 exit (25%) - MA2 Slow turns red
+                    if pos.tranche1_exited and pos.position_state == 2 and pos.quantity > 0:
+                        if ma2_data.get('ma2_tranche2_exit', False):
+                            tranche2_qty = pos.quantity
+                            exit_price = current_close
+                            gross_pnl = (exit_price - pos.entry_price) * tranche2_qty
+                            entry_charges = (pos.entry_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
+                            exit_charges = (exit_price * tranche2_qty) * (self.charges_per_leg_pct / 100)
+                            net_pnl = gross_pnl - entry_charges - exit_charges
+
+                            closed_trades.append(ClosedTrade(
+                                ticker=ticker,
+                                entry_date=pos.entry_date,
+                                entry_price=pos.entry_price,
+                                exit_date=date_str,
+                                exit_price=round(exit_price, 2),
+                                quantity=tranche2_qty,
+                                position_value=round(pos.original_value * 0.25, 2),
+                                pnl=round(net_pnl, 2),
+                                pnl_pct=round((net_pnl / (pos.original_value * 0.25)) * 100, 2),
+                                exit_reason='MA2_SLOW_RED',
+                                days_held=days_held,
+                                kc_lower_at_entry=pos.kc_lower,
+                                kc_middle_at_entry=pos.kc_middle,
+                                tranche="TRANCHE_2"
+                            ))
+
+                            cash += (exit_price * tranche2_qty) - exit_charges
+                            invested -= pos.position_value
+                            total_charges += exit_charges
+                            pos.position_state = 4  # Flat
+                            positions_to_close.append(ticker)
+
+                    # Also check full exit if Slow turns red before tranche 1 exited
+                    elif not pos.tranche1_exited and ma2_data.get('ma2_tranche2_exit', False):
+                        # Exit 100% if Slow turns red before Fast crosses below Slow
+                        exit_price = current_close
+                        gross_pnl = (exit_price - pos.entry_price) * pos.quantity
+                        entry_charges = (pos.entry_price * pos.quantity) * (self.charges_per_leg_pct / 100)
+                        exit_charges = (exit_price * pos.quantity) * (self.charges_per_leg_pct / 100)
+                        net_pnl = gross_pnl - entry_charges - exit_charges
+
+                        closed_trades.append(ClosedTrade(
+                            ticker=ticker,
+                            entry_date=pos.entry_date,
+                            entry_price=pos.entry_price,
+                            exit_date=date_str,
+                            exit_price=round(exit_price, 2),
+                            quantity=pos.quantity,
+                            position_value=pos.position_value,
+                            pnl=round(net_pnl, 2),
+                            pnl_pct=round((net_pnl / pos.position_value) * 100, 2),
+                            exit_reason='MA2_SLOW_RED_FULL',
+                            days_held=days_held,
+                            kc_lower_at_entry=pos.kc_lower,
+                            kc_middle_at_entry=pos.kc_middle
+                        ))
+
+                        cash += (exit_price * pos.quantity) - exit_charges
+                        invested -= pos.position_value
+                        total_charges += exit_charges
+                        positions_to_close.append(ticker)
+
+                elif exit_type == 'td_strategy':
                     # TD Strategy: 3-Tier Tranche Exit System
                     td_data = self.calculate_td_for_date(ticker, date_str)
                     if td_data is None:
@@ -896,7 +1068,15 @@ class TelegramAlertBacktester:
                     tdst_support = 0.0
                     setup_lowest_low = 0.0
 
-                    if exit_type == 'td_strategy':
+                    if exit_type == 'ma2_crossover':
+                        # Sim 1: Both MA2 are blue (rising) AND Fast above Slow
+                        ma2_data = self.calculate_ma2_for_date(ticker, date_str)
+                        if ma2_data is None:
+                            continue
+                        if not ma2_data.get('ma2_entry_valid', False):
+                            continue  # Skip if entry conditions not met
+
+                    elif exit_type == 'td_strategy':
                         # Sim 1: TD MA I AND TD MA II both active
                         td_data = self.calculate_td_for_date(ticker, date_str)
                         if td_data is None:
@@ -934,7 +1114,9 @@ class TelegramAlertBacktester:
                     entry_charges = actual_value * (self.charges_per_leg_pct / 100)
 
                     # Determine stop loss based on strategy
-                    if exit_type == 'td_strategy':
+                    if exit_type == 'ma2_crossover':
+                        stop_loss = entry_price * 0.95  # 5% safety stop (primary exit is MA crossover)
+                    elif exit_type == 'td_strategy':
                         stop_loss = tdst_support
                     elif exit_type == 'delta_cvd':
                         stop_loss = entry_price * 0.95  # 5% default stop for CVD strategy
@@ -1149,12 +1331,12 @@ def main():
 
     today = datetime.now().strftime('%Y%m%d')
 
-    # Run Sim 1: TD Strategy (3-Tier Tranche Exit)
-    print("\n[1/2] Running Sim 1: TD 3-Tier Tranche Exit...")
-    print("       Entry: TD MA I + TD MA II active")
-    print("       Exit: 30% @ TD MA I breach, 45% @ TDST breach, 25% @ Countdown/Time")
-    open1, closed1, summary1 = backtester.run_simulation('td_strategy')
-    backtester.generate_report(open1, closed1, summary1, f"Backtest_Sim1_TD_Tranche_{today}.xlsx")
+    # Run Sim 1: MA2 Crossover Strategy with 2-Tier Exit
+    print("\n[1/2] Running Sim 1: MA2 Fast/Slow 2-Tier Exit...")
+    print("       Entry: MA2 Slow blue + MA2 Fast blue + Fast > Slow")
+    print("       Exit: 75% @ Fast < Slow, 25% @ Slow turns red")
+    open1, closed1, summary1 = backtester.run_simulation('ma2_crossover')
+    backtester.generate_report(open1, closed1, summary1, f"Backtest_Sim1_MA2_Crossover_{today}.xlsx")
 
     # Run Sim 2: Delta CVD Strategy with 2-Tier Exit
     print("\n[2/2] Running Sim 2: Delta CVD 2-Tier Exit...")
@@ -1168,7 +1350,7 @@ def main():
     print("BACKTEST RESULTS COMPARISON")
     print("=" * 70)
 
-    print(f"\n{'Metric':<25} {'Sim 1 (TD Tranche)':<20} {'Sim 2 (Delta CVD)':<20}")
+    print(f"\n{'Metric':<25} {'Sim 1 (MA2 Crossover)':<20} {'Sim 2 (Delta CVD)':<20}")
     print("-" * 65)
     print(f"{'Total Trades':<25} {summary1['total_trades']:<20} {summary2['total_trades']:<20}")
     print(f"{'Closed Trades':<25} {summary1['closed_trades']:<20} {summary2['closed_trades']:<20}")
@@ -1183,7 +1365,7 @@ def main():
 
     print("\n" + "-" * 65)
     if summary1['total_pnl'] > summary2['total_pnl']:
-        print(f"WINNER: Sim 1 (TD Tranche) by ₹{summary1['total_pnl'] - summary2['total_pnl']:,.0f}")
+        print(f"WINNER: Sim 1 (MA2 Crossover) by ₹{summary1['total_pnl'] - summary2['total_pnl']:,.0f}")
     elif summary2['total_pnl'] > summary1['total_pnl']:
         print(f"WINNER: Sim 2 (Delta CVD) by ₹{summary2['total_pnl'] - summary1['total_pnl']:,.0f}")
     else:

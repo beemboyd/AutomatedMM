@@ -2,7 +2,7 @@
     "global": {
         "initial_capital": 10000000,
         "position_size_pct": 5.0,
-        "max_positions": 20,
+        "max_positions": 25,
         "trading_start_time": "09:15",
         "trading_end_time": "15:30",
         "eod_close_time": "15:00",
@@ -14,25 +14,25 @@
     },
     "simulations": {
         "sim_1": {
-            "name": "TD 3-Tier Tranche Exit",
+            "name": "MA2 Fast/Slow 2-Tier Exit",
             "port": 4001,
             "enabled": true,
-            "description": "Tom DeMark based 3-tier exit strategy with tranched position management",
+            "description": "TD MA II based 2-tier exit strategy - Enter when Slow is blue and Fast closes above Slow",
             "direction": "long",
-            "sl_type": "td_strategy",
+            "sl_type": "ma2_crossover",
             "signal_source": "vsr_long",
             "signal_dashboard": "http://localhost:3001",
             "charges_per_leg_pct": 0.10,
             "can_hold_overnight": true,
             "strategy_rules": {
                 "entry": [
-                    "TD MA I active (Close > TD MA I)",
-                    "TD MA II active (Close > TD MA II)"
+                    "MA2 Slow (34-SMA) is blue (rising)",
+                    "MA2 Fast (3-SMA) is blue (rising)",
+                    "MA2 Fast closes above MA2 Slow"
                 ],
                 "exit": [
-                    "Tranche 1 (30%): Close < TD MA I OR Failed follow-through after Setup 9",
-                    "Tranche 2 (45%): Close < TDST Support OR Close < Setup bars 1-9 lowest low",
-                    "Tranche 3 (25%): Countdown >= 13 + Close < TD MA II, OR Higher low break, OR 30-day time stop"
+                    "Tranche 1 (75%): MA2 Fast closes below MA2 Slow",
+                    "Tranche 2 (25%): MA2 Slow turns red (falling)"
                 ]
             },
             "entry_filter": {
@@ -78,6 +78,17 @@
             "charges_per_leg_pct": 0.035,
             "can_hold_overnight": false,
             "eod_close_required": true,
+            "strategy_rules": {
+                "entry": [
+                    "Ticker appears in VSR Short Dashboard (port 3003)",
+                    "Negative momentum detected",
+                    "Score >= 50"
+                ],
+                "exit": [
+                    "Stop Loss: Keltner Channel Upper band (fixed)",
+                    "EOD: All positions closed by 3:00 PM (Intraday only)"
+                ]
+            },
             "entry_filter": {
                 "min_score": 50,
                 "min_momentum": -100
@@ -95,43 +106,116 @@
             "charges_per_leg_pct": 0.035,
             "can_hold_overnight": false,
             "eod_close_required": true,
+            "strategy_rules": {
+                "entry": [
+                    "Ticker appears in VSR Short Dashboard (port 3003)",
+                    "Negative momentum detected",
+                    "Score >= 50"
+                ],
+                "exit": [
+                    "Stop Loss: Parabolic SAR (dynamic, trails with price)",
+                    "PSAR parameters: Start=0.02, Increment=0.02, Max=0.2",
+                    "EOD: All positions closed by 3:00 PM (Intraday only)"
+                ]
+            },
             "entry_filter": {
                 "min_score": 50,
                 "min_momentum": -100
             }
         },
         "sim_5": {
-            "name": "Long Daily + KC Lower SL",
+            "name": "TickFlow 1K + MA2 Crossover Exit",
             "port": 4005,
             "enabled": true,
-            "description": "Long positions on DAILY timeframe with fixed Stop Loss at Keltner Channel Lower band",
+            "description": "Long positions from TickFlow 1K tick section (RED>0 & WM>0). Exit when TD MA2 Fast < TD MA2 Slow. Starts at 9:30 AM on weekdays.",
             "direction": "long",
-            "signal_type": "long_daily",
-            "sl_type": "kc_lower",
-            "signal_source": "vsr_long_daily",
-            "signal_dashboard": "http://localhost:3001",
-            "charges_per_leg_pct": 0.15,
+            "signal_type": "tickflow_1k",
+            "sl_type": "ma2_crossover",
+            "signal_source": "tickflow_1k",
+            "signal_dashboard": "http://localhost:6063",
+            "charges_per_leg_pct": 0.10,
             "can_hold_overnight": true,
+            "trading_start_time": "09:30",
+            "strategy_rules": {
+                "entry": [
+                    "Ticker appears in TickFlow 1K section (port 6063)",
+                    "RED (CVD MA50) > 0 (Bullish volume momentum)",
+                    "WM > 0 AND WM > 9EMA(WM) (Weis Wave momentum rising)",
+                    "Trading starts at 9:30 AM on weekdays"
+                ],
+                "exit": [
+                    "MA2 Crossover: TD MA2 Fast (3-SMA) closes below TD MA2 Slow (34-SMA)",
+                    "Initial Stop Loss: Keltner Channel Lower band (protection)"
+                ]
+            },
             "entry_filter": {
-                "min_score": 60,
-                "min_momentum": 3.0
+                "min_score": 0,
+                "min_momentum": 0
             }
         },
         "sim_6": {
-            "name": "Long Daily + PSAR Dynamic SL",
+            "name": "TD MA2 Filter + MA2 Crossover Exit",
             "port": 4006,
             "enabled": true,
-            "description": "Long positions on DAILY timeframe with dynamic Stop Loss using Parabolic SAR",
+            "description": "Long positions from TD MA2 Filter Dashboard (3005). Exit when TD MA2 Fast < TD MA2 Slow.",
             "direction": "long",
-            "signal_type": "long_daily",
-            "sl_type": "psar",
-            "signal_source": "vsr_long_daily",
-            "signal_dashboard": "http://localhost:3001",
-            "charges_per_leg_pct": 0.15,
+            "signal_type": "td_ma2_filter",
+            "sl_type": "ma2_crossover",
+            "signal_source": "td_ma2_filter",
+            "signal_dashboard": "http://localhost:3005",
+            "charges_per_leg_pct": 0.10,
             "can_hold_overnight": true,
+            "strategy_rules": {
+                "entry": [
+                    "Ticker in TD MA2 Filter Dashboard entry_valid category (port 3005)",
+                    "MA2 Slow (34-SMA) is blue (rising over 1 bar)",
+                    "MA2 Fast (3-SMA) is blue (rising over 2 bars)",
+                    "MA2 Fast > MA2 Slow (confirmed uptrend)",
+                    "Skips exhausted tickers (TD Countdown 13+)"
+                ],
+                "exit": [
+                    "MA2 Crossover: TD MA2 Fast (3-SMA) closes below TD MA2 Slow (34-SMA)",
+                    "Initial Stop Loss: Keltner Channel Lower band (protection)"
+                ]
+            },
             "entry_filter": {
-                "min_score": 60,
-                "min_momentum": 3.0
+                "min_score": 0,
+                "min_momentum": 0,
+                "require_entry_valid": true,
+                "skip_exhausted": true
+            }
+        },
+        "sim_7": {
+            "name": "TD MA II Filter + 2-Tier Exit",
+            "port": 4007,
+            "enabled": true,
+            "description": "Long positions from TD MA II Filter Dashboard (3005) - Entry when both MA2 Fast and Slow are Blue with Fast > Slow. Same exit strategy as Sim 1.",
+            "direction": "long",
+            "signal_type": "td_ma2_filter",
+            "sl_type": "ma2_crossover",
+            "signal_source": "td_ma2_filter",
+            "signal_dashboard": "http://localhost:3005",
+            "charges_per_leg_pct": 0.10,
+            "can_hold_overnight": true,
+            "strategy_rules": {
+                "entry": [
+                    "Ticker in TD MA II Filter Dashboard entry_valid category (port 3005)",
+                    "MA2 Slow (34-SMA) is blue (rising over 1 bar)",
+                    "MA2 Fast (3-SMA) is blue (rising over 2 bars)",
+                    "MA2 Fast > MA2 Slow (confirmed uptrend)",
+                    "Skips exhausted tickers (TD Countdown 13+)"
+                ],
+                "exit": [
+                    "Tranche 1 (75%): MA2 Fast (3-SMA) closes below MA2 Slow (34-SMA)",
+                    "Tranche 2 (25%): MA2 Slow turns red (falling)",
+                    "Initial Stop Loss: Keltner Channel Lower band (protection)"
+                ]
+            },
+            "entry_filter": {
+                "min_score": 0,
+                "min_momentum": 0,
+                "require_entry_valid": true,
+                "skip_exhausted": true
             }
         }
     },
@@ -155,6 +239,16 @@
             "persistence_file": "data/short_momentum/latest_short_momentum.json",
             "hourly_scan_path": "data/short_momentum",
             "dashboard_port": 3003
+        },
+        "td_ma2_filter": {
+            "api_url": "http://localhost:3005/api/filtered-tickers",
+            "dashboard_port": 3005,
+            "category": "entry_valid"
+        },
+        "tickflow_1k": {
+            "api_url": "http://localhost:6063/api/1k-tickers",
+            "dashboard_port": 6063,
+            "description": "TickFlow 1K tick section - RED>0 & WM>0 & WM>9EMA(WM)"
         }
     }
 }

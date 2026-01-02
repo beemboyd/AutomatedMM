@@ -160,6 +160,65 @@ class TDIndicatorCalculator:
 
         return df
 
+    def calculate_ma2_crossover(self, df: pd.DataFrame, fast_period: int = 3, slow_period: int = 34) -> pd.DataFrame:
+        """
+        Calculate TD MA II Fast and Slow for crossover strategy
+
+        Per TD Sequential specification:
+        - MA2 Fast: 3-period SMA of closes
+        - MA2 Slow: 34-period SMA of closes
+        - "Blue" condition: MA is rising (ROC >= 0)
+          - Fast is blue when: current_fast >= fast_2_bars_ago
+          - Slow is blue when: current_slow >= slow_1_bar_ago
+        - "Red" condition: MA is falling (ROC < 0)
+
+        Entry: Both MAs are blue AND Fast closes above Slow
+        Exit: MA2 Slow turns red (falling)
+
+        Args:
+            fast_period: Period for fast MA (default 3)
+            slow_period: Period for slow MA (default 34)
+
+        Returns:
+            DataFrame with ma2_fast, ma2_slow, ma2_entry_valid, ma2_exit_signal
+        """
+        df = df.copy()
+
+        # Calculate MAs
+        df['ma2_fast'] = df['close'].rolling(window=fast_period).mean()
+        df['ma2_slow'] = df['close'].rolling(window=slow_period).mean()
+
+        # Calculate ROC (Rate of Change) for "blue/red" condition
+        # Fast is "blue" when: smaFast - smaFast[2] >= 0 (rising over 2 bars)
+        df['ma2_fast_roc'] = df['ma2_fast'] - df['ma2_fast'].shift(2)
+        # Slow is "blue" when: smaSlow - smaSlow[1] >= 0 (rising over 1 bar)
+        df['ma2_slow_roc'] = df['ma2_slow'] - df['ma2_slow'].shift(1)
+
+        # "Blue" condition: MA is rising (ROC >= 0)
+        df['ma2_fast_blue'] = df['ma2_fast_roc'] >= 0
+        df['ma2_slow_blue'] = df['ma2_slow_roc'] >= 0
+        df['ma2_both_blue'] = df['ma2_fast_blue'] & df['ma2_slow_blue']
+
+        # Fast above Slow condition
+        df['ma2_fast_above_slow'] = df['ma2_fast'] > df['ma2_slow']
+
+        # Entry: MA2 Slow is blue AND Fast closes above Slow AND Fast is blue
+        df['ma2_entry_valid'] = df['ma2_slow_blue'] & df['ma2_fast_above_slow'] & df['ma2_fast_blue']
+
+        # Exit signals for 2-tier exit:
+        # Tranche 1 (75%): MA2 Fast closes below MA2 Slow
+        df['ma2_fast_below_slow'] = df['ma2_fast'] < df['ma2_slow']
+        df['ma2_tranche1_exit'] = df['ma2_fast_below_slow']
+
+        # Tranche 2 (25%): MA2 Slow turns red (falling, ROC < 0)
+        df['ma2_slow_red'] = df['ma2_slow_roc'] < 0
+        df['ma2_tranche2_exit'] = df['ma2_slow_red']
+
+        # Full exit signal (for backwards compatibility)
+        df['ma2_exit_signal'] = df['ma2_slow_red']
+
+        return df
+
     def calculate_td_setup_bullish(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate Bullish TD Sequential Setup (9-count)
