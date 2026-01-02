@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Short Momentum Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #0a0a0a;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            color: #fff;
+        }
+        
+        .refresh-btn {
+            background: #f97316;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .refresh-btn:hover {
+            background: #ea580c;
+        }
+        
+        .refresh-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .last-updated {
+            color: #888;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .categories {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .category-card {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #333;
+        }
+        
+        .category-title {
+            font-size: 1.5rem;
+            color: #fff;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .ticker-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .ticker-item {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            gap: 15px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .ticker-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .ticker-symbol {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #f97316;
+        }
+        
+        .ticker-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 10px;
+        }
+        
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .detail-label {
+            font-size: 0.75rem;
+            color: #888;
+            text-transform: uppercase;
+        }
+        
+        .detail-value {
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        
+        .score-high { color: #f97316; }
+        .score-medium { color: #fb923c; }
+        .score-low { color: #6b7280; }
+        
+        .momentum-strong { color: #f97316; }
+        .momentum-medium { color: #fb923c; }
+        .momentum-weak { color: #fdba74; }
+        
+        .rsi-low { color: #f97316; }
+        .rsi-medium { color: #fb923c; }
+        .rsi-high { color: #6b7280; }
+        
+        .persistence-high { color: #f97316; }
+        .persistence-medium { color: #fb923c; }
+        .persistence-low { color: #6b7280; }
+        
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        
+        .error {
+            background: #f97316;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        /* Icons */
+        .icon-high-score::before { content: "🎯 "; }
+        .icon-negative::before { content: "📉 "; }
+        .icon-rsi::before { content: "📊 "; }
+        .icon-volume::before { content: "📈 "; }
+        .icon-persistence::before { content: "⏰ "; }
+        .icon-new::before { content: "🆕 "; }
+        .icon-all::before { content: "📋 "; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .categories {
+                grid-template-columns: 1fr;
+            }
+            
+            .ticker-item {
+                grid-template-columns: 80px 1fr;
+            }
+            
+            .ticker-details {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Short Momentum Dashboard - Negative Momentum Only</h1>
+                <div class="last-updated" id="lastUpdated"></div>
+            </div>
+            <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
+        </div>
+        
+        <div id="loading" class="loading">Loading short momentum data...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="categories" class="categories" style="display: none;">
+            <!-- High Scores -->
+            <div class="category-card">
+                <h2 class="category-title icon-high-score">High Scores (≥80)</h2>
+                <div id="highScores" class="ticker-list"></div>
+            </div>
+            
+            <!-- Strong Negative Momentum -->
+            <div class="category-card">
+                <h2 class="category-title icon-negative">Strong Negative (<-2%)</h2>
+                <div id="strongNegative" class="ticker-list"></div>
+            </div>
+            
+            <!-- Low RSI -->
+            <div class="category-card">
+                <h2 class="category-title icon-rsi">Low RSI (<40)</h2>
+                <div id="lowRsi" class="ticker-list"></div>
+            </div>
+            
+            <!-- High Volume -->
+            <div class="category-card">
+                <h2 class="category-title icon-volume">High Volume</h2>
+                <div id="highVolume" class="ticker-list"></div>
+            </div>
+            
+            <!-- Persistence Leaders -->
+            <div class="category-card">
+                <h2 class="category-title icon-persistence">3-Day Persistence</h2>
+                <div id="persistenceLeaders" class="ticker-list"></div>
+            </div>
+            
+            <!-- New Shorts -->
+            <div class="category-card">
+                <h2 class="category-title icon-new">New Short Opportunities</h2>
+                <div id="newShorts" class="ticker-list"></div>
+            </div>
+        </div>
+        
+        <!-- All Tickers -->
+        <div class="category-card" style="display: none;" id="allTickersCard">
+            <h2 class="category-title icon-all">All Short Opportunities</h2>
+            <div id="allTickers" class="ticker-list"></div>
+        </div>
+    </div>
+    
+    <script>
+        let currentData = null;
+        
+        function formatNumber(num) {
+            return new Intl.NumberFormat('en-IN').format(num);
+        }
+        
+        function getScoreClass(score) {
+            if (score >= 80) return 'score-high';
+            if (score >= 50) return 'score-medium';
+            return 'score-low';
+        }
+        
+        function getMomentumClass(momentum) {
+            if (momentum <= -3) return 'momentum-strong';
+            if (momentum <= -1.5) return 'momentum-medium';
+            return 'momentum-weak';
+        }
+        
+        function getRsiClass(rsi) {
+            if (rsi < 30) return 'rsi-low';
+            if (rsi < 40) return 'rsi-medium';
+            return 'rsi-high';
+        }
+        
+        function getPersistenceClass(days) {
+            if (days >= 10) return 'persistence-high';
+            if (days >= 5) return 'persistence-medium';
+            return 'persistence-low';
+        }
+        
+        function createTickerElement(ticker) {
+            return `
+                <div class="ticker-item" onclick="showTickerDetails('${ticker.ticker}')">
+                    <div class="ticker-symbol">${ticker.ticker}</div>
+                    <div class="ticker-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Score</span>
+                            <span class="detail-value ${getScoreClass(ticker.score)}">${ticker.score}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Momentum</span>
+                            <span class="detail-value ${getMomentumClass(ticker.momentum)}">${ticker.momentum.toFixed(1)}%</span>
+                        </div>
+                        ${ticker.rsi ? `
+                        <div class="detail-item">
+                            <span class="detail-label">RSI</span>
+                            <span class="detail-value ${getRsiClass(ticker.rsi)}">${ticker.rsi.toFixed(0)}</span>
+                        </div>
+                        ` : ''}
+                        <div class="detail-item">
+                            <span class="detail-label">Price</span>
+                            <span class="detail-value">₹${formatNumber(ticker.price)}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Volume</span>
+                            <span class="detail-value">${formatNumber(ticker.volume)}</span>
+                        </div>
+                        ${ticker.days_tracked > 0 ? `
+                        <div class="detail-item">
+                            <span class="detail-label">Days</span>
+                            <span class="detail-value ${getPersistenceClass(ticker.days_tracked)}">${ticker.days_tracked}d</span>
+                        </div>
+                        ` : ''}
+                        ${ticker.trend ? `
+                        <div class="detail-item">
+                            <span class="detail-label">Trend</span>
+                            <span class="detail-value">${ticker.trend}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function updateCategories(data) {
+            const categories = data.categories;
+            
+            // Update high scores
+            const highScoresEl = document.getElementById('highScores');
+            if (categories.high_scores && categories.high_scores.length > 0) {
+                highScoresEl.innerHTML = categories.high_scores
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                highScoresEl.innerHTML = '<div class="empty-state">No tickers with high scores</div>';
+            }
+            
+            // Update strong negative
+            const strongNegativeEl = document.getElementById('strongNegative');
+            if (categories.strong_negative && categories.strong_negative.length > 0) {
+                strongNegativeEl.innerHTML = categories.strong_negative
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                strongNegativeEl.innerHTML = '<div class="empty-state">No tickers with strong negative momentum</div>';
+            }
+            
+            // Update low RSI
+            const lowRsiEl = document.getElementById('lowRsi');
+            if (categories.low_rsi && categories.low_rsi.length > 0) {
+                lowRsiEl.innerHTML = categories.low_rsi
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                lowRsiEl.innerHTML = '<div class="empty-state">No tickers with low RSI</div>';
+            }
+            
+            // Update high volume
+            const highVolumeEl = document.getElementById('highVolume');
+            if (categories.high_volume && categories.high_volume.length > 0) {
+                highVolumeEl.innerHTML = categories.high_volume
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                highVolumeEl.innerHTML = '<div class="empty-state">No tickers with high volume</div>';
+            }
+            
+            // Update persistence leaders
+            const persistenceLeadersEl = document.getElementById('persistenceLeaders');
+            if (categories.persistence_leaders && categories.persistence_leaders.length > 0) {
+                persistenceLeadersEl.innerHTML = categories.persistence_leaders
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                persistenceLeadersEl.innerHTML = '<div class="empty-state">No 3-day persistence leaders yet</div>';
+            }
+            
+            // Update new shorts
+            const newShortsEl = document.getElementById('newShorts');
+            if (categories.new_shorts && categories.new_shorts.length > 0) {
+                newShortsEl.innerHTML = categories.new_shorts
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+            } else {
+                newShortsEl.innerHTML = '<div class="empty-state">No new short opportunities</div>';
+            }
+            
+            // Update all tickers
+            const allTickersEl = document.getElementById('allTickers');
+            const allTickersCard = document.getElementById('allTickersCard');
+            if (categories.all_tickers && categories.all_tickers.length > 0) {
+                allTickersEl.innerHTML = categories.all_tickers
+                    .map(ticker => createTickerElement(ticker))
+                    .join('');
+                allTickersCard.style.display = 'block';
+            } else {
+                allTickersCard.style.display = 'none';
+            }
+            
+            // Update last updated time
+            document.getElementById('lastUpdated').textContent = `Last updated: ${data.timestamp}`;
+        }
+        
+        async function fetchData() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('categories').style.display = 'none';
+                
+                const response = await fetch('/api/short-momentum');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                currentData = data;
+                
+                updateCategories(data);
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('categories').style.display = 'grid';
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = `Error loading data: ${error.message}`;
+            }
+        }
+        
+        function refreshData() {
+            fetchData();
+        }
+        
+        function showTickerDetails(ticker) {
+            // For now, just log the ticker
+            console.log('Ticker clicked:', ticker);
+            // You can implement a modal or redirect to show more details
+        }
+        
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchData();
+            
+            // Auto-refresh every 60 seconds
+            setInterval(fetchData, 60000);
+        });
+    </script>
+</body>
+</html>

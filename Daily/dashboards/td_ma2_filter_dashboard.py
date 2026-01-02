@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-TD MA II Filter Dashboard
-Filters VSR alerts using Tom DeMark MA II Blue conditions
+TD MA II + WM Filter Dashboard
+Filters VSR alerts using Tom DeMark MA II Blue conditions + WM (Wave Momentum) filter
 
 Port: 3005
 
-Filter Logic (from PineScript):
-- MA2 Fast (3-SMA): Blue when rising/flat over 2 bars (ROC >= 0)
-- MA2 Slow (34-SMA): Blue when rising/flat over 1 bar (ROC >= 0)
-- Entry Valid: Both Blue AND Fast > Slow
+Filter Logic:
+- All filters from TD MA II Filter Dashboard (port 3005)
+- Additional: WM > 0, where WM = EMA21 - EMA50
 
-Shows tickers from VSR dashboard that pass the TD MA II filter.
+Shows tickers from VSR dashboard that pass ALL filters.
 """
 
 from flask import Flask, jsonify, Response
@@ -84,13 +83,13 @@ def get_instrument_token(ticker: str) -> Optional[int]:
     return instrument_cache.get(ticker)
 
 
-def fetch_historical_data(ticker: str, days: int = 60) -> Optional[pd.DataFrame]:
+def fetch_historical_data(ticker: str, days: int = 100) -> Optional[pd.DataFrame]:
     """
     Fetch historical daily OHLC data for a ticker
 
     Args:
         ticker: Stock symbol
-        days: Number of days of history (need 34+ for slow MA)
+        days: Number of days of history (need 50+ for EMA50)
 
     Returns:
         DataFrame with OHLC data or None
@@ -115,7 +114,7 @@ def fetch_historical_data(ticker: str, days: int = 60) -> Optional[pd.DataFrame]
             interval='day'
         )
 
-        if not data or len(data) < 35:  # Need at least 35 bars for 34-SMA
+        if not data or len(data) < 50:  # Need at least 50 bars for EMA50
             logger.warning(f"{ticker}: Insufficient data ({len(data) if data else 0} bars)")
             return None
 
@@ -130,41 +129,22 @@ def fetch_historical_data(ticker: str, days: int = 60) -> Optional[pd.DataFrame]
 
 def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
     """
-    Calculate full Tom DeMark exhaustion stack:
-
-    1. TD Setup 9 → maturity (not exhaustion)
-    2. Countdown >= 11 → vulnerability
-    3. Countdown 13 → exhaustion condition
-    4. Stall + TD MA failure → exhaustion confirmation
-    5. TDST break → trend invalidation
-
-    Also calculates TD MA I and TD MA II status for confirmation.
+    Calculate full Tom DeMark exhaustion stack
     """
     result = {
-        # TD Setup
         'setup_count': 0,
         'setup_complete': False,
         'bars_since_setup9': 0,
-
-        # TD Countdown
         'countdown': 0,
         'countdown_complete': False,
-
-        # TD MA I (5-SMA of lows, triggered when low > highest low of 12 bars)
         'td_ma1_active': False,
         'td_ma1_value': 0.0,
-
-        # TDST Support
         'tdst_support': 0.0,
         'tdst_active': False,
         'tdst_broken': False,
-
-        # Stall detection
         'stall_detected': False,
         'range_compression': False,
-
-        # Exhaustion assessment
-        'exhaustion_level': 'NONE',  # NONE, MATURING, VULNERABLE, EXHAUSTED, CONFIRMED
+        'exhaustion_level': 'NONE',
         'exhaustion_signals': []
     }
 
@@ -172,8 +152,7 @@ def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
         return result
 
     try:
-        # ========== TD SETUP 9 (Bullish) ==========
-        # Condition: Close > Close[4] for 9 consecutive bars
+        # TD SETUP 9 (Bullish)
         df['setup_cond'] = df['close'] > df['close'].shift(4)
 
         setup_count = 0
@@ -198,9 +177,7 @@ def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
         result['setup_count'] = min(setup_count, 9)
         result['setup_complete'] = setup_complete
 
-        # ========== TD COUNTDOWN 13 (Bullish) ==========
-        # After Setup 9, count bars where Close >= High[2]
-        # Bars don't need to be consecutive
+        # TD COUNTDOWN 13 (Bullish)
         countdown = 0
         if setup_bar9_idx is not None:
             result['bars_since_setup9'] = len(df) - 1 - setup_bar9_idx
@@ -214,20 +191,16 @@ def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
         result['countdown'] = countdown
         result['countdown_complete'] = countdown >= 13
 
-        # ========== TD MA I (Bullish) ==========
-        # Trigger: Low > Lowest low of prior 12 bars
-        # Value: 5-bar SMA of lows
-        # Duration: 4 bars, extends if re-triggered
+        # TD MA I (Bullish)
         df['lowest_low_12'] = df['low'].shift(1).rolling(window=12).min()
         df['td_ma1_trigger'] = df['low'] > df['lowest_low_12']
         df['td_ma1_sma'] = df['low'].rolling(window=5).mean()
 
-        # Check if TD MA I is currently active (within 4 bars of last trigger)
         td_ma1_active = False
         td_ma1_value = 0.0
         bars_remaining = 0
 
-        for i in range(max(12, len(df) - 10), len(df)):  # Check last 10 bars
+        for i in range(max(12, len(df) - 10), len(df)):
             if df['td_ma1_trigger'].iloc[i]:
                 bars_remaining = 4
                 td_ma1_value = float(df['td_ma1_sma'].iloc[i])
@@ -238,8 +211,7 @@ def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
         result['td_ma1_active'] = td_ma1_active
         result['td_ma1_value'] = round(td_ma1_value, 2)
 
-        # ========== TDST SUPPORT ==========
-        # Lowest low of Setup bars 1-4
+        # TDST SUPPORT
         if setup_bar9_idx is not None and setup_bar9_idx >= 8:
             setup_start = setup_bar9_idx - 8
             setup_bar4 = setup_bar9_idx - 5
@@ -247,46 +219,38 @@ def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
             result['tdst_support'] = round(tdst_support, 2)
             result['tdst_active'] = True
 
-            # Check if TDST is broken (close below support)
             latest_close = float(df['close'].iloc[-1])
             if latest_close < tdst_support:
                 result['tdst_broken'] = True
                 result['tdst_active'] = False
 
-        # ========== STALL DETECTION ==========
-        # Look for range compression and loss of directional progress
+        # STALL DETECTION
         if len(df) >= 5:
             recent_ranges = df['high'].iloc[-5:] - df['low'].iloc[-5:]
             avg_recent_range = recent_ranges.mean()
             prior_ranges = df['high'].iloc[-10:-5] - df['low'].iloc[-10:-5] if len(df) >= 10 else recent_ranges
             avg_prior_range = prior_ranges.mean()
 
-            # Range compression: recent ranges < 70% of prior ranges
             if avg_prior_range > 0 and avg_recent_range < avg_prior_range * 0.7:
                 result['range_compression'] = True
 
-            # Check for overlapping closes (stall)
             recent_closes = df['close'].iloc[-5:]
             close_range = recent_closes.max() - recent_closes.min()
             if avg_recent_range > 0 and close_range < avg_recent_range * 0.5:
                 result['stall_detected'] = True
 
-        # ========== EXHAUSTION ASSESSMENT ==========
+        # EXHAUSTION ASSESSMENT
         signals = []
 
-        # Level 1: Maturing (Setup 9 complete)
         if setup_complete:
             signals.append("Setup 9 Complete")
 
-        # Level 2: Vulnerable (Countdown 11-12)
         if countdown >= 11 and countdown < 13:
             signals.append(f"Countdown {countdown}/13")
 
-        # Level 3: Exhausted (Countdown 13)
         if countdown >= 13:
             signals.append("Countdown 13 Complete")
 
-        # Confirmation signals
         if not td_ma1_active and setup_complete:
             signals.append("TD MA I Failed")
 
@@ -301,7 +265,6 @@ def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
 
         result['exhaustion_signals'] = signals
 
-        # Determine exhaustion level
         if result['tdst_broken']:
             result['exhaustion_level'] = 'CONFIRMED'
         elif countdown >= 13 and (not td_ma1_active or result['stall_detected']):
@@ -322,50 +285,57 @@ def calculate_td_exhaustion(df: pd.DataFrame) -> Dict:
         return result
 
 
-def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
+def calculate_td_ma2_wm(df: pd.DataFrame) -> Dict:
     """
-    Calculate TD MA II Blue conditions + Exhaustion status
+    Calculate TD MA II Blue conditions + WM (Wave Momentum) filter + Exhaustion status
 
-    From PineScript:
+    TD MA II:
     - smaFast = ta.sma(close, 3)
     - smaSlow = ta.sma(close, 34)
-    - rocFast = smaFast - smaFast[2]  (change over 2 bars)
-    - rocSlow = smaSlow - smaSlow[1]  (change over 1 bar)
     - Fast Blue: rocFast >= 0
     - Slow Blue: rocSlow >= 0
     - Entry Valid: Fast Blue AND Slow Blue AND Fast > Slow
 
+    WM (Wave Momentum):
+    - WM = EMA21 - EMA50
+    - WM Filter: WM > 0
+
     Returns:
-        Dict with MA2 state, values, and exhaustion status
+        Dict with MA2 state, WM values, and exhaustion status
     """
-    if df is None or len(df) < 35:
+    if df is None or len(df) < 50:
         return {
             'valid': False,
             'error': 'Insufficient data'
         }
 
     try:
-        # Calculate SMAs
+        # Calculate SMAs for TD MA II
         df['ma2_fast'] = df['close'].rolling(window=3).mean()
         df['ma2_slow'] = df['close'].rolling(window=34).mean()
 
         # Calculate ROC (Rate of Change)
-        # Fast: change over 2 bars
         df['roc_fast'] = df['ma2_fast'] - df['ma2_fast'].shift(2)
-        # Slow: change over 1 bar
         df['roc_slow'] = df['ma2_slow'] - df['ma2_slow'].shift(1)
+
+        # Calculate WM (Wave Momentum) = EMA21 - EMA50
+        df['ema21'] = df['close'].ewm(span=21, adjust=False).mean()
+        df['ema50'] = df['close'].ewm(span=50, adjust=False).mean()
+        df['wm'] = df['ema21'] - df['ema50']
 
         # Get latest values
         latest = df.iloc[-1]
-        prev = df.iloc[-2] if len(df) > 1 else None
 
         ma2_fast = latest['ma2_fast']
         ma2_slow = latest['ma2_slow']
         roc_fast = latest['roc_fast']
         roc_slow = latest['roc_slow']
         close = latest['close']
+        ema21 = latest['ema21']
+        ema50 = latest['ema50']
+        wm = latest['wm']
 
-        # Blue conditions (convert to Python bool to avoid JSON serialization issues)
+        # Blue conditions
         fast_blue = bool(roc_fast >= 0)
         slow_blue = bool(roc_slow >= 0)
         both_blue = fast_blue and slow_blue
@@ -373,10 +343,16 @@ def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
         # Fast above Slow
         fast_above_slow = bool(ma2_fast > ma2_slow)
 
-        # Entry valid: Both Blue AND Fast > Slow
-        entry_valid = both_blue and fast_above_slow
+        # TD MA II Entry valid: Both Blue AND Fast > Slow
+        ma2_entry_valid = both_blue and fast_above_slow
 
-        # Calculate distance from MAs (for display)
+        # WM Filter: WM > 0
+        wm_positive = bool(wm > 0)
+
+        # Combined Entry Valid: MA2 Entry Valid AND WM > 0
+        entry_valid = ma2_entry_valid and wm_positive
+
+        # Calculate distance from MAs
         pct_above_fast = float((close - ma2_fast) / ma2_fast * 100) if ma2_fast > 0 else 0.0
         pct_above_slow = float((close - ma2_slow) / ma2_slow * 100) if ma2_slow > 0 else 0.0
 
@@ -394,6 +370,13 @@ def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
             'slow_blue': slow_blue,
             'both_blue': both_blue,
             'fast_above_slow': fast_above_slow,
+            'ma2_entry_valid': ma2_entry_valid,
+            # WM values
+            'ema21': round(float(ema21), 2),
+            'ema50': round(float(ema50), 2),
+            'wm': round(float(wm), 2),
+            'wm_positive': wm_positive,
+            # Combined entry valid
             'entry_valid': entry_valid,
             'pct_above_fast': round(pct_above_fast, 2),
             'pct_above_slow': round(pct_above_slow, 2),
@@ -409,7 +392,7 @@ def calculate_td_ma2_blue(df: pd.DataFrame) -> Dict:
         }
 
     except Exception as e:
-        logger.error(f"Error calculating MA2: {e}")
+        logger.error(f"Error calculating MA2+WM: {e}")
         return {
             'valid': False,
             'error': str(e)
@@ -423,10 +406,7 @@ def fetch_vsr_tickers() -> List[Dict]:
         response.raise_for_status()
         data = response.json()
 
-        # Get all tickers with positive momentum
         all_tickers = data.get('categories', {}).get('all_tickers', [])
-
-        # Filter for positive momentum (same as VSR dashboard)
         positive_momentum = [t for t in all_tickers if t.get('momentum', 0) > 0]
 
         logger.info(f"Fetched {len(positive_momentum)} tickers with positive momentum from VSR API")
@@ -438,35 +418,23 @@ def fetch_vsr_tickers() -> List[Dict]:
 
 
 def process_ticker(ticker_data: Dict) -> Optional[Dict]:
-    """
-    Process a single ticker - fetch data and calculate MA2 Blue status
-
-    Args:
-        ticker_data: Dict with ticker info from VSR API
-
-    Returns:
-        Enhanced ticker data with MA2 info, or None if failed
-    """
+    """Process a single ticker - fetch data and calculate MA2+WM status"""
     ticker = ticker_data.get('ticker')
     if not ticker:
         return None
 
-    # Add small delay to avoid rate limiting (Zerodha allows ~3 requests/second)
     time.sleep(0.4)
 
-    # Fetch historical data
     df = fetch_historical_data(ticker)
     if df is None:
         return None
 
-    # Calculate MA2 Blue status
-    ma2_status = calculate_td_ma2_blue(df)
+    ma2_wm_status = calculate_td_ma2_wm(df)
 
-    if not ma2_status.get('valid'):
+    if not ma2_wm_status.get('valid'):
         return None
 
-    # Merge ticker data with MA2 status
-    result = {**ticker_data, **ma2_status}
+    result = {**ticker_data, **ma2_wm_status}
     return result
 
 
@@ -477,19 +445,14 @@ _filter_cache = {
 }
 
 def get_filtered_tickers() -> Dict:
-    """
-    Get VSR tickers filtered by TD MA II Blue conditions
-    Uses caching to avoid excessive API calls
-    """
+    """Get VSR tickers filtered by TD MA II Blue + WM conditions"""
     global _filter_cache
 
     current_time = time.time()
 
-    # Return cached data if fresh
     if _filter_cache['data'] and (current_time - _filter_cache['timestamp']) < FILTER_CACHE_TTL:
         return _filter_cache['data']
 
-    # Fetch VSR tickers
     vsr_tickers = fetch_vsr_tickers()
 
     if not vsr_tickers:
@@ -501,49 +464,53 @@ def get_filtered_tickers() -> Dict:
             'tickers': []
         }
 
-    # Process tickers sequentially to avoid rate limiting (Zerodha ~3 req/sec)
-    # Use ThreadPoolExecutor with limited workers
     filtered_tickers = []
-    both_blue_only = []
+    ma2_entry_valid = []
+    wm_positive = []
     entry_valid = []
 
     with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(process_ticker, t): t for t in vsr_tickers[:30]}  # Limit to top 30
+        futures = {executor.submit(process_ticker, t): t for t in vsr_tickers[:30]}
 
         for future in as_completed(futures):
             result = future.result()
             if result:
                 filtered_tickers.append(result)
 
-                if result.get('both_blue'):
-                    both_blue_only.append(result)
+                if result.get('ma2_entry_valid'):
+                    ma2_entry_valid.append(result)
+
+                if result.get('wm_positive'):
+                    wm_positive.append(result)
 
                 if result.get('entry_valid'):
                     entry_valid.append(result)
 
     # Sort by score, then momentum
     filtered_tickers.sort(key=lambda x: (x.get('score', 0), x.get('momentum', 0)), reverse=True)
-    both_blue_only.sort(key=lambda x: (x.get('score', 0), x.get('momentum', 0)), reverse=True)
+    ma2_entry_valid.sort(key=lambda x: (x.get('score', 0), x.get('momentum', 0)), reverse=True)
+    wm_positive.sort(key=lambda x: (x.get('score', 0), x.get('momentum', 0)), reverse=True)
     entry_valid.sort(key=lambda x: (x.get('score', 0), x.get('momentum', 0)), reverse=True)
 
     result = {
         'timestamp': datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST'),
         'total_vsr': len(vsr_tickers),
         'processed': len(filtered_tickers),
-        'both_blue_count': len(both_blue_only),
+        'ma2_entry_valid_count': len(ma2_entry_valid),
+        'wm_positive_count': len(wm_positive),
         'entry_valid_count': len(entry_valid),
         'categories': {
-            'entry_valid': entry_valid,  # Both Blue + Fast > Slow
-            'both_blue': both_blue_only,  # Both Blue (may include Fast < Slow)
+            'entry_valid': entry_valid,  # MA2 Entry Valid + WM > 0
+            'ma2_entry_valid': ma2_entry_valid,  # Only MA2 Entry Valid
+            'wm_positive': wm_positive,  # Only WM > 0
             'all_processed': filtered_tickers
         }
     }
 
-    # Update cache
     _filter_cache['data'] = result
     _filter_cache['timestamp'] = current_time
 
-    logger.info(f"Filter results: {len(entry_valid)} entry valid, {len(both_blue_only)} both blue, {len(filtered_tickers)} processed")
+    logger.info(f"Filter results: {len(entry_valid)} entry valid (MA2+WM), {len(ma2_entry_valid)} MA2 valid, {len(wm_positive)} WM positive")
 
     return result
 
@@ -555,7 +522,7 @@ HTML_TEMPLATE = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TD MA II Filter Dashboard</title>
+    <title>TD MA II + WM Filter Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -573,7 +540,7 @@ HTML_TEMPLATE = '''
             padding-bottom: 15px;
             border-bottom: 2px solid #0f3460;
         }
-        .header h1 { color: #4ecca3; font-size: 1.8em; }
+        .header h1 { color: #f59e0b; font-size: 1.8em; }
         .header .meta { text-align: right; font-size: 0.9em; color: #888; }
 
         .stats-row {
@@ -589,17 +556,17 @@ HTML_TEMPLATE = '''
             text-align: center;
             border: 1px solid #0f3460;
         }
-        .stat-value { font-size: 2em; font-weight: bold; color: #4ecca3; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #f59e0b; }
         .stat-label { font-size: 0.8em; color: #888; text-transform: uppercase; }
 
         .filter-info {
-            background: rgba(78, 204, 163, 0.1);
-            border: 1px solid #4ecca3;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid #f59e0b;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 20px;
         }
-        .filter-info h3 { color: #4ecca3; margin-bottom: 10px; }
+        .filter-info h3 { color: #f59e0b; margin-bottom: 10px; }
         .filter-info code { background: #1a1a2e; padding: 2px 6px; border-radius: 4px; }
 
         .categories { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
@@ -611,14 +578,14 @@ HTML_TEMPLATE = '''
         }
         .category-title {
             font-size: 1.3em;
-            color: #4ecca3;
+            color: #f59e0b;
             margin-bottom: 15px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
         .category-title .count {
-            background: #4ecca3;
+            background: #f59e0b;
             color: #000;
             padding: 2px 8px;
             border-radius: 12px;
@@ -654,6 +621,7 @@ HTML_TEMPLATE = '''
             display: flex;
             gap: 8px;
             margin-top: 5px;
+            flex-wrap: wrap;
         }
         .ma-badge {
             padding: 2px 6px;
@@ -697,7 +665,7 @@ HTML_TEMPLATE = '''
         }
 
         .refresh-btn {
-            background: #4ecca3;
+            background: #f59e0b;
             color: #000;
             border: none;
             padding: 8px 16px;
@@ -705,7 +673,7 @@ HTML_TEMPLATE = '''
             cursor: pointer;
             font-weight: bold;
         }
-        .refresh-btn:hover { background: #3db892; }
+        .refresh-btn:hover { background: #d97706; }
 
         .empty-state { text-align: center; color: #666; padding: 30px; }
         .loading { text-align: center; padding: 40px; color: #888; }
@@ -715,8 +683,8 @@ HTML_TEMPLATE = '''
 <body>
     <div class="header">
         <div>
-            <h1>TD MA II Filter Dashboard</h1>
-            <div class="meta">Port: 3005 | Filters VSR alerts with TD MA II Blue conditions</div>
+            <h1>TD MA II + WM Filter Dashboard</h1>
+            <div class="meta">Port: 3005 | TD MA II Blue + WM (EMA21-EMA50) > 0</div>
         </div>
         <div>
             <div id="lastUpdated" style="margin-bottom: 5px;"></div>
@@ -725,20 +693,23 @@ HTML_TEMPLATE = '''
     </div>
 
     <div class="filter-info">
-        <h3>Filter Logic (Tom DeMark MA II)</h3>
+        <h3>Filter Logic (TD MA II + WM)</h3>
         <p style="margin-bottom: 8px;">
-            <strong>MA2 Fast (3-SMA):</strong> <span class="blue">Blue</span> when <code>smaFast - smaFast[2] >= 0</code> (rising/flat over 2 bars)
+            <strong>MA2 Fast (3-SMA):</strong> <span class="blue">Blue</span> when <code>smaFast - smaFast[2] >= 0</code>
         </p>
         <p style="margin-bottom: 8px;">
-            <strong>MA2 Slow (34-SMA):</strong> <span class="blue">Blue</span> when <code>smaSlow - smaSlow[1] >= 0</code> (rising/flat over 1 bar)
+            <strong>MA2 Slow (34-SMA):</strong> <span class="blue">Blue</span> when <code>smaSlow - smaSlow[1] >= 0</code>
+        </p>
+        <p style="margin-bottom: 8px;">
+            <strong>WM (Wave Momentum):</strong> <span class="yellow">WM = EMA21 - EMA50</span>, Filter: <code>WM > 0</code>
         </p>
         <p>
-            <strong>Entry Valid:</strong> <span class="green">Both Blue</span> AND <code>Fast > Slow</code>
+            <strong>Entry Valid:</strong> <span class="green">Both MA2 Blue</span> + <code>Fast > Slow</code> + <span class="yellow">WM > 0</span>
         </p>
     </div>
 
     <div id="stats" class="stats-row"></div>
-    <div id="loading" class="loading">Loading TD MA II data...</div>
+    <div id="loading" class="loading">Loading TD MA II + WM data...</div>
     <div id="error" class="error" style="display: none;"></div>
     <div id="categories" class="categories" style="display: none;"></div>
 
@@ -759,10 +730,10 @@ HTML_TEMPLATE = '''
         function getExhaustionIcon(level) {
             const icons = {
                 'NONE': '',
-                'MATURING': '📊',
-                'VULNERABLE': '⚠️',
-                'EXHAUSTED': '🔥',
-                'CONFIRMED': '🛑'
+                'MATURING': '',
+                'VULNERABLE': '',
+                'EXHAUSTED': '',
+                'CONFIRMED': ''
             };
             return icons[level] || '';
         }
@@ -770,7 +741,7 @@ HTML_TEMPLATE = '''
         function createTickerElement(ticker) {
             const fastColor = ticker.fast_blue ? 'blue' : 'red';
             const slowColor = ticker.slow_blue ? 'blue' : 'red';
-            const entryColor = ticker.entry_valid ? 'green' : 'yellow';
+            const wmColor = ticker.wm_positive ? 'yellow' : 'red';
             const exhaustionLevel = ticker.exhaustion_level || 'NONE';
             const exhaustionSignals = ticker.exhaustion_signals || [];
 
@@ -781,6 +752,7 @@ HTML_TEMPLATE = '''
                         <div class="ma-status">
                             <span class="ma-badge ${ticker.fast_blue ? 'blue-bg' : 'red-bg'}">Fast ${ticker.fast_blue ? 'Blue' : 'Red'}</span>
                             <span class="ma-badge ${ticker.slow_blue ? 'blue-bg' : 'red-bg'}">Slow ${ticker.slow_blue ? 'Blue' : 'Red'}</span>
+                            <span class="ma-badge ${ticker.wm_positive ? 'yellow-bg' : 'red-bg'}">WM ${ticker.wm > 0 ? '+' : ''}${ticker.wm?.toFixed(1) || '0'}</span>
                         </div>
                         ${ticker.entry_valid ? '<span class="ma-badge green-bg" style="margin-top:4px;">ENTRY VALID</span>' : ''}
                         ${exhaustionLevel !== 'NONE' ? `
@@ -808,23 +780,23 @@ HTML_TEMPLATE = '''
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Close</span>
-                            <span class="detail-value">₹${ticker.close?.toFixed(2) || 'N/A'}</span>
+                            <span class="detail-value">${ticker.close?.toFixed(2) || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">EMA21</span>
+                            <span class="detail-value">${ticker.ema21?.toFixed(2) || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">EMA50</span>
+                            <span class="detail-value">${ticker.ema50?.toFixed(2) || 'N/A'}</span>
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Fast MA</span>
-                            <span class="detail-value ${fastColor}">₹${ticker.ma2_fast?.toFixed(2) || 'N/A'}</span>
+                            <span class="detail-value ${fastColor}">${ticker.ma2_fast?.toFixed(2) || 'N/A'}</span>
                         </div>
                         <div class="detail-item">
                             <span class="detail-label">Slow MA</span>
-                            <span class="detail-value ${slowColor}">₹${ticker.ma2_slow?.toFixed(2) || 'N/A'}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">TD MA I</span>
-                            <span class="detail-value ${ticker.td_ma1_active ? 'green' : 'red'}">${ticker.td_ma1_active ? 'Active' : 'Failed'}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">TDST</span>
-                            <span class="detail-value ${ticker.tdst_broken ? 'red' : ''}">${ticker.tdst_support > 0 ? '₹' + ticker.tdst_support : 'N/A'}${ticker.tdst_broken ? ' ❌' : ''}</span>
+                            <span class="detail-value ${slowColor}">${ticker.ma2_slow?.toFixed(2) || 'N/A'}</span>
                         </div>
                     </div>
                     ${exhaustionSignals.length > 0 ? `
@@ -837,7 +809,6 @@ HTML_TEMPLATE = '''
         }
 
         function updateUI(data) {
-            // Update stats
             document.getElementById('stats').innerHTML = `
                 <div class="stat-card">
                     <div class="stat-value">${data.total_vsr || 0}</div>
@@ -852,12 +823,15 @@ HTML_TEMPLATE = '''
                     <div class="stat-label">Entry Valid</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value" style="color: #3b82f6;">${data.both_blue_count || 0}</div>
-                    <div class="stat-label">Both Blue</div>
+                    <div class="stat-value" style="color: #3b82f6;">${data.ma2_entry_valid_count || 0}</div>
+                    <div class="stat-label">MA2 Valid</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #f59e0b;">${data.wm_positive_count || 0}</div>
+                    <div class="stat-label">WM > 0</div>
                 </div>
             `;
 
-            // Update categories
             const categories = data.categories || {};
 
             let html = '';
@@ -865,9 +839,9 @@ HTML_TEMPLATE = '''
             // Entry Valid category (primary)
             html += `
                 <div class="category-card" style="border: 2px solid #10b981;">
-                    <h2 class="category-title">
-                        Entry Valid (Both Blue + Fast > Slow)
-                        <span class="count">${categories.entry_valid?.length || 0}</span>
+                    <h2 class="category-title" style="color: #10b981;">
+                        Entry Valid (MA2 Blue + Fast>Slow + WM>0)
+                        <span class="count" style="background: #10b981;">${categories.entry_valid?.length || 0}</span>
                     </h2>
                     <div class="ticker-list">
                         ${categories.entry_valid?.length > 0
@@ -877,17 +851,17 @@ HTML_TEMPLATE = '''
                 </div>
             `;
 
-            // Both Blue category
+            // MA2 Entry Valid category
             html += `
                 <div class="category-card" style="border: 2px solid #3b82f6;">
-                    <h2 class="category-title">
-                        Both Blue (Fast & Slow Rising)
-                        <span class="count">${categories.both_blue?.length || 0}</span>
+                    <h2 class="category-title" style="color: #3b82f6;">
+                        MA2 Valid Only (Both Blue + Fast>Slow)
+                        <span class="count" style="background: #3b82f6;">${categories.ma2_entry_valid?.length || 0}</span>
                     </h2>
                     <div class="ticker-list">
-                        ${categories.both_blue?.length > 0
-                            ? categories.both_blue.map(t => createTickerElement(t)).join('')
-                            : '<div class="empty-state">No tickers with both MAs blue</div>'}
+                        ${categories.ma2_entry_valid?.length > 0
+                            ? categories.ma2_entry_valid.map(t => createTickerElement(t)).join('')
+                            : '<div class="empty-state">No tickers with MA2 entry valid</div>'}
                     </div>
                 </div>
             `;
@@ -962,9 +936,8 @@ def health():
 
 
 if __name__ == '__main__':
-    logger.info(f"Starting TD MA II Filter Dashboard on port {PORT}")
+    logger.info(f"Starting TD MA II + WM Filter Dashboard on port {PORT}")
 
-    # Initialize Kite
     if init_kite():
         logger.info("Kite connection established")
     else:
