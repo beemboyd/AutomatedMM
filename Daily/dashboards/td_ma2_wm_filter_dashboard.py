@@ -83,7 +83,7 @@ def get_instrument_token(ticker: str) -> Optional[int]:
     return instrument_cache.get(ticker)
 
 
-def fetch_historical_data(ticker: str, days: int = 60) -> Optional[pd.DataFrame]:
+def fetch_historical_data(ticker: str, days: int = 100) -> Optional[pd.DataFrame]:
     """
     Fetch historical daily OHLC data for a ticker
 
