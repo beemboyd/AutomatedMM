@@ -555,7 +555,6 @@ HTML_TEMPLATE = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="60">
     <title>TD MA II Filter Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -926,7 +925,7 @@ HTML_TEMPLATE = '''
 
         document.addEventListener('DOMContentLoaded', function() {
             fetchData();
-            setInterval(fetchData, 60000);  // Refresh every 60 seconds
+            setInterval(fetchData, 300000);  // Refresh every 5 minutes
         });
     </script>
 </body>
