@@ -81,9 +81,10 @@ pkill -f "vsr_tracker_dashboard" 2>/dev/null || true
 pkill -f "td_ma2_filter_dashboard" 2>/dev/null || true
 print_status "SUCCESS" "Killed dashboard services"
 
-# Kill OrderFlow service
+# Kill OrderFlow service and dashboard
 pkill -f "orderflow_service" 2>/dev/null || true
-print_status "SUCCESS" "Killed OrderFlow service"
+pkill -f "orderflow_dashboard" 2>/dev/null || true
+print_status "SUCCESS" "Killed OrderFlow service and dashboard"
 
 # Kill any remaining Python processes on our ports
 lsof -ti :3001 | xargs kill -9 2>/dev/null || true
@@ -91,6 +92,7 @@ lsof -ti :3002 | xargs kill -9 2>/dev/null || true
 lsof -ti :3003 | xargs kill -9 2>/dev/null || true
 lsof -ti :3004 | xargs kill -9 2>/dev/null || true
 lsof -ti :3005 | xargs kill -9 2>/dev/null || true
+lsof -ti :3009 | xargs kill -9 2>/dev/null || true
 lsof -ti :2002 | xargs kill -9 2>/dev/null || true
 print_status "SUCCESS" "Cleared all service ports"
 
@@ -315,6 +317,15 @@ else
     print_status "WARNING" "OrderFlow start script not found"
 fi
 
+# OrderFlow Dashboard (Port 3009)
+nohup python3 "${ORDERFLOW_DIR}/dashboards/orderflow_dashboard.py" > /dev/null 2>&1 &
+sleep 3
+if lsof -i :3009 | grep LISTEN > /dev/null; then
+    print_status "SUCCESS" "OrderFlow Dashboard started on port 3009"
+else
+    print_status "WARNING" "OrderFlow Dashboard may not be running on port 3009"
+fi
+
 # Step 11: Force initial data generation
 log_message ""
 log_message "Step 11: Forcing initial data generation"
@@ -331,7 +342,7 @@ sleep 5
 # Count running services
 telegram_count=$(pgrep -f "telegram" | wc -l)
 tracker_count=$(pgrep -f "tracker_service" | wc -l)
-dashboard_count=$(lsof -i :3001,:3002,:3003,:3004,:3005,:2002 2>/dev/null | grep LISTEN | wc -l)
+dashboard_count=$(lsof -i :3001,:3002,:3003,:3004,:3005,:3009,:2002 2>/dev/null | grep LISTEN | wc -l)
 simulation_count=$(pgrep -f "simulation_[0-9]\.py" | wc -l)
 orderflow_count=$(pgrep -f "orderflow_service" | wc -l)
 
@@ -352,6 +363,7 @@ echo "  Hourly Tracker:        http://localhost:3002"
 echo "  Short Momentum:        http://localhost:3003"
 echo "  Hourly Short:          http://localhost:3004"
 echo "  TD MA II Filter:       http://localhost:3005"
+echo "  OrderFlow Dashboard:   http://localhost:3009"
 echo "  Alert Volume Tracker:  http://localhost:2002"
 echo ""
 echo "Simulation Dashboards:"
