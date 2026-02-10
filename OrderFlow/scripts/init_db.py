@@ -133,6 +133,10 @@ def apply_migrations(db_config):
     row = cursor.fetchone()
     if row and row[0] == 'boolean':
         logger.info("Migrating delta_divergence from BOOLEAN to DOUBLE PRECISION...")
+        # Drop the boolean default first, then change type, then set new default
+        cursor.execute("""
+            ALTER TABLE of_metrics ALTER COLUMN delta_divergence DROP DEFAULT;
+        """)
         cursor.execute("""
             ALTER TABLE of_metrics
             ALTER COLUMN delta_divergence TYPE DOUBLE PRECISION
