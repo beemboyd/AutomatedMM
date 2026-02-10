@@ -1,5 +1,28 @@
 # Activity Log
 
+## 2026-02-10 19:45 IST - Claude
+**OrderFlow Real-Time Dashboard (Port 3009)**
+
+**New File:**
+- `OrderFlow/dashboards/orderflow_dashboard.py` — Self-contained Flask app serving live order flow visualization
+
+**Features:**
+- Header: Symbol dropdown, live price, Wyckoff phase badge (color-coded), confidence %, IST timestamp
+- 5 stat cards: Buying Pressure, Selling Pressure, Bid/Ask Ratio, CVD Slope, Divergence Score
+- 4 Chart.js timeline charts: Price+CVD (dual Y), Buying vs Selling Pressure, Trade Delta bars, Bid/Ask Ratio+Divergence
+- Event log: Phase transitions, absorption events, large trades
+- Lookback controls: 30m, 1hr (default), 2hr, Full Day
+- Auto-refresh every 10 seconds via fetch API
+- Dark gradient theme matching existing dashboards
+
+**API Endpoints:** `/api/symbols`, `/api/latest`, `/api/timeline`, `/api/events`
+
+**Tech:** Flask + render_template_string, Chart.js 4 CDN, psycopg2 direct to PostgreSQL of_metrics table
+
+**Impact:** Read-only dashboard, no changes to existing OrderFlow service or DB schema.
+
+---
+
 ## 2026-02-10 IST - Claude
 **Enhanced OrderFlow Metrics: Delta/CVD, Liquidity & Composite Scores**
 
