@@ -81,6 +81,10 @@ pkill -f "vsr_tracker_dashboard" 2>/dev/null || true
 pkill -f "td_ma2_filter_dashboard" 2>/dev/null || true
 print_status "SUCCESS" "Killed dashboard services"
 
+# Kill OrderFlow service
+pkill -f "orderflow_service" 2>/dev/null || true
+print_status "SUCCESS" "Killed OrderFlow service"
+
 # Kill any remaining Python processes on our ports
 lsof -ti :3001 | xargs kill -9 2>/dev/null || true
 lsof -ti :3002 | xargs kill -9 2>/dev/null || true
@@ -292,17 +296,36 @@ else
     print_status "WARNING" "Simulations start script not found"
 fi
 
-# Step 10: Force initial data generation
+# Step 10: Restart OrderFlow service
 log_message ""
-log_message "Step 10: Forcing initial data generation"
+log_message "Step 10: Restarting OrderFlow service"
+
+ORDERFLOW_DIR="${BASE_DIR}/OrderFlow"
+if [ -f "${ORDERFLOW_DIR}/scripts/start_orderflow.sh" ]; then
+    cd "${BASE_DIR}"
+    "${ORDERFLOW_DIR}/scripts/start_orderflow.sh" --user Sai > /dev/null 2>&1
+    sleep 3
+    if pgrep -f "orderflow_service" > /dev/null; then
+        print_status "SUCCESS" "OrderFlow service started"
+    else
+        print_status "WARNING" "OrderFlow service may not have started"
+    fi
+    cd "${DAILY_DIR}"
+else
+    print_status "WARNING" "OrderFlow start script not found"
+fi
+
+# Step 11: Force initial data generation
+log_message ""
+log_message "Step 11: Forcing initial data generation"
 
 # Run a VSR scan to populate data
 python3 scanners/VSR_Momentum_Scanner.py -u Sai > /dev/null 2>&1 &
 print_status "SUCCESS" "Initiated VSR scan for data population"
 
-# Step 11: Final verification
+# Step 12: Final verification
 log_message ""
-log_message "Step 11: Final service verification"
+log_message "Step 12: Final service verification"
 sleep 5
 
 # Count running services
@@ -310,6 +333,7 @@ telegram_count=$(pgrep -f "telegram" | wc -l)
 tracker_count=$(pgrep -f "tracker_service" | wc -l)
 dashboard_count=$(lsof -i :3001,:3002,:3003,:3004,:3005,:2002 2>/dev/null | grep LISTEN | wc -l)
 simulation_count=$(pgrep -f "simulation_[0-9]\.py" | wc -l)
+orderflow_count=$(pgrep -f "orderflow_service" | wc -l)
 
 log_message "========================================="
 log_message "Token Refresh Complete"
@@ -317,6 +341,7 @@ log_message "Telegram Services: ${telegram_count} running"
 log_message "Tracker Services: ${tracker_count} running"
 log_message "Dashboards: ${dashboard_count} running"
 log_message "Simulations: ${simulation_count} running"
+log_message "OrderFlow: ${orderflow_count} running"
 log_message "========================================="
 
 print_status "SUCCESS" "All services restarted with new token"

@@ -1,5 +1,45 @@
 # Activity Log
 
+## 2026-02-10 IST - Claude
+**Implemented OrderFlow Module - Real-time Order Flow Analysis**
+
+**Purpose:**
+- Capture L1/L2 tick data via Zerodha KiteTicker WebSocket (FULL mode)
+- Store tick data in TimescaleDB for offline analysis
+- Compute real-time order flow metrics: delta, CVD, imbalance, absorption, phase detection
+- Identify Wyckoff-style market phases: accumulation, markup, distribution, markdown
+
+**New Files Created:**
+1. `OrderFlow/__init__.py` - Module init
+2. `OrderFlow/config/orderflow_config.json` - Tickers, metric params, DB config, retention
+3. `OrderFlow/config/schema.sql` - TimescaleDB DDL (hypertables, continuous aggregates, retention/compression policies)
+4. `OrderFlow/scripts/setup_timescaledb.sh` - Brew install + configure TimescaleDB
+5. `OrderFlow/scripts/init_db.py` - Programmatic schema creation
+6. `OrderFlow/scripts/start_orderflow.sh` - Start service with PID tracking
+7. `OrderFlow/scripts/stop_orderflow.sh` - Stop service gracefully
+8. `OrderFlow/core/db_manager.py` - ThreadedConnectionPool + batch inserts via execute_values
+9. `OrderFlow/core/instrument_resolver.py` - Symbol-to-token mapping with 24h cache
+10. `OrderFlow/core/tick_buffer.py` - Thread-safe buffer with auto-flush (size/time thresholds)
+11. `OrderFlow/core/metrics_engine.py` - Core metrics: delta, CVD, imbalance, absorption, phase detection
+12. `OrderFlow/core/tick_collector.py` - KiteTicker MODE_FULL handler with auto-reconnect
+13. `OrderFlow/services/orderflow_service.py` - Main entry point wiring all components
+
+**Modified Files:**
+1. `Daily/config.ini` - Added [OrderFlow] section with DB, ticker, and metric configuration
+2. `Daily/refresh_token_services.sh` - Added OrderFlow kill/restart steps (Step 10)
+
+**TimescaleDB Tables:**
+- `raw_ticks` - Every FULL-mode tick (7-day retention)
+- `depth_snapshots` - 5-level bid/ask depth as JSONB (7-day retention)
+- `orderflow_metrics` - Computed metrics every 10s (90-day retention)
+- `orderflow_1min` - Continuous aggregate (1-min bars)
+
+**Dependencies:**
+- `psycopg2-binary` - PostgreSQL adapter
+- `postgresql@16` + `timescaledb` extension - via Homebrew
+
+---
+
 ## 2026-01-01 10:50 IST - Claude
 **Added Auto-Refresh Token Handling for Simulations**
 
