@@ -76,6 +76,17 @@ def query_one(sql, params=None):
     rows = query_rows(sql, params)
     return rows[0] if rows else None
 
+
+def compute_ema(values, period):
+    """Compute EMA matching PineScript ta.ema()."""
+    if not values:
+        return []
+    k = 2.0 / (period + 1)
+    ema = [values[0]]
+    for i in range(1, len(values)):
+        ema.append(values[i] * k + ema[-1] * (1 - k))
+    return ema
+
 # ---------------------------------------------------------------------------
 # Flask app
 # ---------------------------------------------------------------------------
@@ -135,6 +146,24 @@ def api_timeline():
         v = r.get(k)
         return float(v) if v is not None else None
 
+    # Delta CVD (PineScript candle-direction logic):
+    #   close > open → +volume, close < open → -volume, equal → 0
+    delta_cvd = []
+    for r in rows:
+        pc, po, vol = _v(r, "price_close"), _v(r, "price_open"), _v(r, "interval_volume")
+        if pc is not None and po is not None and vol is not None:
+            if pc > po:
+                delta_cvd.append(vol)
+            elif pc < po:
+                delta_cvd.append(-vol)
+            else:
+                delta_cvd.append(0.0)
+        else:
+            delta_cvd.append(0.0)
+
+    dcvd_ema21 = compute_ema(delta_cvd, 21)
+    dcvd_ema50 = compute_ema(delta_cvd, 50)
+
     return jsonify(
         {
             "ts": [r["ts"].astimezone(IST).strftime("%H:%M:%S") for r in rows],
@@ -150,6 +179,9 @@ def api_timeline():
             "phase_confidence": [_v(r, "phase_confidence") for r in rows],
             "interval_volume": [_v(r, "interval_volume") for r in rows],
             "vwap": [_v(r, "vwap") for r in rows],
+            "delta_cvd": [round(v, 2) for v in delta_cvd],
+            "dcvd_ema21": [round(v, 2) for v in dcvd_ema21],
+            "dcvd_ema50": [round(v, 2) for v in dcvd_ema50],
         }
     )
 
@@ -342,6 +374,7 @@ a{color:#3b82f6;text-decoration:none}
     <div class="chart-card"><h3>Buying vs Selling Pressure</h3><canvas id="chartPressure"></canvas></div>
     <div class="chart-card"><h3>Trade Delta</h3><canvas id="chartDelta"></canvas></div>
     <div class="chart-card"><h3>Bid/Ask Ratio + Divergence</h3><canvas id="chartRatioDiv"></canvas></div>
+    <div class="chart-card" style="grid-column:1/-1"><h3>Delta CVD — EMA(21) vs EMA(50)</h3><canvas id="chartDeltaCvd"></canvas></div>
 </div>
 
 <!-- Event log -->
@@ -443,6 +476,23 @@ function initCharts(){
             annotation:{annotations:{refLine:{type:'line',yMin:1,yMax:1,borderColor:'rgba(139,92,246,0.3)',borderDash:[4,4],borderWidth:1,yScaleID:'y'}}}
         }}
     });
+
+    // 5) Delta CVD EMA(21) vs EMA(50) + zero line
+    charts.deltaCvd = new Chart(document.getElementById('chartDeltaCvd'),{
+        type:'line',
+        data:{labels:[],datasets:[
+            {label:'ΔCVD EMA(21)',data:[],borderColor:'#10b981',
+             borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+            {label:'ΔCVD EMA(50)',data:[],borderColor:'#ef4444',
+             borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+        ]},
+        options:{...baseOpts,scales:{
+            x:{ticks:{color:tickColor,maxTicksLimit:20,font:{size:10}},grid:{color:gridColor}},
+            y:{ticks:{color:tickColor,font:{size:10}},grid:{color:gridColor}},
+        },plugins:{...baseOpts.plugins,
+            annotation:{annotations:{zeroLine:{type:'line',yMin:0,yMax:0,borderColor:'#475569',borderWidth:1,borderDash:[4,4]}}}
+        }}
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -538,6 +588,12 @@ async function fetchTimeline(){
         charts.ratioDiv.data.datasets[0].data = d.bid_ask_ratio;
         charts.ratioDiv.data.datasets[1].data = d.divergence_score;
         charts.ratioDiv.update('none');
+
+        // Delta CVD EMAs
+        charts.deltaCvd.data.labels = ts;
+        charts.deltaCvd.data.datasets[0].data = d.dcvd_ema21;
+        charts.deltaCvd.data.datasets[1].data = d.dcvd_ema50;
+        charts.deltaCvd.update('none');
     }catch(e){console.error('fetchTimeline',e)}
 }
 
