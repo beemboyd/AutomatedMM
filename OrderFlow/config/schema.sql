@@ -1,9 +1,10 @@
--- OrderFlow TimescaleDB Schema
--- Creates hypertables for raw ticks, depth snapshots, and computed metrics
+-- OrderFlow PostgreSQL Schema
+-- Uses the existing tick_data database (shared with Simplified_India_TS)
+-- Plain PostgreSQL tables with proper indexes for time-series queries
 
--- Table 1: raw_ticks (hypertable, 1-day chunks)
+-- Table 1: of_raw_ticks
 -- Every FULL-mode tick as received from KiteTicker
-CREATE TABLE IF NOT EXISTS raw_ticks (
+CREATE TABLE IF NOT EXISTS of_raw_ticks (
     ts                    TIMESTAMPTZ NOT NULL,
     instrument_token      INTEGER NOT NULL,
     symbol                TEXT NOT NULL,
@@ -21,13 +22,12 @@ CREATE TABLE IF NOT EXISTS raw_ticks (
     last_trade_time       TIMESTAMPTZ
 );
 
-SELECT create_hypertable('raw_ticks', 'ts', chunk_time_interval => INTERVAL '1 day',
-                          if_not_exists => TRUE);
-CREATE INDEX IF NOT EXISTS idx_raw_ticks_symbol_ts ON raw_ticks (symbol, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_of_raw_ticks_symbol_ts ON of_raw_ticks (symbol, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_of_raw_ticks_ts ON of_raw_ticks (ts DESC);
 
--- Table 2: depth_snapshots (hypertable, 1-day chunks)
+-- Table 2: of_depth_snapshots
 -- 5-level bid/ask depth stored as JSONB
-CREATE TABLE IF NOT EXISTS depth_snapshots (
+CREATE TABLE IF NOT EXISTS of_depth_snapshots (
     ts                  TIMESTAMPTZ NOT NULL,
     instrument_token    INTEGER NOT NULL,
     symbol              TEXT NOT NULL,
@@ -39,13 +39,11 @@ CREATE TABLE IF NOT EXISTS depth_snapshots (
     bid_ask_imbalance   DOUBLE PRECISION
 );
 
-SELECT create_hypertable('depth_snapshots', 'ts', chunk_time_interval => INTERVAL '1 day',
-                          if_not_exists => TRUE);
-CREATE INDEX IF NOT EXISTS idx_depth_symbol_ts ON depth_snapshots (symbol, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_of_depth_symbol_ts ON of_depth_snapshots (symbol, ts DESC);
 
--- Table 3: orderflow_metrics (hypertable, 1-day chunks)
+-- Table 3: of_metrics
 -- Computed metrics every N seconds
-CREATE TABLE IF NOT EXISTS orderflow_metrics (
+CREATE TABLE IF NOT EXISTS of_metrics (
     ts                      TIMESTAMPTZ NOT NULL,
     symbol                  TEXT NOT NULL,
     interval_seconds        INTEGER DEFAULT 10,
@@ -79,52 +77,25 @@ CREATE TABLE IF NOT EXISTS orderflow_metrics (
     price_close             DOUBLE PRECISION
 );
 
-SELECT create_hypertable('orderflow_metrics', 'ts', chunk_time_interval => INTERVAL '1 day',
-                          if_not_exists => TRUE);
-CREATE INDEX IF NOT EXISTS idx_metrics_symbol_ts ON orderflow_metrics (symbol, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_of_metrics_symbol_ts ON of_metrics (symbol, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_of_metrics_ts ON of_metrics (ts DESC);
 
--- Continuous Aggregate: 1-minute bars from orderflow_metrics
-CREATE MATERIALIZED VIEW IF NOT EXISTS orderflow_1min
-WITH (timescaledb.continuous) AS
+-- Materialized view: 1-minute bars from of_metrics
+CREATE MATERIALIZED VIEW IF NOT EXISTS of_metrics_1min AS
 SELECT
-    time_bucket('1 minute', ts) AS bucket,
+    date_trunc('minute', ts) AS bucket,
     symbol,
     SUM(trade_delta) AS delta_1m,
-    LAST(cumulative_delta, ts) AS cvd,
+    (array_agg(cumulative_delta ORDER BY ts DESC))[1] AS cvd,
     AVG(bid_ask_imbalance_l5) AS avg_imbalance,
     SUM(interval_volume) AS volume_1m,
     SUM(large_trade_count) AS large_trades,
-    LAST(phase, ts) AS phase,
-    FIRST(price_open, ts) AS open,
+    (array_agg(phase ORDER BY ts DESC))[1] AS phase,
+    (array_agg(price_open ORDER BY ts ASC))[1] AS open,
     MAX(price_high) AS high,
     MIN(price_low) AS low,
-    LAST(price_close, ts) AS close
-FROM orderflow_metrics
+    (array_agg(price_close ORDER BY ts DESC))[1] AS close
+FROM of_metrics
 GROUP BY bucket, symbol;
 
--- Retention policies
-SELECT add_retention_policy('raw_ticks', INTERVAL '7 days', if_not_exists => TRUE);
-SELECT add_retention_policy('depth_snapshots', INTERVAL '7 days', if_not_exists => TRUE);
-SELECT add_retention_policy('orderflow_metrics', INTERVAL '90 days', if_not_exists => TRUE);
-
--- Enable compression on older chunks
-ALTER TABLE raw_ticks SET (
-    timescaledb.compress,
-    timescaledb.compress_segmentby = 'symbol',
-    timescaledb.compress_orderby = 'ts DESC'
-);
-SELECT add_compression_policy('raw_ticks', INTERVAL '2 days', if_not_exists => TRUE);
-
-ALTER TABLE depth_snapshots SET (
-    timescaledb.compress,
-    timescaledb.compress_segmentby = 'symbol',
-    timescaledb.compress_orderby = 'ts DESC'
-);
-SELECT add_compression_policy('depth_snapshots', INTERVAL '2 days', if_not_exists => TRUE);
-
-ALTER TABLE orderflow_metrics SET (
-    timescaledb.compress,
-    timescaledb.compress_segmentby = 'symbol',
-    timescaledb.compress_orderby = 'ts DESC'
-);
-SELECT add_compression_policy('orderflow_metrics', INTERVAL '7 days', if_not_exists => TRUE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_of_metrics_1min_pk ON of_metrics_1min (bucket, symbol);

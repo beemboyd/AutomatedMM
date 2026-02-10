@@ -1,14 +1,14 @@
 """
-TimescaleDB connection pool and batch operations for OrderFlow module.
+PostgreSQL connection pool and batch operations for OrderFlow module.
 
+Uses the existing tick_data database (shared with Simplified_India_TS).
 Provides thread-safe connection pooling via psycopg2.pool.ThreadedConnectionPool
 and high-performance batch inserts via psycopg2.extras.execute_values.
 """
 
-import json
 import logging
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class DBManager:
-    """TimescaleDB connection pool manager with batch insert and query helpers"""
+    """PostgreSQL connection pool manager with batch insert and query helpers"""
 
     def __init__(self, db_config: Dict[str, Any]):
         self.db_config = db_config
@@ -34,11 +34,11 @@ class DBManager:
                 maxconn=self.db_config.get("max_connections", 10),
                 host=self.db_config.get("host", "localhost"),
                 port=self.db_config.get("port", 5432),
-                dbname=self.db_config.get("name", "orderflow"),
+                dbname=self.db_config.get("name", "tick_data"),
                 user=self.db_config.get("user", "maverick"),
                 password=self.db_config.get("password", ""),
             )
-            logger.info("TimescaleDB connection pool initialized "
+            logger.info("PostgreSQL connection pool initialized "
                         f"(min={self.db_config.get('min_connections', 2)}, "
                         f"max={self.db_config.get('max_connections', 10)})")
         except Exception as e:
@@ -69,7 +69,7 @@ class DBManager:
         """Batch insert raw tick records.
 
         Args:
-            ticks: List of tuples matching raw_ticks columns:
+            ticks: List of tuples matching of_raw_ticks columns:
                 (ts, instrument_token, symbol, last_price, last_traded_quantity,
                  average_traded_price, volume_traded, total_buy_quantity,
                  total_sell_quantity, oi, ohlc_open, ohlc_high, ohlc_low,
@@ -79,7 +79,7 @@ class DBManager:
             return
 
         query = """
-            INSERT INTO raw_ticks (
+            INSERT INTO of_raw_ticks (
                 ts, instrument_token, symbol, last_price, last_traded_quantity,
                 average_traded_price, volume_traded, total_buy_quantity,
                 total_sell_quantity, oi, ohlc_open, ohlc_high, ohlc_low,
@@ -95,7 +95,7 @@ class DBManager:
         """Batch insert depth snapshot records.
 
         Args:
-            snapshots: List of tuples matching depth_snapshots columns:
+            snapshots: List of tuples matching of_depth_snapshots columns:
                 (ts, instrument_token, symbol, buy_depth_json, sell_depth_json,
                  bid_ask_spread, total_bid_qty, total_ask_qty, bid_ask_imbalance)
         """
@@ -103,7 +103,7 @@ class DBManager:
             return
 
         query = """
-            INSERT INTO depth_snapshots (
+            INSERT INTO of_depth_snapshots (
                 ts, instrument_token, symbol, buy_depth, sell_depth,
                 bid_ask_spread, total_bid_qty, total_ask_qty, bid_ask_imbalance
             ) VALUES %s
@@ -117,13 +117,13 @@ class DBManager:
         """Batch insert computed orderflow metric records.
 
         Args:
-            metrics: List of tuples matching orderflow_metrics columns
+            metrics: List of tuples matching of_metrics columns
         """
         if not metrics:
             return
 
         query = """
-            INSERT INTO orderflow_metrics (
+            INSERT INTO of_metrics (
                 ts, symbol, interval_seconds,
                 trade_delta, cumulative_delta, delta_divergence,
                 phase, phase_confidence,
@@ -147,7 +147,7 @@ class DBManager:
         with self.get_connection() as conn:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cursor.execute("""
-                SELECT * FROM orderflow_metrics
+                SELECT * FROM of_metrics
                 WHERE symbol = %s
                 ORDER BY ts DESC
                 LIMIT %s
@@ -160,8 +160,8 @@ class DBManager:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cursor.execute("""
                 SELECT ts, cumulative_delta, price_close, trade_delta, phase
-                FROM orderflow_metrics
-                WHERE symbol = %s AND ts > NOW() - INTERVAL '%s minutes'
+                FROM of_metrics
+                WHERE symbol = %s AND ts > NOW() - make_interval(mins => %s)
                 ORDER BY ts ASC
             """, (symbol, since_minutes))
             return [dict(row) for row in cursor.fetchall()]
@@ -178,7 +178,7 @@ class DBManager:
                     ROUND(last_price::numeric, 1) AS price_level,
                     SUM(last_traded_quantity) AS total_volume,
                     COUNT(*) AS tick_count
-                FROM raw_ticks
+                FROM of_raw_ticks
                 WHERE symbol = %s AND ts::date = %s::date
                 GROUP BY price_level
                 ORDER BY price_level
@@ -194,8 +194,8 @@ class DBManager:
                     SELECT ts, symbol, phase, phase_confidence, price_close,
                            cumulative_delta,
                            LAG(phase) OVER (ORDER BY ts) AS prev_phase
-                    FROM orderflow_metrics
-                    WHERE symbol = %s AND ts > NOW() - INTERVAL '%s minutes'
+                    FROM of_metrics
+                    WHERE symbol = %s AND ts > NOW() - make_interval(mins => %s)
                 )
                 SELECT * FROM phase_changes
                 WHERE phase != prev_phase OR prev_phase IS NULL
@@ -204,12 +204,12 @@ class DBManager:
             return [dict(row) for row in cursor.fetchall()]
 
     def get_1min_bars(self, symbol: str, since_minutes: int = 60) -> List[Dict]:
-        """Get 1-minute aggregated bars from the continuous aggregate"""
+        """Get 1-minute aggregated bars from the materialized view"""
         with self.get_connection() as conn:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cursor.execute("""
-                SELECT * FROM orderflow_1min
-                WHERE symbol = %s AND bucket > NOW() - INTERVAL '%s minutes'
+                SELECT * FROM of_metrics_1min
+                WHERE symbol = %s AND bucket > NOW() - make_interval(mins => %s)
                 ORDER BY bucket ASC
             """, (symbol, since_minutes))
             return [dict(row) for row in cursor.fetchall()]
@@ -219,10 +219,34 @@ class DBManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if symbol:
-                cursor.execute("SELECT COUNT(*) FROM raw_ticks WHERE symbol = %s", (symbol,))
+                cursor.execute("SELECT COUNT(*) FROM of_raw_ticks WHERE symbol = %s", (symbol,))
             else:
-                cursor.execute("SELECT COUNT(*) FROM raw_ticks")
+                cursor.execute("SELECT COUNT(*) FROM of_raw_ticks")
             return cursor.fetchone()[0]
+
+    def purge_old_data(self, raw_ticks_days: int = 7, depth_days: int = 7,
+                       metrics_days: int = 90):
+        """Delete data older than the specified retention periods"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "DELETE FROM of_raw_ticks WHERE ts < NOW() - make_interval(days => %s)",
+                (raw_ticks_days,))
+            raw_deleted = cursor.rowcount
+
+            cursor.execute(
+                "DELETE FROM of_depth_snapshots WHERE ts < NOW() - make_interval(days => %s)",
+                (depth_days,))
+            depth_deleted = cursor.rowcount
+
+            cursor.execute(
+                "DELETE FROM of_metrics WHERE ts < NOW() - make_interval(days => %s)",
+                (metrics_days,))
+            metrics_deleted = cursor.rowcount
+
+            logger.info(f"Purged old data: {raw_deleted} ticks, "
+                        f"{depth_deleted} depth, {metrics_deleted} metrics")
 
     # ── Lifecycle ──
 
