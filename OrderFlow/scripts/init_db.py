@@ -94,6 +94,93 @@ def apply_schema(db_config):
     logger.info("Schema applied successfully")
 
 
+def apply_migrations(db_config):
+    """Apply schema migrations to existing tables (idempotent)"""
+    conn = get_connection(db_config)
+    conn.autocommit = True
+    cursor = conn.cursor()
+
+    # ── Migration 1: Add enhanced metrics columns to of_metrics ──
+    new_columns = [
+        ("bid_ask_ratio",       "DOUBLE PRECISION"),
+        ("net_liquidity_delta", "BIGINT DEFAULT 0"),
+        ("spread",              "DOUBLE PRECISION"),
+        ("best_bid_qty",        "BIGINT DEFAULT 0"),
+        ("best_ask_qty",        "BIGINT DEFAULT 0"),
+        ("delta_per_trade",     "DOUBLE PRECISION"),
+        ("cvd_slope",           "DOUBLE PRECISION"),
+        ("buy_sell_ratio",      "DOUBLE PRECISION"),
+        ("buying_pressure",     "DOUBLE PRECISION DEFAULT 0"),
+        ("selling_pressure",    "DOUBLE PRECISION DEFAULT 0"),
+        ("divergence_score",    "DOUBLE PRECISION DEFAULT 0"),
+    ]
+
+    for col_name, col_type in new_columns:
+        try:
+            cursor.execute(
+                f"ALTER TABLE of_metrics ADD COLUMN {col_name} {col_type};"
+            )
+            logger.info(f"Added column: of_metrics.{col_name}")
+        except psycopg2.errors.DuplicateColumn:
+            logger.debug(f"Column of_metrics.{col_name} already exists, skipping")
+
+    # ── Migration 2: Change delta_divergence from BOOLEAN to DOUBLE PRECISION ──
+    # Check current type
+    cursor.execute("""
+        SELECT data_type FROM information_schema.columns
+        WHERE table_name = 'of_metrics' AND column_name = 'delta_divergence'
+    """)
+    row = cursor.fetchone()
+    if row and row[0] == 'boolean':
+        logger.info("Migrating delta_divergence from BOOLEAN to DOUBLE PRECISION...")
+        cursor.execute("""
+            ALTER TABLE of_metrics
+            ALTER COLUMN delta_divergence TYPE DOUBLE PRECISION
+            USING CASE WHEN delta_divergence THEN 1.0 ELSE 0.0 END;
+        """)
+        cursor.execute("""
+            ALTER TABLE of_metrics ALTER COLUMN delta_divergence SET DEFAULT 0;
+        """)
+        logger.info("Migrated delta_divergence to DOUBLE PRECISION")
+
+    # ── Migration 3: Recreate of_metrics_1min materialized view ──
+    logger.info("Recreating of_metrics_1min materialized view...")
+    cursor.execute("DROP MATERIALIZED VIEW IF EXISTS of_metrics_1min CASCADE;")
+
+    cursor.execute("""
+        CREATE MATERIALIZED VIEW of_metrics_1min AS
+        SELECT
+            date_trunc('minute', ts) AS bucket,
+            symbol,
+            SUM(trade_delta) AS delta_1m,
+            (array_agg(cumulative_delta ORDER BY ts DESC))[1] AS cvd,
+            AVG(bid_ask_imbalance_l5) AS avg_imbalance,
+            SUM(interval_volume) AS volume_1m,
+            SUM(large_trade_count) AS large_trades,
+            (array_agg(phase ORDER BY ts DESC))[1] AS phase,
+            (array_agg(price_open ORDER BY ts ASC))[1] AS open,
+            MAX(price_high) AS high,
+            MIN(price_low) AS low,
+            (array_agg(price_close ORDER BY ts DESC))[1] AS close,
+            AVG(buying_pressure) AS avg_buying_pressure,
+            AVG(selling_pressure) AS avg_selling_pressure,
+            (array_agg(divergence_score ORDER BY ts DESC))[1] AS divergence_score,
+            AVG(bid_ask_ratio) AS avg_bid_ask_ratio,
+            (array_agg(cvd_slope ORDER BY ts DESC))[1] AS cvd_slope
+        FROM of_metrics
+        GROUP BY bucket, symbol;
+    """)
+    cursor.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_of_metrics_1min_pk "
+        "ON of_metrics_1min (bucket, symbol);"
+    )
+    logger.info("Materialized view of_metrics_1min recreated with enhanced columns")
+
+    cursor.close()
+    conn.close()
+    logger.info("Migrations applied successfully")
+
+
 def verify_setup(db_config):
     """Verify OrderFlow tables exist"""
     conn = get_connection(db_config)
@@ -153,6 +240,7 @@ def main():
         drop_existing(db_config)
 
     apply_schema(db_config)
+    apply_migrations(db_config)
     verify_setup(db_config)
 
 

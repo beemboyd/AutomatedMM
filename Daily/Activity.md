@@ -1,6 +1,29 @@
 # Activity Log
 
 ## 2026-02-10 IST - Claude
+**Enhanced OrderFlow Metrics: Delta/CVD, Liquidity & Composite Scores**
+
+**Purpose:**
+- Add liquidity tracking from resting order book (bid_ask_ratio, spread, best_bid/ask_qty, net_liquidity_delta)
+- Add CVD slope (OLS over 6 intervals) for momentum detection
+- Add composite buying_pressure/selling_pressure scores (0-100) combining 6 independent signals
+- Change divergence from boolean to continuous score (-100 to +100)
+- Add delta_per_trade and buy_sell_ratio for normalized trade flow analysis
+
+**Modified Files:**
+1. `OrderFlow/core/metrics_engine.py` - Enhanced SymbolState with liquidity fields; new _compute_cvd_slope(), _compute_composite_scores(); _check_divergence() returns float; expanded 35-field metrics tuple
+2. `OrderFlow/config/schema.sql` - Added 11 new columns to of_metrics; delta_divergence changed BOOLEAN→DOUBLE PRECISION; recreated of_metrics_1min view with new aggregations
+3. `OrderFlow/core/db_manager.py` - Updated INSERT INTO of_metrics with 11 new columns (35 total)
+4. `OrderFlow/scripts/init_db.py` - Added apply_migrations() for ALTER TABLE migration; handles boolean→float conversion of delta_divergence; drops+recreates materialized view
+
+**New Columns in of_metrics:**
+bid_ask_ratio, net_liquidity_delta, spread, best_bid_qty, best_ask_qty, delta_per_trade, cvd_slope, buy_sell_ratio, buying_pressure, selling_pressure, divergence_score
+
+**Impact:** Run `python OrderFlow/scripts/init_db.py` to apply migrations to existing DB. No data loss.
+
+---
+
+## 2026-02-10 IST - Claude
 **Implemented OrderFlow Module - Real-time Order Flow Analysis**
 
 **Purpose:**

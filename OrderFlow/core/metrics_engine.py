@@ -3,13 +3,15 @@ Order flow metrics computation engine for OrderFlow module.
 
 Computes per-symbol real-time metrics:
 - Trade delta (tick rule: price up = buy, price down = sell)
-- Cumulative Volume Delta (CVD)
+- Cumulative Volume Delta (CVD) with slope/acceleration
 - Bid-ask imbalance (weighted across 5 depth levels)
 - Stacked imbalance detection
 - Absorption detection (large resting orders absorbing aggression)
 - Large trade detection
-- Delta divergence (price vs CVD divergence)
+- Delta divergence (continuous score: price vs CVD divergence severity)
 - Wyckoff phase detection (accumulation/markup/distribution/markdown)
+- Liquidity metrics (bid_ask_ratio, spread, net_liquidity_delta)
+- Composite buying/selling pressure scores (0-100)
 
 No database dependency — operates on in-memory state and produces tuples
 for batch insertion by the TickBuffer/DBManager.
@@ -62,6 +64,16 @@ class SymbolState:
     absorption_buy: bool = False
     absorption_sell: bool = False
 
+    # ── Liquidity metrics (NEW) ──
+    bid_ask_ratio: float = 0.0
+    prev_bid_ask_ratio: float = 0.0
+    bid_liquidity_change: int = 0   # accumulated over interval
+    ask_liquidity_change: int = 0   # accumulated over interval
+    spread: float = 0.0
+    best_bid_qty: int = 0
+    best_ask_qty: int = 0
+    net_liquidity_delta: int = 0    # accumulated over interval
+
     # Phase detection history
     delta_history: deque = field(default_factory=lambda: deque(maxlen=60))
     cvd_history: deque = field(default_factory=lambda: deque(maxlen=60))
@@ -96,6 +108,9 @@ class MetricsEngine:
         self.absorption_volume_threshold = phase_config.get("absorption_volume_threshold", 2.0)
         self.divergence_threshold = phase_config.get("delta_divergence_threshold", 0.3)
         self.min_confidence = phase_config.get("min_confidence", 0.4)
+
+        # CVD slope lookback (6 intervals = 60s at 10s interval)
+        self.cvd_slope_lookback = config.get("cvd_slope_lookback", 6)
 
         # Per-symbol state
         self._states: Dict[str, SymbolState] = {}
@@ -168,7 +183,7 @@ class MetricsEngine:
             self._compute_and_emit(symbol, state)
 
     def _process_depth(self, state: SymbolState, depth: Dict, tick: Dict):
-        """Process depth data for imbalance and absorption metrics"""
+        """Process depth data for imbalance, absorption, and liquidity metrics"""
         buy_levels = depth.get("buy", [])
         sell_levels = depth.get("sell", [])
 
@@ -214,10 +229,31 @@ class MetricsEngine:
         state.stacked_imbalance_buy = stacked_buy
         state.stacked_imbalance_sell = stacked_sell
 
-        # ── Absorption detection ──
+        # ── Resting liquidity from full order book ──
         total_bid_qty = tick.get("total_buy_quantity", 0)
         total_ask_qty = tick.get("total_sell_quantity", 0)
 
+        # Bid/ask ratio: who is passively positioned across ALL levels
+        state.bid_ask_ratio = (
+            total_bid_qty / total_ask_qty if total_ask_qty > 0 else 0.0
+        )
+
+        # Liquidity changes: track how the book is shifting within this interval
+        if state.prev_total_bid_qty > 0:
+            bid_change = total_bid_qty - state.prev_total_bid_qty
+            ask_change = total_ask_qty - state.prev_total_ask_qty
+            state.bid_liquidity_change += bid_change
+            state.ask_liquidity_change += ask_change
+            state.net_liquidity_delta += (bid_change - ask_change)
+
+        # Spread and top-of-book quantities
+        best_bid_price = buy_levels[0].get("price", 0)
+        best_ask_price = sell_levels[0].get("price", 0)
+        state.spread = best_ask_price - best_bid_price if best_ask_price > 0 else 0.0
+        state.best_bid_qty = bid_qty_l1
+        state.best_ask_qty = ask_qty_l1
+
+        # ── Absorption detection ──
         # Buy absorption: strong selling (negative delta) but bid qty holds/increases
         if (state.interval_delta < 0 and state.prev_total_bid_qty > 0 and
                 total_bid_qty >= state.prev_total_bid_qty * 0.95):
@@ -251,8 +287,8 @@ class MetricsEngine:
         price_low = min(prices) if prices else state.last_price
         price_close = prices[-1] if prices else state.last_price
 
-        # Delta divergence check
-        delta_divergence = self._check_divergence(state)
+        # Delta divergence check (now returns float -100 to +100)
+        divergence_score = self._check_divergence(state)
 
         # Update history for phase detection
         state.delta_history.append(state.interval_delta)
@@ -265,14 +301,36 @@ class MetricsEngine:
         state.phase = phase
         state.phase_confidence = confidence
 
-        # Build the metrics tuple
+        # ── Enhanced metrics ──
+        delta_per_trade = (
+            state.interval_delta / state.tick_count if state.tick_count > 0 else 0.0
+        )
+
+        buy_sell_ratio = (
+            state.interval_buy_volume / state.interval_sell_volume
+            if state.interval_sell_volume > 0 else 0.0
+        )
+
+        cvd_slope = self._compute_cvd_slope(state)
+
+        # Composite scores
+        buying_pressure, selling_pressure = self._compute_composite_scores(
+            state, cvd_slope
+        )
+
+        # Legacy boolean → float for DB column (delta_divergence)
+        # We now store the divergence_score in divergence_score column,
+        # and keep delta_divergence as abs(score) > 30 threshold for backward compat
+        delta_divergence_compat = divergence_score
+
+        # Build the metrics tuple (35 fields — must match db_manager INSERT)
         metrics_record = (
             datetime.now(timezone.utc),          # ts
             symbol,                               # symbol
             self.interval_seconds,                # interval_seconds
             state.interval_delta,                 # trade_delta
             state.cumulative_delta,               # cumulative_delta
-            delta_divergence,                     # delta_divergence
+            delta_divergence_compat,              # delta_divergence (now float)
             phase,                                # phase
             confidence,                           # phase_confidence
             state.bid_ask_imbalance_l1,           # bid_ask_imbalance_l1
@@ -291,13 +349,26 @@ class MetricsEngine:
             round(price_high, 2),                 # price_high
             round(price_low, 2),                  # price_low
             round(price_close, 2),                # price_close
+            # ── New columns ──
+            round(state.bid_ask_ratio, 4),        # bid_ask_ratio
+            state.net_liquidity_delta,            # net_liquidity_delta
+            round(state.spread, 2),               # spread
+            state.best_bid_qty,                   # best_bid_qty
+            state.best_ask_qty,                   # best_ask_qty
+            round(delta_per_trade, 2),            # delta_per_trade
+            round(cvd_slope, 2) if cvd_slope is not None else None,  # cvd_slope
+            round(buy_sell_ratio, 4),             # buy_sell_ratio
+            round(buying_pressure, 1),            # buying_pressure
+            round(selling_pressure, 1),           # selling_pressure
+            round(divergence_score, 1),           # divergence_score
         )
 
         self._pending_metrics.append(metrics_record)
 
         logger.debug(f"{symbol}: delta={state.interval_delta:+.0f} "
                      f"cvd={state.cumulative_delta:+.0f} phase={phase}({confidence:.2f}) "
-                     f"vol={state.interval_volume} large={state.large_trade_count}")
+                     f"vol={state.interval_volume} bp={buying_pressure:.0f} "
+                     f"sp={selling_pressure:.0f} div={divergence_score:+.0f}")
 
         # Reset interval state (preserve cumulative values)
         state.interval_delta = 0.0
@@ -309,16 +380,22 @@ class MetricsEngine:
         state.large_trade_volume = 0
         state.absorption_buy = False
         state.absorption_sell = False
+        state.bid_liquidity_change = 0
+        state.ask_liquidity_change = 0
+        state.net_liquidity_delta = 0
         state.tick_count = 0
         state.interval_start_time = time.time()
 
-    def _check_divergence(self, state: SymbolState) -> bool:
+    def _check_divergence(self, state: SymbolState) -> float:
         """Check for delta-price divergence.
 
-        Returns True if price direction and CVD direction disagree.
+        Returns a continuous score from -100 to +100:
+          +100 = bearish divergence (price up, CVD collapsing → distribution)
+          -100 = bullish divergence (price down, CVD rising → accumulation)
+             0 = price and CVD in sync (healthy trend)
         """
         if len(state.price_history) < 5 or len(state.cvd_history) < 5:
-            return False
+            return 0.0
 
         recent_prices = list(state.price_history)[-5:]
         recent_cvd = list(state.cvd_history)[-5:]
@@ -329,18 +406,120 @@ class MetricsEngine:
         # Normalize
         price_range = max(recent_prices) - min(recent_prices)
         if price_range == 0:
-            return False
+            return 0.0
 
         norm_price = price_change / price_range
-        cvd_range = max(recent_cvd) - min(recent_cvd) if max(recent_cvd) != min(recent_cvd) else 1
-        norm_cvd = cvd_change / cvd_range
+        cvd_range = max(recent_cvd) - min(recent_cvd)
+        norm_cvd = cvd_change / cvd_range if cvd_range != 0 else 0.0
 
-        # Divergence: price up but CVD down (or vice versa)
-        if abs(norm_price) > self.divergence_threshold and abs(norm_cvd) > self.divergence_threshold:
-            if (norm_price > 0 and norm_cvd < 0) or (norm_price < 0 and norm_cvd > 0):
-                return True
+        # Both must be meaningful to score a divergence
+        if abs(norm_price) < self.divergence_threshold or abs(norm_cvd) < self.divergence_threshold:
+            return 0.0
 
-        return False
+        # Divergence = price and CVD moving in opposite directions
+        # Score = how strongly they disagree, scaled to -100..+100
+        # Positive score = bearish divergence (price up, CVD down)
+        # Negative score = bullish divergence (price down, CVD up)
+        if (norm_price > 0 and norm_cvd < 0):
+            # Bearish divergence: price up but CVD down
+            severity = min(abs(norm_price) + abs(norm_cvd), 2.0) / 2.0
+            return round(severity * 100, 1)
+        elif (norm_price < 0 and norm_cvd > 0):
+            # Bullish divergence: price down but CVD up
+            severity = min(abs(norm_price) + abs(norm_cvd), 2.0) / 2.0
+            return round(-severity * 100, 1)
+
+        return 0.0
+
+    def _compute_cvd_slope(self, state: SymbolState) -> Optional[float]:
+        """Compute CVD slope via OLS over last N intervals.
+
+        Returns slope (CVD units per interval), or None if insufficient data.
+        Positive slope = buying accelerating, negative = fading.
+        """
+        n = self.cvd_slope_lookback
+        if len(state.cvd_history) < n:
+            return None
+
+        recent_cvd = list(state.cvd_history)[-n:]
+
+        # Simple OLS: slope = (n*sum(x*y) - sum(x)*sum(y)) / (n*sum(x^2) - sum(x)^2)
+        # where x = 0,1,2,...,n-1 and y = cvd values
+        sum_x = 0.0
+        sum_y = 0.0
+        sum_xy = 0.0
+        sum_x2 = 0.0
+        for i, y in enumerate(recent_cvd):
+            sum_x += i
+            sum_y += y
+            sum_xy += i * y
+            sum_x2 += i * i
+
+        denom = n * sum_x2 - sum_x * sum_x
+        if denom == 0:
+            return 0.0
+
+        slope = (n * sum_xy - sum_x * sum_y) / denom
+        return slope
+
+    def _compute_composite_scores(self, state: SymbolState,
+                                  cvd_slope: Optional[float]) -> Tuple[float, float]:
+        """Compute buying_pressure and selling_pressure composite scores (0-100).
+
+        Combines 6 independent signals:
+        1. trade_delta direction
+        2. cvd_slope direction
+        3. bid_ask_ratio vs 1.0
+        4. net_liquidity_delta direction (book shifting)
+        5. ask/bid liquidity pulled (resistance/support fading)
+        6. stacked imbalance
+
+        Returns:
+            (buying_pressure, selling_pressure) each 0-100
+        """
+        buying = 0.0
+        selling = 0.0
+
+        # 1. Trade delta (who is aggressing) — 20 points
+        if state.interval_delta > 0:
+            buying += 20
+        elif state.interval_delta < 0:
+            selling += 20
+
+        # 2. CVD slope (momentum direction) — 20 points
+        if cvd_slope is not None:
+            if cvd_slope > 0:
+                buying += 20
+            elif cvd_slope < 0:
+                selling += 20
+
+        # 3. Bid/ask ratio (passive positioning) — 15 points
+        if state.bid_ask_ratio > 1.0:
+            buying += 15
+        elif state.bid_ask_ratio > 0 and state.bid_ask_ratio < 1.0:
+            selling += 15
+
+        # 4. Net liquidity delta (book shift direction) — 15 points
+        if state.net_liquidity_delta > 0:
+            buying += 15
+        elif state.net_liquidity_delta < 0:
+            selling += 15
+
+        # 5. Liquidity being pulled (resistance/support fading) — 15 points
+        if state.ask_liquidity_change < 0:
+            # Asks pulled = resistance fading → bullish
+            buying += 15
+        if state.bid_liquidity_change < 0:
+            # Bids pulled = support fading → bearish
+            selling += 15
+
+        # 6. Stacked imbalance — 15 points
+        if state.stacked_imbalance_buy >= 2:
+            buying += 15
+        if state.stacked_imbalance_sell >= 2:
+            selling += 15
+
+        return (min(buying, 100.0), min(selling, 100.0))
 
     def _detect_phase(self, state: SymbolState) -> Tuple[str, float]:
         """Detect current Wyckoff-style market phase.
@@ -484,6 +663,12 @@ class MetricsEngine:
             "interval_delta": state.interval_delta,
             "interval_volume": state.interval_volume,
             "tick_count": state.tick_count,
+            # ── New fields ──
+            "bid_ask_ratio": state.bid_ask_ratio,
+            "spread": state.spread,
+            "best_bid_qty": state.best_bid_qty,
+            "best_ask_qty": state.best_ask_qty,
+            "net_liquidity_delta": state.net_liquidity_delta,
         }
 
     def get_all_states(self) -> Dict[str, Dict]:
@@ -505,4 +690,9 @@ class MetricsEngine:
             state.imbalance_history.clear()
             state.phase = "unknown"
             state.phase_confidence = 0.0
+            state.bid_ask_ratio = 0.0
+            state.prev_bid_ask_ratio = 0.0
+            state.net_liquidity_delta = 0
+            state.bid_liquidity_change = 0
+            state.ask_liquidity_change = 0
             logger.info(f"Reset daily state for {symbol}")

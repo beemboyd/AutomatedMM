@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS of_metrics (
     -- Delta
     trade_delta             DOUBLE PRECISION,
     cumulative_delta        DOUBLE PRECISION,
-    delta_divergence        BOOLEAN DEFAULT FALSE,
+    delta_divergence        DOUBLE PRECISION DEFAULT 0,
     -- Phase detection
     phase                   TEXT DEFAULT 'unknown',
     phase_confidence        DOUBLE PRECISION DEFAULT 0,
@@ -74,7 +74,21 @@ CREATE TABLE IF NOT EXISTS of_metrics (
     price_open              DOUBLE PRECISION,
     price_high              DOUBLE PRECISION,
     price_low               DOUBLE PRECISION,
-    price_close             DOUBLE PRECISION
+    price_close             DOUBLE PRECISION,
+    -- Liquidity metrics
+    bid_ask_ratio           DOUBLE PRECISION,
+    net_liquidity_delta     BIGINT DEFAULT 0,
+    spread                  DOUBLE PRECISION,
+    best_bid_qty            BIGINT DEFAULT 0,
+    best_ask_qty            BIGINT DEFAULT 0,
+    -- Enhanced delta/CVD
+    delta_per_trade         DOUBLE PRECISION,
+    cvd_slope               DOUBLE PRECISION,
+    buy_sell_ratio          DOUBLE PRECISION,
+    -- Composite scores
+    buying_pressure         DOUBLE PRECISION DEFAULT 0,
+    selling_pressure        DOUBLE PRECISION DEFAULT 0,
+    divergence_score        DOUBLE PRECISION DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_of_metrics_symbol_ts ON of_metrics (symbol, ts DESC);
@@ -94,7 +108,12 @@ SELECT
     (array_agg(price_open ORDER BY ts ASC))[1] AS open,
     MAX(price_high) AS high,
     MIN(price_low) AS low,
-    (array_agg(price_close ORDER BY ts DESC))[1] AS close
+    (array_agg(price_close ORDER BY ts DESC))[1] AS close,
+    AVG(buying_pressure) AS avg_buying_pressure,
+    AVG(selling_pressure) AS avg_selling_pressure,
+    (array_agg(divergence_score ORDER BY ts DESC))[1] AS divergence_score,
+    AVG(bid_ask_ratio) AS avg_bid_ask_ratio,
+    (array_agg(cvd_slope ORDER BY ts DESC))[1] AS cvd_slope
 FROM of_metrics
 GROUP BY bucket, symbol;
 

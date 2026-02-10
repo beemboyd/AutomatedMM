@@ -132,7 +132,11 @@ class DBManager:
                 interval_volume, interval_buy_volume, interval_sell_volume, vwap,
                 large_trade_count, large_trade_volume,
                 absorption_buy, absorption_sell,
-                price_open, price_high, price_low, price_close
+                price_open, price_high, price_low, price_close,
+                bid_ask_ratio, net_liquidity_delta, spread,
+                best_bid_qty, best_ask_qty,
+                delta_per_trade, cvd_slope, buy_sell_ratio,
+                buying_pressure, selling_pressure, divergence_score
             ) VALUES %s
         """
         with self.get_connection() as conn:
