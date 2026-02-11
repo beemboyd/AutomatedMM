@@ -146,24 +146,6 @@ def api_timeline():
         v = r.get(k)
         return float(v) if v is not None else None
 
-    # Delta CVD (PineScript candle-direction logic):
-    #   close > open → +volume, close < open → -volume, equal → 0
-    delta_cvd = []
-    for r in rows:
-        pc, po, vol = _v(r, "price_close"), _v(r, "price_open"), _v(r, "interval_volume")
-        if pc is not None and po is not None and vol is not None:
-            if pc > po:
-                delta_cvd.append(vol)
-            elif pc < po:
-                delta_cvd.append(-vol)
-            else:
-                delta_cvd.append(0.0)
-        else:
-            delta_cvd.append(0.0)
-
-    dcvd_ema21 = compute_ema(delta_cvd, 21)
-    dcvd_ema50 = compute_ema(delta_cvd, 50)
-
     return jsonify(
         {
             "ts": [r["ts"].astimezone(IST).strftime("%H:%M:%S") for r in rows],
@@ -179,6 +161,69 @@ def api_timeline():
             "phase_confidence": [_v(r, "phase_confidence") for r in rows],
             "interval_volume": [_v(r, "interval_volume") for r in rows],
             "vwap": [_v(r, "vwap") for r in rows],
+        }
+    )
+
+
+@app.route("/api/delta_cvd")
+def api_delta_cvd():
+    """1000-tick bar Delta CVD with EMA(21) and EMA(50).
+
+    Fetches all raw ticks for the symbol, groups every 1000 ticks into
+    OHLC+Volume bars, then applies the PineScript candle-direction logic:
+      close > open  →  delta_cvd = +volume
+      close < open  →  delta_cvd = -volume
+      close == open →  delta_cvd = 0
+    """
+    symbol = request.args.get("symbol", "MTARTECH")
+    bar_size = int(request.args.get("bar_size", 1000))
+
+    # Fetch raw ticks ordered chronologically
+    rows = query_rows(
+        """SELECT last_price, last_traded_quantity, ts
+           FROM of_raw_ticks
+           WHERE symbol = %s
+           ORDER BY ts ASC""",
+        (symbol,),
+    )
+
+    if not rows:
+        return jsonify({"bars": 0, "ts": [], "dcvd_ema21": [], "dcvd_ema50": []})
+
+    # Build 1000-tick bars: OHLC + sum(last_traded_quantity)
+    bars = []
+    for i in range(0, len(rows), bar_size):
+        chunk = rows[i : i + bar_size]
+        if len(chunk) < 2:
+            continue
+        prices = [float(r["last_price"]) for r in chunk]
+        volume = sum(int(r["last_traded_quantity"]) for r in chunk)
+        bar_open = prices[0]
+        bar_close = prices[-1]
+        bar_ts = chunk[-1]["ts"]  # bar closes at last tick's timestamp
+        bars.append(
+            {"open": bar_open, "close": bar_close, "volume": volume, "ts": bar_ts}
+        )
+
+    # Candle-direction delta_cvd per bar
+    delta_cvd = []
+    for b in bars:
+        if b["close"] > b["open"]:
+            delta_cvd.append(float(b["volume"]))
+        elif b["close"] < b["open"]:
+            delta_cvd.append(-float(b["volume"]))
+        else:
+            delta_cvd.append(0.0)
+
+    dcvd_ema21 = compute_ema(delta_cvd, 21)
+    dcvd_ema50 = compute_ema(delta_cvd, 50)
+
+    return jsonify(
+        {
+            "bars": len(bars),
+            "bar_size": bar_size,
+            "total_ticks": len(rows),
+            "ts": [b["ts"].astimezone(IST).strftime("%H:%M:%S") for b in bars],
             "delta_cvd": [round(v, 2) for v in delta_cvd],
             "dcvd_ema21": [round(v, 2) for v in dcvd_ema21],
             "dcvd_ema50": [round(v, 2) for v in dcvd_ema50],
@@ -374,7 +419,7 @@ a{color:#3b82f6;text-decoration:none}
     <div class="chart-card"><h3>Buying vs Selling Pressure</h3><canvas id="chartPressure"></canvas></div>
     <div class="chart-card"><h3>Trade Delta</h3><canvas id="chartDelta"></canvas></div>
     <div class="chart-card"><h3>Bid/Ask Ratio + Divergence</h3><canvas id="chartRatioDiv"></canvas></div>
-    <div class="chart-card" style="grid-column:1/-1"><h3>Delta CVD — EMA(21) vs EMA(50)</h3><canvas id="chartDeltaCvd"></canvas></div>
+    <div class="chart-card" style="grid-column:1/-1"><h3>Delta CVD (1000-Tick Bars) — EMA(21) vs EMA(50) <span id="dcvdBarInfo" style="font-weight:400;color:#475569"></span></h3><canvas id="chartDeltaCvd"></canvas></div>
 </div>
 
 <!-- Event log -->
@@ -588,13 +633,24 @@ async function fetchTimeline(){
         charts.ratioDiv.data.datasets[0].data = d.bid_ask_ratio;
         charts.ratioDiv.data.datasets[1].data = d.divergence_score;
         charts.ratioDiv.update('none');
-
-        // Delta CVD EMAs
-        charts.deltaCvd.data.labels = ts;
-        charts.deltaCvd.data.datasets[0].data = d.dcvd_ema21;
-        charts.deltaCvd.data.datasets[1].data = d.dcvd_ema50;
-        charts.deltaCvd.update('none');
     }catch(e){console.error('fetchTimeline',e)}
+}
+
+async function fetchDeltaCvd(){
+    try{
+        const r = await fetch(`/api/delta_cvd?symbol=${currentSymbol}`);
+        if(!r.ok) return;
+        const d = await r.json();
+
+        // Update bar info label
+        const info = document.getElementById('dcvdBarInfo');
+        info.textContent = `| ${d.bars} bars from ${d.total_ticks} ticks`;
+
+        charts.deltaCvd.data.labels = d.ts || [];
+        charts.deltaCvd.data.datasets[0].data = d.dcvd_ema21 || [];
+        charts.deltaCvd.data.datasets[1].data = d.dcvd_ema50 || [];
+        charts.deltaCvd.update('none');
+    }catch(e){console.error('fetchDeltaCvd',e)}
 }
 
 async function fetchEvents(){
@@ -645,6 +701,7 @@ async function fetchSymbols(){
 function refreshAll(){
     fetchLatest();
     fetchTimeline();
+    fetchDeltaCvd();
     fetchEvents();
 }
 
