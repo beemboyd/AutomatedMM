@@ -1,5 +1,38 @@
 # Activity Log
 
+## 2026-02-11 15:30 IST - Claude
+**TG — Grid Trading Bot Module (XTS/Findoc)**
+
+**New Module:** `TG/` — Complete grid trading bot for NSE equity
+
+**Files Created:**
+- `TG/__init__.py` — Package init
+- `TG/config.py` — Grid configuration (SubsetConfig, GridConfig dataclasses, geometric doubling)
+- `TG/grid.py` — Grid level calculator (GridLevel, GridCalculator)
+- `TG/group.py` — Entry+target order pair lifecycle (Group, GroupStatus)
+- `TG/state.py` — JSON state persistence with atomic writes (StateManager)
+- `TG/xts_client.py` — XTS API wrapper (dual-instance: interactive + market data)
+- `TG/bot_buy.py` — Buy Bot A (BUY entries below anchor, SELL targets)
+- `TG/bot_sell.py` — Sell Bot B (SELL entries above anchor, BUY targets, holdings check)
+- `TG/engine.py` — Main orchestrator (poll loop, fill routing, state recovery)
+- `TG/run.py` — CLI entry point with XTS credentials and grid parameters
+- `TG/sdk/` — Cloned XTS Python SDK (Connect.py patched for path/import fixes)
+
+**Grid Design:**
+- Single account, 2 bots: Buy Bot A (below anchor) + Sell Bot B (above anchor)
+- Base grid space: 1 paisa (0.01), Base target: 2 paisa (0.02)
+- Geometric doubling: spacing and target double per subset
+- Position sizing: 1000 total, subsets of 300 (300+300+300+100)
+- Convergence property: all buy targets → anchor+0.01, all sell targets → anchor-0.01
+- All LIMIT orders, NRML product (carry-forward), polling-based fill detection
+- Ticker: SPCENET
+
+**Broker:** XTS (Symphony Fintech / Findoc) — credentials pending from user
+
+**Impact:** New standalone module, no changes to existing codebase.
+
+---
+
 ## 2026-02-10 19:45 IST - Claude
 **OrderFlow Real-Time Dashboard (Port 3009)**
 
