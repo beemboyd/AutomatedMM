@@ -2,10 +2,10 @@
 
 ## Overview
 
-TG is a symmetric grid trading bot for NSE equity, operating two bots (Buy Bot A and Sell Bot B) on a single broker account via the XTS (Symphony Fintech / Findoc) API. It places LIMIT orders at geometrically-spaced levels around an anchor price, capturing the bid-ask spread through continuous entry-target cycles.
+TG is a symmetric grid trading bot for NSE equity, operating two bots (Buy Bot A and Sell Bot B) on a single broker account. It uses a **hybrid broker architecture**: XTS (Symphony Fintech / Findoc) for trading, and Zerodha KiteConnect for market data. Orders are placed as LIMIT at geometrically-spaced levels around an anchor price, capturing the bid-ask spread through continuous entry-target cycles.
 
 **Ticker:** SPCENET
-**Broker:** XTS / Findoc (Symphony Fintech)
+**Broker:** XTS / Findoc (trading) + Zerodha (market data)
 **Exchange:** NSE (Cash Market)
 **Product:** NRML (carry-forward, equivalent to CNC)
 **Session:** Orders persist overnight — shutdown does NOT cancel orders
@@ -22,7 +22,7 @@ TG is a symmetric grid trading bot for NSE equity, operating two bots (Buy Bot A
 6. [Data Flow](#6-data-flow)
 7. [Group Lifecycle](#7-group-lifecycle)
 8. [State Persistence](#8-state-persistence)
-9. [XTS Integration](#9-xts-integration)
+9. [Hybrid Broker Integration](#9-hybrid-broker-integration)
 10. [Startup & Recovery](#10-startup--recovery)
 11. [Operational Commands](#11-operational-commands)
 12. [Risk & Constraints](#12-risk--constraints)
@@ -163,7 +163,9 @@ TG/
 ├── grid.py              # GridCalculator, GridLevel
 ├── group.py             # Group lifecycle model, GroupStatus
 ├── state.py             # StateManager (JSON persistence)
-├── xts_client.py        # XTS API wrapper (trading + market data)
+├── hybrid_client.py     # Hybrid client: Zerodha (data) + XTS (trading)
+├── xts_client.py        # XTS-only client (retained as reference)
+├── zerodha_client.py    # Zerodha-only client (retained as reference)
 ├── bot_buy.py           # Buy Bot A
 ├── bot_sell.py           # Sell Bot B
 ├── engine.py            # GridEngine orchestrator
@@ -187,19 +189,20 @@ run.py
         ├─→ config.py (GridConfig)
         ├─→ grid.py (GridCalculator)
         ├─→ state.py (StateManager)
-        ├─→ xts_client.py (XTSClient)
-        │     └─→ sdk/Connect.py (XTSConnect)
+        ├─→ hybrid_client.py (HybridClient)
+        │     ├─→ sdk/Connect.py (XTSConnect)  ← trading
+        │     └─→ kiteconnect (KiteConnect)    ← market data
         ├─→ bot_buy.py (BuyBot)
         │     ├─→ grid.py (GridLevel)
         │     ├─→ group.py (Group, GroupStatus)
         │     ├─→ state.py (StateManager)
-        │     ├─→ xts_client.py (XTSClient)
+        │     ├─→ hybrid_client.py (HybridClient)
         │     └─→ config.py (GridConfig)
         └─→ bot_sell.py (SellBot)
               ├─→ grid.py (GridLevel)
               ├─→ group.py (Group, GroupStatus)
               ├─→ state.py (StateManager)
-              ├─→ xts_client.py (XTSClient)
+              ├─→ hybrid_client.py (HybridClient)
               └─→ config.py (GridConfig)
 ```
 
@@ -255,24 +258,33 @@ Key methods:
 - `save()` / `load()` — Atomic JSON persistence via tmp + os.replace
 - `get_open_groups_for_bot()` — Filter open groups by bot ID
 
-### `xts_client.py` — XTS API Wrapper
+### `hybrid_client.py` — Hybrid Broker Client (Active)
 
 | Class | Purpose |
 |-------|---------|
-| `XTSClient` | Wraps XTS SDK with same interface as original Zerodha client |
+| `HybridClient` | Composes Zerodha (data) + XTS (trading) behind a single interface |
 
-Two internal XTSConnect instances:
-- `self.xt` — Interactive (trading): order placement, cancellation, order book
-- `self.xt_md` — Market Data: LTP quotes, instrument search
+Two broker backends:
+- `self.xt` — XTS Interactive (trading): order placement, cancellation, order book, holdings, positions
+- `self.kite` — Zerodha KiteConnect (data): LTP quotes, instrument resolution
 
 Key methods:
-- `connect()` — Dual login (interactive + market data)
-- `resolve_instrument()` — Symbol → exchangeInstrumentID (cached)
-- `place_order()` — LIMIT order with product/segment mapping
-- `cancel_order()` — Cancel by AppOrderID
-- `get_orders()` — Normalized order book (status mapping to engine format)
-- `get_ltp()` — Last traded price via touchline quote
-- `get_available_qty()` — Holdings check for sell bot
+- `connect()` — XTS interactive login + Zerodha instrument cache build
+- `resolve_instrument()` — Symbol → exchange_token via dict lookup (zero network calls)
+- `place_order()` — LIMIT order via XTS with product/segment mapping
+- `cancel_order()` — Cancel by AppOrderID via XTS
+- `get_orders()` — Normalized order book from XTS (status mapping to engine format)
+- `get_ltp()` — Last traded price from Zerodha `kite.ltp()`
+- `get_holdings()` / `get_available_qty()` — Holdings from XTS (Findoc account)
+- `get_positions()` — Positions from XTS (net-wise)
+
+Credentials:
+- XTS: `interactive_key` + `interactive_secret` (passed via CLI)
+- Zerodha: loaded from `Daily/config.ini` section `[API_CREDENTIALS_{user}]`
+
+### `xts_client.py` — XTS-Only Client (Reference)
+
+Retained for reference. Previously the active client with dual XTS instances (interactive + market data). Replaced by `hybrid_client.py`.
 
 ### `bot_buy.py` — Buy Bot A
 
@@ -320,12 +332,14 @@ Key methods:
 
 CLI arguments:
 - `--symbol` — NSE symbol (required)
-- `--anchor` / `--auto-anchor` — Grid center price
+- `--anchor` / `--auto-anchor` — Grid center price (auto-anchor fetches LTP from Zerodha)
 - `--grid-space` — Base spacing (default: 0.01)
 - `--target` — Base target (default: 0.02)
 - `--total-qty` — Total shares (default: 1000)
 - `--subset-qty` — Per-subset shares (default: 300)
 - `--product` — NRML or MIS (default: NRML)
+- `--interactive-key` / `--interactive-secret` — XTS Interactive credentials
+- `--user` — Zerodha user for market data (default: Sai)
 - `--dry-run` — Print grid, no orders
 - `--cancel-all` — Cancel all open orders and exit
 - `--no-reenter` — Disable auto re-entry after target fill
@@ -339,17 +353,17 @@ CLI arguments:
 ```
 GridEngine.start()
     │
-    ├─→ XTSClient.connect()          # dual login
+    ├─→ HybridClient.connect()          # dual login
     ├─→ StateManager.load()          # load or init state
     │
     ├─→ BuyBot.place_entries()       # for each free level:
     │     ├─→ Group.create()         #   create group (ENTRY_PENDING)
-    │     ├─→ XTSClient.place_order()#   place BUY LIMIT
+    │     ├─→ HybridClient.place_order()#   place BUY LIMIT
     │     ├─→ StateManager.add_group()#  register group + order mapping
     │     └─→ level_groups[i] = gid  #   mark level as active
     │
     └─→ SellBot.place_entries()      # same as above with holdings check
-          ├─→ XTSClient.get_available_qty()  # check holdings first
+          ├─→ HybridClient.get_available_qty()  # check holdings first
           └─→ ... (same flow as BuyBot)
 ```
 
@@ -360,7 +374,7 @@ GridEngine._run_loop()
     │
     └─→ _poll_orders() [every poll_interval seconds]
           │
-          ├─→ XTSClient.get_orders()         # fetch normalized order book
+          ├─→ HybridClient.get_orders()         # fetch normalized order book
           │
           └─→ for each order with status change:
                 │
@@ -493,17 +507,48 @@ State is persisted to `TG/state/{SYMBOL}_grid_state.json` using atomic writes (w
 
 ---
 
-## 9. XTS Integration
+## 9. Hybrid Broker Integration
 
-### Dual-Instance Architecture
+### Architecture
 
-XTS requires two separate API sessions because `interactive_login()` and `marketdata_login()` overwrite the same internal `self.token` field:
+The bot uses a **hybrid client** that composes two brokers:
 
 ```
-XTSClient
-  ├── self.xt      (XTSConnect)  ← interactive_login()  → trading
-  └── self.xt_md   (XTSConnect)  ← marketdata_login()   → quotes
+HybridClient
+  ├── self.xt    (XTSConnect)   ← interactive_login()  → trading (Findoc)
+  └── self.kite  (KiteConnect)  ← config.ini creds     → market data (Zerodha)
 ```
+
+**Why hybrid?** Zerodha is already running for tick data and dashboards. Reusing it for market data eliminates the need for XTS market-data credentials (reduces from 4 credentials to 2).
+
+### Method Delegation
+
+| Method | Source | Why |
+|--------|--------|-----|
+| `connect()` | XTS interactive login + Zerodha instrument cache | No XTS market data login needed |
+| `resolve_instrument()` | Zerodha `kite.instruments('NSE')` cache | `exchange_token` == XTS `exchangeInstrumentID` |
+| `place_order()` | XTS interactive | Orders on Findoc |
+| `cancel_order()` | XTS interactive | Orders on Findoc |
+| `get_orders()` | XTS interactive | Order book on Findoc |
+| `get_ltp()` | Zerodha `kite.ltp()` | Market data from Zerodha |
+| `get_holdings()` | XTS interactive | Holdings on Findoc account |
+| `get_available_qty()` | XTS interactive | Holdings on Findoc account |
+| `get_positions()` | XTS interactive | Positions on Findoc account |
+
+### Instrument Resolution
+
+On `connect()`, the client calls `kite.instruments('NSE')` once and builds a `symbol -> exchange_token` dict (~2000 entries). `resolve_instrument()` is then a pure dict lookup with zero network calls.
+
+Key insight: Zerodha's `exchange_token` is the same numeric ID that XTS uses as `exchangeInstrumentID` for NSE equity instruments.
+
+### Credentials
+
+| Source | Credential | How Provided |
+|--------|-----------|-------------|
+| XTS Interactive | `interactive_key`, `interactive_secret` | CLI args (`--interactive-key`, `--interactive-secret`) |
+| Zerodha | `api_key`, `access_token` | `Daily/config.ini` section `[API_CREDENTIALS_{user}]` |
+
+Zerodha user is selected via `--user` CLI arg (default: `Sai`).
 
 ### XTS vs Zerodha Mapping
 
@@ -533,14 +578,6 @@ XTS statuses are normalized to engine-expected format:
 | PendingCancel | CANCELLED |
 | Rejected | REJECTED |
 
-### Instrument Resolution
-
-Symbols (e.g., "SPCENET") must be resolved to numeric `exchangeInstrumentID`:
-
-1. Try `search_by_scriptname()` — search by name, match exact symbol + exchange
-2. Fallback: `get_equity_symbol()` — search by series (EQ) + symbol
-3. Result is cached in `_instrument_cache` for the session
-
 ### XTS SDK Patches
 
 The SDK (`TG/sdk/Connect.py`) was patched to fix:
@@ -555,7 +592,7 @@ The SDK (`TG/sdk/Connect.py`) was patched to fix:
 ### Fresh Start
 
 ```
-1. connect()              → dual XTS login
+1. connect()              → XTS interactive login + Zerodha instrument cache
 2. print_grid_layout()    → visual verification
 3. state.load()           → returns False (no state file)
 4. buy_bot.place_entries() → place all 4 BUY LIMIT entries
@@ -567,7 +604,7 @@ The SDK (`TG/sdk/Connect.py`) was patched to fix:
 ### Resume After Shutdown
 
 ```
-1. connect()              → dual XTS login
+1. connect()              → XTS interactive login + Zerodha instrument cache
 2. state.load()           → returns True, restores open groups
 3. restore_level_groups() → rebuild level → group mappings for both bots
 4. _reconcile_orders()    → check broker for fills that occurred while offline
@@ -620,7 +657,7 @@ python -m TG.run --symbol SPCENET --anchor 50.25 \
 ```bash
 python -m TG.run --symbol SPCENET --anchor 50.25 \
     --interactive-key YOUR_KEY --interactive-secret YOUR_SECRET \
-    --marketdata-key YOUR_MD_KEY --marketdata-secret YOUR_MD_SECRET \
+    --user Sai \
     --xts-root https://your-api-endpoint.com
 ```
 
@@ -682,8 +719,7 @@ python -m TG.run --symbol SPCENET --anchor 50.25 --no-reenter
 | `poll_interval` | float | 2.0 | Seconds between order polls |
 | `interactive_key` | str | "" | XTS Interactive API key |
 | `interactive_secret` | str | "" | XTS Interactive API secret |
-| `marketdata_key` | str | "" | XTS Market Data API key |
-| `marketdata_secret` | str | "" | XTS Market Data API secret |
+| `zerodha_user` | str | "Sai" | Zerodha user for market data (from config.ini) |
 | `xts_root` | str | (symphony URL) | XTS API root URL |
 
 ### Logging
