@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-Grid Trading Bot — Entry Point (XTS / Findoc)
+Grid Trading Bot — Entry Point (XTS trading + Zerodha market data)
 
 Usage:
-    # Start grid bot with test credentials
+    # Start grid bot (Zerodha user defaults to Sai)
     python -m TG.run --symbol IRFC --anchor 50.25
 
     # Custom grid parameters
@@ -14,16 +14,16 @@ Usage:
     # Dry run (print grid layout without trading)
     python -m TG.run --symbol IRFC --anchor 50.25 --dry-run
 
-    # Use current LTP as anchor
+    # Use current LTP as anchor (fetches from Zerodha)
     python -m TG.run --symbol IRFC --auto-anchor
 
     # Cancel all open orders and exit
     python -m TG.run --symbol IRFC --anchor 50.25 --cancel-all
 
-    # Custom XTS credentials
+    # Custom XTS credentials + Zerodha user
     python -m TG.run --symbol IRFC --anchor 50.25 \\
         --interactive-key YOUR_KEY --interactive-secret YOUR_SECRET \\
-        --marketdata-key YOUR_MD_KEY --marketdata-secret YOUR_MD_SECRET
+        --user Sai
 """
 
 import sys
@@ -36,13 +36,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from TG.config import GridConfig
 from TG.engine import GridEngine
-from TG.xts_client import XTSClient
+from TG.hybrid_client import _load_zerodha_credentials
+
+from kiteconnect import KiteConnect
 
 # Default test account credentials
 _DEFAULT_INTERACTIVE_KEY = '92bb2907aca741730ea553'
 _DEFAULT_INTERACTIVE_SECRET = 'Rsoq237@LG'
-_DEFAULT_MARKETDATA_KEY = '9188ab225b52093dc7e585'
-_DEFAULT_MARKETDATA_SECRET = 'Uwjc617#S#'
 _DEFAULT_XTS_ROOT = 'https://developers.symphonyfintech.in'
 
 
@@ -68,7 +68,7 @@ def setup_logging(log_level: str = "INFO"):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='TG — Grid Trading Bot (XTS / Findoc)',
+        description='TG — Grid Trading Bot (XTS trading + Zerodha data)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -95,15 +95,13 @@ def parse_args():
     parser.add_argument('--product', default='NRML',
                         help='Product type: NRML (carry-forward) or MIS (default: NRML)')
 
-    # XTS Credentials
+    # Credentials
     parser.add_argument('--interactive-key', default=_DEFAULT_INTERACTIVE_KEY,
                         help='XTS Interactive API key')
     parser.add_argument('--interactive-secret', default=_DEFAULT_INTERACTIVE_SECRET,
                         help='XTS Interactive API secret')
-    parser.add_argument('--marketdata-key', default=_DEFAULT_MARKETDATA_KEY,
-                        help='XTS Market Data API key')
-    parser.add_argument('--marketdata-secret', default=_DEFAULT_MARKETDATA_SECRET,
-                        help='XTS Market Data API secret')
+    parser.add_argument('--user', default='Sai',
+                        help='Zerodha user for market data (default: Sai)')
     parser.add_argument('--xts-root', default=_DEFAULT_XTS_ROOT,
                         help='XTS API root URL')
 
@@ -133,17 +131,15 @@ def main():
     # Resolve anchor price
     anchor_price = args.anchor
     if args.auto_anchor:
-        logger.info("Fetching LTP for %s to set anchor...", args.symbol)
+        logger.info("Fetching LTP for %s from Zerodha (user=%s)...",
+                     args.symbol, args.user)
         try:
-            temp_client = XTSClient(
-                interactive_key=args.interactive_key,
-                interactive_secret=args.interactive_secret,
-                marketdata_key=args.marketdata_key,
-                marketdata_secret=args.marketdata_secret,
-                root_url=args.xts_root,
-            )
-            temp_client.connect()
-            ltp = temp_client.get_ltp(args.symbol, args.exchange)
+            creds = _load_zerodha_credentials(args.user)
+            kite = KiteConnect(api_key=creds['api_key'])
+            kite.set_access_token(creds['access_token'])
+            key = f"{args.exchange}:{args.symbol}"
+            data = kite.ltp([key])
+            ltp = data[key]['last_price']
             if ltp is None:
                 logger.error("Could not fetch LTP for %s. Cannot auto-anchor.", args.symbol)
                 sys.exit(1)
@@ -169,8 +165,7 @@ def main():
         product=args.product,
         interactive_key=args.interactive_key,
         interactive_secret=args.interactive_secret,
-        marketdata_key=args.marketdata_key,
-        marketdata_secret=args.marketdata_secret,
+        zerodha_user=args.user,
         xts_root=args.xts_root,
         auto_reenter=not args.no_reenter,
         poll_interval=args.poll_interval,
@@ -197,7 +192,8 @@ def main():
         return
 
     # Start the engine
-    logger.info("Starting Grid Engine for %s @ %.2f via XTS", args.symbol, anchor_price)
+    logger.info("Starting Grid Engine for %s @ %.2f (XTS + Zerodha/%s)",
+                 args.symbol, anchor_price, args.user)
     engine = GridEngine(config)
     engine.start()
 

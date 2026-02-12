@@ -1,12 +1,12 @@
 """
 Grid Trading Bot Configuration
 
-Handles XTS (Symphony Fintech / Findoc) credentials and
-grid-specific parameters from CLI args or defaults.
+Handles XTS Interactive credentials (trading via Findoc) and
+Zerodha user selection (market data from config.ini).
 
-Two sets of XTS credentials required:
-  - Interactive (trading): for order placement/cancellation
-  - Market Data: for LTP quotes and instrument search
+Credentials:
+  - XTS Interactive: key + secret for order placement/cancellation
+  - Zerodha: user name to look up in Daily/config.ini for LTP & instruments
 """
 
 import os
@@ -78,9 +78,8 @@ class GridConfig:
     interactive_key: str = ""
     interactive_secret: str = ""
 
-    # XTS Market Data credentials (quotes, instrument search)
-    marketdata_key: str = ""
-    marketdata_secret: str = ""
+    # Zerodha user for market data (looked up in Daily/config.ini)
+    zerodha_user: str = "Sai"
 
     # XTS API root URL
     xts_root: str = _DEFAULT_XTS_ROOT
@@ -124,24 +123,19 @@ class GridConfig:
         """
         interactive_key = overrides.pop('interactive_key', '')
         interactive_secret = overrides.pop('interactive_secret', '')
-        marketdata_key = overrides.pop('marketdata_key', '')
-        marketdata_secret = overrides.pop('marketdata_secret', '')
+        zerodha_user = overrides.pop('zerodha_user', 'Sai')
         xts_root = overrides.pop('xts_root', _DEFAULT_XTS_ROOT)
 
         if not interactive_key or not interactive_secret:
             raise ValueError("Missing XTS Interactive credentials "
                              "(--interactive-key, --interactive-secret)")
-        if not marketdata_key or not marketdata_secret:
-            raise ValueError("Missing XTS Market Data credentials "
-                             "(--marketdata-key, --marketdata-secret)")
 
         return cls(
             symbol=symbol,
             anchor_price=anchor_price,
             interactive_key=interactive_key,
             interactive_secret=interactive_secret,
-            marketdata_key=marketdata_key,
-            marketdata_secret=marketdata_secret,
+            zerodha_user=zerodha_user,
             xts_root=xts_root,
             **overrides,
         )
@@ -159,7 +153,7 @@ class GridConfig:
         print(f"  Subset Qty       : {self.subset_qty}")
         print(f"  Subsets          : {len(subsets)}")
         print(f"  Product          : {self.product}")
-        print(f"  Broker           : XTS ({self.xts_root})")
+        print(f"  Broker           : XTS + Zerodha (user={self.zerodha_user})")
         print(f"  Auto Re-enter    : {self.auto_reenter}")
         print(f"{'='*60}")
 

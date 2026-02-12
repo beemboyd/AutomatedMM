@@ -23,7 +23,7 @@ from .config import GridConfig
 from .grid import GridCalculator
 from .group import Group, GroupStatus
 from .state import StateManager
-from .xts_client import XTSClient
+from .hybrid_client import HybridClient
 from .bot_buy import BuyBot
 from .bot_sell import SellBot
 
@@ -44,11 +44,10 @@ class GridEngine:
         self.running = False
 
         # Initialize components
-        self.client = XTSClient(
+        self.client = HybridClient(
             interactive_key=config.interactive_key,
             interactive_secret=config.interactive_secret,
-            marketdata_key=config.marketdata_key,
-            marketdata_secret=config.marketdata_secret,
+            zerodha_user=config.zerodha_user,
             root_url=config.xts_root,
         )
         self.state = StateManager(config.symbol)

@@ -1,5 +1,35 @@
 # Activity Log
 
+## 2026-02-12 10:00 IST - Claude
+**TG — Hybrid Client: Zerodha Market Data + XTS Trading**
+
+**Change:** Replaced XTS-only broker client with hybrid Zerodha+XTS client.
+Zerodha handles market data (LTP, instrument resolution from config.ini),
+XTS handles trading (orders, holdings, positions on Findoc).
+
+**Why:** Reduces required credentials from 4 (XTS interactive + market data)
+to 2 (XTS interactive only) + Zerodha user from existing config.ini.
+
+**Files Created:**
+- `TG/hybrid_client.py` — New hybrid client composing Zerodha (data) + XTS (trading)
+
+**Files Modified:**
+- `TG/config.py` — Removed `marketdata_key/secret`, added `zerodha_user` field
+- `TG/engine.py` — Import HybridClient instead of XTSClient
+- `TG/run.py` — Removed `--marketdata-*` args, added `--user`, simplified auto-anchor to use Zerodha LTP
+- `TG/bot_buy.py` — Updated import + type hint to HybridClient
+- `TG/bot_sell.py` — Updated import + type hint to HybridClient
+
+**Files Retained (no changes):**
+- `TG/xts_client.py` — Kept as reference for XTS-only operation
+
+**New CLI:**
+```
+python -m TG.run --symbol IRFC --anchor 50.25 --interactive-key KEY --interactive-secret SECRET --user Sai
+```
+
+---
+
 ## 2026-02-11 15:30 IST - Claude
 **TG — Grid Trading Bot Module (XTS/Findoc)**
 

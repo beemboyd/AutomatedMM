@@ -23,7 +23,7 @@ from datetime import datetime
 from .grid import GridLevel
 from .group import Group, GroupStatus
 from .state import StateManager
-from .xts_client import XTSClient
+from .hybrid_client import HybridClient
 from .config import GridConfig
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class SellBot:
     holdings, the level is skipped with a warning.
     """
 
-    def __init__(self, levels: List[GridLevel], client: XTSClient,
+    def __init__(self, levels: List[GridLevel], client: HybridClient,
                  state: StateManager, config: GridConfig):
         self.levels = levels
         self.client = client

@@ -20,7 +20,7 @@ from datetime import datetime
 from .grid import GridLevel
 from .group import Group, GroupStatus
 from .state import StateManager
-from .xts_client import XTSClient
+from .hybrid_client import HybridClient
 from .config import GridConfig
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class BuyBot:
     and a new entry can be placed if auto_reenter is enabled.
     """
 
-    def __init__(self, levels: List[GridLevel], client: XTSClient,
+    def __init__(self, levels: List[GridLevel], client: HybridClient,
                  state: StateManager, config: GridConfig):
         self.levels = levels
         self.client = client
