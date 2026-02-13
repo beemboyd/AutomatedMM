@@ -233,7 +233,7 @@ class HybridClient:
                 limitPrice=price,
                 stopPrice=0,
                 orderUniqueIdentifier=order_unique_id or "",
-                apiOrderSource="",
+                apiOrderSource="WebAPI",
             )
 
             if isinstance(resp, str):
