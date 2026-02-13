@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Default XTS test credentials
-_DEFAULT_XTS_ROOT = 'https://developers.symphonyfintech.in'
+_DEFAULT_XTS_ROOT = 'https://xts.myfindoc.com'
 
 
 @dataclass

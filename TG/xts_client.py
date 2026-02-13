@@ -83,7 +83,7 @@ class XTSClient:
 
     def __init__(self, interactive_key: str, interactive_secret: str,
                  marketdata_key: str, marketdata_secret: str,
-                 root_url: str = 'https://developers.symphonyfintech.in',
+                 root_url: str = 'https://xts.myfindoc.com',
                  source: str = 'WEBAPI'):
         self.root_url = root_url
         self.source = source

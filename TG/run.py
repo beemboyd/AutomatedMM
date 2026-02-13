@@ -45,7 +45,7 @@ _DEFAULT_INTERACTIVE_KEY = '59ec1c9e69270e5cd97108'
 _DEFAULT_INTERACTIVE_SECRET = 'Mjcd080@xT'
 _DEFAULT_MARKETDATA_KEY = '202e06ba0b421bf9e1e515'
 _DEFAULT_MARKETDATA_SECRET = 'Payr544@nk'
-_DEFAULT_XTS_ROOT = 'https://developers.symphonyfintech.in'
+_DEFAULT_XTS_ROOT = 'https://xts.myfindoc.com'
 
 
 def setup_logging(log_level: str = "INFO"):

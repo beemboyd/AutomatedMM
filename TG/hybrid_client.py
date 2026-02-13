@@ -105,7 +105,7 @@ class HybridClient:
 
     def __init__(self, interactive_key: str, interactive_secret: str,
                  zerodha_user: str = "Sai",
-                 root_url: str = 'https://developers.symphonyfintech.in',
+                 root_url: str = 'https://xts.myfindoc.com',
                  source: str = 'WEBAPI'):
         self.root_url = root_url
         self.source = source
