@@ -40,9 +40,11 @@ from TG.hybrid_client import _load_zerodha_credentials
 
 from kiteconnect import KiteConnect
 
-# Default test account credentials
-_DEFAULT_INTERACTIVE_KEY = '92bb2907aca741730ea553'
-_DEFAULT_INTERACTIVE_SECRET = 'Rsoq237@LG'
+# Default XTS credentials
+_DEFAULT_INTERACTIVE_KEY = '59ec1c9e69270e5cd97108'
+_DEFAULT_INTERACTIVE_SECRET = 'Mjcd080@xT'
+_DEFAULT_MARKETDATA_KEY = '202e06ba0b421bf9e1e515'
+_DEFAULT_MARKETDATA_SECRET = 'Payr544@nk'
 _DEFAULT_XTS_ROOT = 'https://developers.symphonyfintech.in'
 
 
