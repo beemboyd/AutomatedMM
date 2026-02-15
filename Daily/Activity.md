@@ -1,5 +1,36 @@
 # Activity Log
 
+## 2026-02-16 01:00 IST - Claude
+**TG1 — Grid OCO Trading Bot (Two-Token Cross-Instrument Hedging)**
+
+**New Module:** `TG1/` — Complete grid OCO trading bot ported from Findoc-Backend GridOcoLogic (Node.js → Python). Two-token architecture: TokenA is grid-traded, TokenB provides OCO hedging. Uses 3 separate Findoc XTS sessions + Zerodha KiteTicker WebSocket for real-time prices.
+
+**Files Created:**
+- `TG1/__init__.py` — Package init
+- `TG1/requirements.txt` — Dependencies (kiteconnect>=5.0.0)
+- `TG1/config.py` — GridOcoConfig dataclass (grid/OCO/credentials/operational params, validation, grid layout printer)
+- `TG1/models.py` — OpenOrder (entry↔target state machine) + OrderHistoryRecord dataclasses
+- `TG1/state.py` — StateManager (atomic JSON persistence, 4 position counters, order search helpers)
+- `TG1/findoc_client.py` — FindocMultiClient (3 XTS sessions: Trade + UpsideOCO + DownsideOCO + Zerodha instrument cache)
+- `TG1/zerodha_feed.py` — ZerodhaFeed (KiteTicker WebSocket in daemon thread, thread-safe LTP dict)
+- `TG1/grid_engine.py` — GridOcoEngine (core trading engine: grid creation, 1s polling, entry/target/OCO fill handling, dynamic OCO bracketing, termination conditions)
+- `TG1/run.py` — CLI entry point with argparse (--dry-run, --auto-entry, --cancel-all)
+- `TG1/ARCHITECTURE.md` — Comprehensive architecture documentation
+
+**Key Features:**
+- 5 trade types: gridocots, buyocots, sellocots, buyts, sellts
+- Linear arithmetic grid (entry_price ± i×spread)
+- Dynamic OCO bracketing (nearest 2 above/below current TokenB price)
+- One-at-a-time entry placement (BUY DESC, SELL ASC)
+- TokenB price captured at entry fill time
+- Auto-termination: OCO imbalance + untriggered OCO buildup
+- MaxQuantity pause (does not terminate)
+- State recovery with order reconciliation on restart
+
+**Impact:** New self-contained trading bot module. No changes to existing TG or Daily code.
+
+---
+
 ## 2026-02-12 10:00 IST - Claude
 **TG — Hybrid Client: Zerodha Market Data + XTS Trading**
 
