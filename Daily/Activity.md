@@ -1,5 +1,75 @@
 # Activity Log
 
+## 2026-02-16 13:35 IST - Claude
+**TG — SPCENET Pair Order Fill Fix + Reconciliation Bug Fix + PnL Tracking**
+
+### Problem 1: SPCENET SELL Orders Not Filling
+**Root Cause:** `place_market_order()` placed LIMIT orders at exact LTP. For illiquid instruments like SPCENET (bid-ask spread is wide), SELL LIMIT at LTP doesn't match because the best bid is below LTP. XTS accepted the orders (got AppOrderID) but they sat in "New" status indefinitely.
+
+**Evidence:** XTS order book showed SELL SPCENET orders at 5.51 stuck in "New" while BUY SPCENET orders at 5.51 filled immediately (asks available at LTP).
+
+**Fix (`TG/hybrid_client.py`):**
+- `place_market_order()` now accepts `slippage` parameter (default=0.02 INR)
+- SELL orders placed at `LTP - slippage` (hits the bid)
+- BUY orders placed at `LTP + slippage` (hits the ask)
+- Returns `(order_id, price)` tuple for price tracking
+- Log format: `MARKET ORDER: SELL SPCENET 1 @ LTP=5.50 -> LIMIT=5.48 (slip=0.02)`
+
+**Verification:** After fix, SELL SPCENET at 5.48 (LTP=5.50, slip=0.02) filled immediately on XTS.
+
+### Problem 2: Duplicate Orders on Bot Restart
+**Root Cause:** `_handle_fill()` in `engine.py` matched orders by `order_id == group.entry_order_id` without checking `group.status`. On restart, the empty `_order_status_cache` caused ALL completed orders from the XTS day book to be reprocessed. Entry fills that were already handled (group status = TARGET_PENDING) got re-routed to `on_entry_fill()`, placing duplicate target and pair orders.
+
+**Evidence:** After restart, two SELL TATSILV targets appeared for the same group (AppOrderID 1210035246 and 1210035248, both for `TP-0A_a54930ab`).
+
+**Fix (`TG/engine.py`):**
+- Added status guards in `_handle_fill()`:
+  - Entry fills only process when `group.status == ENTRY_PENDING`
+  - Target fills only process when `group.status == TARGET_PENDING`
+  - Already-processed fills logged at DEBUG level and skipped
+
+### Problem 3: SPCENET PnL Not Tracked on Dashboard
+**Root Cause:** `place_market_order()` originally returned only `order_id` (no price), and the Group model had no fields for pair trade prices.
+
+**Fix (multiple files):**
+- `TG/group.py` — Added `pair_hedge_price`, `pair_unwind_price`, `pair_pnl` fields to Group dataclass; updated `to_dict()`/`from_dict()`
+- `TG/bot_buy.py` — Stores `pair_hedge_price` on entry fill, computes `pair_pnl = (hedge - unwind) * qty` on target fill
+- `TG/bot_sell.py` — Same pattern (pair_pnl = (unwind - hedge) * qty for sell bot)
+- `TG/dashboard.py` — Added 3 KPI cards (TATSILV PnL, SPCENET PnL, Combined PnL), dual-line PnL chart, price/PnL columns in pair trades table
+
+### Dashboard Enhancements (`TG/dashboard.py`)
+- Added `--pair-qty` CLI argument for accurate net pair qty display
+- Net pair qty calculation uses actual pair_qty (was hardcoded ±1)
+- Pair trades table shows Qty, Price, and Pair PnL columns
+- PnL chart: dual lines — primary symbol (blue) and combined (green/red)
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `TG/hybrid_client.py` | Slippage in `place_market_order()`, returns `(order_id, price)` tuple |
+| `TG/engine.py` | Status guards in `_handle_fill()` prevent duplicate processing |
+| `TG/group.py` | Added `pair_hedge_price`, `pair_unwind_price`, `pair_pnl` fields |
+| `TG/bot_buy.py` | Pair price tracking and PnL computation |
+| `TG/bot_sell.py` | Pair price tracking and PnL computation |
+| `TG/dashboard.py` | SPCENET PnL KPIs, chart, table enhancements, `--pair-qty` arg |
+
+### Running Configuration
+```bash
+# Bot
+python3 -m TG.run --symbol TATSILV --auto-anchor --grid-space 0.01 --target 0.03 \
+  --total-qty 10 --subset-qty 1 --pair-symbol SPCENET --pair-qty 1
+
+# Dashboard
+python3 -m TG.dashboard --symbol TATSILV --pair-symbol SPCENET --pair-qty 1 --port 7777
+```
+
+### Important Notes
+- **XTS single-session limitation:** Querying XTS order book with a separate login invalidates the bot's session. Monitor via bot output file or dashboard only.
+- **NONSQROFF RMS block:** Findoc has a blanket SELL+NRML block on old orders from previous sessions. New orders placed after a fresh login are not affected.
+- **Slippage default (0.02 INR):** Sufficient for SPCENET (~5.50 price, ~0.4% slippage). Adjust via `slippage` parameter if needed for other instruments.
+
+---
+
 ## 2026-02-16 15:00 IST - Claude
 **TG — Order Naming Convention + Live Dashboard (Port 7777)**
 
