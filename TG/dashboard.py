@@ -74,10 +74,11 @@ def _compute_summary(state: dict) -> dict:
     }
 
 
-def create_app(symbol: str) -> Flask:
+def create_app(symbol: str, pair_symbol: str = "") -> Flask:
     """Create Flask app for the given symbol."""
     app = Flask(__name__)
     app.config['SYMBOL'] = symbol
+    app.config['PAIR_SYMBOL'] = pair_symbol
 
     @app.route('/api/state')
     def api_state():
@@ -90,13 +91,14 @@ def create_app(symbol: str) -> Flask:
 
     @app.route('/')
     def index():
-        return Response(_build_html(symbol), mimetype='text/html')
+        return Response(_build_html(symbol, pair_symbol), mimetype='text/html')
 
     return app
 
 
-def _build_html(symbol: str) -> str:
+def _build_html(symbol: str, pair_symbol: str = "") -> str:
     """Build the complete self-contained HTML dashboard."""
+    pair_display = pair_symbol or "None"
     return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -184,6 +186,7 @@ body {{
 .kpi .value.red {{ color: var(--red); }}
 .kpi .value.blue {{ color: var(--blue); }}
 .kpi .value.orange {{ color: var(--orange); }}
+.kpi .value.purple {{ color: var(--purple); }}
 .bots {{
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -272,7 +275,7 @@ tr:hover td {{ background: rgba(68, 138, 255, 0.05); }}
         <h1>TG Grid Bot &mdash; <span id="hdr-symbol">{symbol}</span></h1>
         <span style="color:var(--dim);font-size:12px;">
             Anchor: <span id="hdr-anchor">—</span> &nbsp;|&nbsp;
-            Pair: <span id="hdr-pair">—</span>
+            Pair: <span id="hdr-pair">{pair_display}</span>
         </span>
     </div>
     <div class="meta">
@@ -362,6 +365,41 @@ tr:hover td {{ background: rgba(68, 138, 255, 0.05); }}
         <tbody id="closed-tbody"></tbody>
     </table>
     <div class="empty-msg" id="closed-empty" style="display:none;">No completed trades yet</div>
+</div>
+
+<div class="section">
+    <h2>Pair Trades &mdash; {pair_display}</h2>
+    <div class="kpis" style="margin-bottom:12px;">
+        <div class="kpi">
+            <div class="label">Open Hedges</div>
+            <div class="value purple" id="pair-open">0</div>
+        </div>
+        <div class="kpi">
+            <div class="label">Completed Pairs</div>
+            <div class="value blue" id="pair-closed">0</div>
+        </div>
+        <div class="kpi">
+            <div class="label">Net Pair Qty</div>
+            <div class="value" id="pair-net-qty">0</div>
+        </div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Pair ID</th>
+                <th>Group</th>
+                <th>Bot</th>
+                <th>Subset</th>
+                <th>Action</th>
+                <th>Pair Side</th>
+                <th>{pair_display} Entry</th>
+                <th>Status</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody id="pair-tbody"></tbody>
+    </table>
+    <div class="empty-msg" id="pair-empty" style="display:none;">No pair trades yet</div>
 </div>
 
 <div class="section">
@@ -488,6 +526,84 @@ function update() {{
                 }}).join('');
             }}
 
+            // Pair trades section
+            const pairTbody = document.getElementById('pair-tbody');
+            const pairEmpty = document.getElementById('pair-empty');
+            const pairRows = [];
+            let openHedges = 0;
+            let completedPairs = 0;
+            let netPairQty = 0;
+
+            // Open groups with pair orders (active hedges)
+            openArr.forEach(g => {{
+                if (g.pair_order_id && g.status === 'TARGET_PENDING') {{
+                    const pid = fmtOid(g.bot, g.subset_index, g.group_id, 'PR');
+                    // Bot A entry=BUY → pair=SELL; Bot B entry=SELL → pair=BUY
+                    const pairSide = g.entry_side === 'BUY' ? 'SELL' : 'BUY';
+                    openHedges++;
+                    netPairQty += (pairSide === 'BUY' ? 1 : -1);
+                    pairRows.push('<tr>' +
+                        '<td style="font-size:11px;color:var(--purple);">' + pid + '</td>' +
+                        '<td>' + g.group_id + '</td>' +
+                        '<td>' + g.bot + '</td>' +
+                        '<td>' + g.subset_index + '</td>' +
+                        '<td style="color:var(--orange);">HEDGE</td>' +
+                        '<td>' + pairSide + '</td>' +
+                        '<td>—</td>' +
+                        '<td><span class="status-badge status-TARGET_PENDING">OPEN</span></td>' +
+                        '<td>' + fmtTime(g.entry_filled_at) + '</td>' +
+                        '</tr>');
+                }}
+            }});
+
+            // Closed groups with pair orders (unwound hedges)
+            const closedWithPair = (state.closed_groups || []).filter(g => g.pair_order_id).slice(-30).reverse();
+            closedWithPair.forEach(g => {{
+                const pid = fmtOid(g.bot, g.subset_index, g.group_id, 'PR');
+                // On target fill, pair is unwound: Bot A target=SELL → pair unwind=BUY; Bot B target=BUY → pair unwind=SELL
+                const hedgeSide = g.entry_side === 'BUY' ? 'SELL' : 'BUY';
+                const unwindSide = g.entry_side === 'BUY' ? 'BUY' : 'SELL';
+                completedPairs++;
+                // Hedge row
+                pairRows.push('<tr style="opacity:0.6;">' +
+                    '<td style="font-size:11px;color:var(--purple);">' + pid + '</td>' +
+                    '<td>' + g.group_id + '</td>' +
+                    '<td>' + g.bot + '</td>' +
+                    '<td>' + g.subset_index + '</td>' +
+                    '<td style="color:var(--orange);">HEDGE</td>' +
+                    '<td>' + hedgeSide + '</td>' +
+                    '<td>—</td>' +
+                    '<td><span class="status-badge status-CLOSED">CLOSED</span></td>' +
+                    '<td>' + fmtTime(g.entry_filled_at) + '</td>' +
+                    '</tr>');
+                // Unwind row
+                pairRows.push('<tr style="opacity:0.6;">' +
+                    '<td style="font-size:11px;color:var(--purple);">' + pid + '</td>' +
+                    '<td>' + g.group_id + '</td>' +
+                    '<td>' + g.bot + '</td>' +
+                    '<td>' + g.subset_index + '</td>' +
+                    '<td style="color:var(--green);">UNWIND</td>' +
+                    '<td>' + unwindSide + '</td>' +
+                    '<td>—</td>' +
+                    '<td><span class="status-badge status-CLOSED">CLOSED</span></td>' +
+                    '<td>' + fmtTime(g.target_filled_at) + '</td>' +
+                    '</tr>');
+            }});
+
+            document.getElementById('pair-open').textContent = openHedges;
+            document.getElementById('pair-closed').textContent = completedPairs;
+            const netEl = document.getElementById('pair-net-qty');
+            netEl.textContent = (netPairQty > 0 ? '+' : '') + netPairQty;
+            netEl.className = 'value ' + (netPairQty === 0 ? 'green' : 'orange');
+
+            if (pairRows.length === 0) {{
+                pairTbody.innerHTML = '';
+                pairEmpty.style.display = 'block';
+            }} else {{
+                pairEmpty.style.display = 'none';
+                pairTbody.innerHTML = pairRows.join('');
+            }}
+
             // PnL chart
             const allClosed = state.closed_groups || [];
             if (allClosed.length > 0) {{
@@ -554,6 +670,7 @@ setInterval(update, 3000);
 def main():
     parser = argparse.ArgumentParser(description='TG Grid Bot Dashboard')
     parser.add_argument('--symbol', required=True, help='Trading symbol (e.g., TATSILV)')
+    parser.add_argument('--pair-symbol', default='', help='Pair hedge symbol (e.g., SPCENET)')
     parser.add_argument('--port', type=int, default=7777, help='Dashboard port (default: 7777)')
     parser.add_argument('--host', default='0.0.0.0', help='Bind host (default: 0.0.0.0)')
     args = parser.parse_args()
@@ -561,7 +678,7 @@ def main():
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s %(name)s %(levelname)s %(message)s')
 
-    app = create_app(args.symbol)
+    app = create_app(args.symbol, args.pair_symbol)
     logger.info("Starting TG dashboard for %s on %s:%d", args.symbol, args.host, args.port)
     app.run(host=args.host, port=args.port, debug=False)
 
