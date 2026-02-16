@@ -1,5 +1,23 @@
 # Activity Log
 
+## 2026-02-16 15:00 IST - Claude
+**TG — Order Naming Convention + Live Dashboard (Port 7777)**
+
+**Order Naming Convention:**
+- `TG/config.py` — Added `generate_order_id(role, subset_index, bot, group_id)` module-level helper. Format: `{ROLE}{LEVEL}{BOT}_{GROUP_ID}` (e.g., `EN-0A_a1b2c3d4`, `TP+2B_e5f6g7h8`, `PR-1A_c3d4e5f6`)
+- `TG/bot_buy.py` — All 4 order placements (entry, target, pair hedge, pair unwind) now pass `order_unique_id` with named identifiers using bot="A"
+- `TG/bot_sell.py` — Same pattern with bot="B" for all 4 order placements
+- `TG/hybrid_client.py` — Added `order_unique_id` parameter to `place_market_order()`, forwarded to `place_order()`
+
+**Live Dashboard:**
+- `TG/dashboard.py` — **NEW** Single-file Flask app serving dashboard at port 7777
+  - Routes: `/` (HTML dashboard), `/api/state` (raw JSON), `/api/summary` (derived KPIs)
+  - Sections: KPI cards (PnL, cycles, open groups, win rate, exposure), Bot A/B status, open positions table, recent transactions (last 30) with named order IDs, cumulative PnL chart (Chart.js)
+  - Auto-refresh: 3s polling with live pulse indicator
+  - CLI: `python -m TG.dashboard --symbol TATSILV --port 7777`
+
+**Impact:** All XTS orders now carry human-readable `orderUniqueIdentifier` visible in broker order book and logs. Dashboard provides real-time monitoring without SSH access.
+
 ## 2026-02-16 12:30 IST - Claude
 **TG — Pair Trading Support (TATSILV-SPCENET)**
 

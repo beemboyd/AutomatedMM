@@ -259,7 +259,8 @@ class HybridClient:
 
     def place_market_order(self, symbol: str, transaction_type: str, qty: int,
                            exchange: str = "NSE",
-                           product: str = "NRML") -> Optional[str]:
+                           product: str = "NRML",
+                           order_unique_id: str = "") -> Optional[str]:
         """
         Place a market-like order by using LIMIT at current LTP.
 
@@ -274,7 +275,8 @@ class HybridClient:
             return None
         logger.info("MARKET ORDER: %s %s %d @ LTP=%.2f (LIMIT)",
                      transaction_type, symbol, qty, ltp)
-        return self.place_order(symbol, transaction_type, qty, ltp, exchange, product)
+        return self.place_order(symbol, transaction_type, qty, ltp, exchange, product,
+                                order_unique_id=order_unique_id)
 
     def cancel_order(self, order_id: str, order_unique_id: str = "") -> bool:
         """Cancel a pending order by AppOrderID via XTS."""

@@ -21,7 +21,7 @@ from .grid import GridLevel
 from .group import Group, GroupStatus
 from .state import StateManager
 from .hybrid_client import HybridClient
-from .config import GridConfig
+from .config import GridConfig, generate_order_id
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,7 @@ class BuyBot:
             qty=level.qty,
         )
 
+        entry_oid = generate_order_id("EN", level.subset_index, "A", group.group_id)
         order_id = self.client.place_order(
             symbol=self.config.symbol,
             transaction_type="BUY",
@@ -82,15 +83,16 @@ class BuyBot:
             price=level.entry_price,
             exchange=self.config.exchange,
             product=self.config.product,
+            order_unique_id=entry_oid,
         )
 
         if order_id:
             group.entry_order_id = order_id
             self.state.add_group(group)
             self.level_groups[level.subset_index] = group.group_id
-            logger.info("BuyBot ENTRY: subset=%d, BUY %d @ %.2f, group=%s, order=%s",
+            logger.info("BuyBot ENTRY: subset=%d, BUY %d @ %.2f, group=%s, order=%s [%s]",
                         level.subset_index, level.qty, level.entry_price,
-                        group.group_id, order_id)
+                        group.group_id, order_id, entry_oid)
             return True
         else:
             logger.error("BuyBot ENTRY FAILED: subset=%d, BUY %d @ %.2f",
@@ -113,6 +115,7 @@ class BuyBot:
                      group.group_id, fill_qty, fill_price, group.entry_price)
 
         # Place sell target at the theoretical target price
+        target_oid = generate_order_id("TP", group.subset_index, "A", group.group_id)
         order_id = self.client.place_order(
             symbol=self.config.symbol,
             transaction_type="SELL",
@@ -120,28 +123,31 @@ class BuyBot:
             price=group.target_price,
             exchange=self.config.exchange,
             product=self.config.product,
+            order_unique_id=target_oid,
         )
 
         if order_id:
             group.target_order_id = order_id
             group.status = GroupStatus.TARGET_PENDING
             self.state.register_order(order_id, group.group_id)
-            logger.info("BuyBot TARGET: group=%s, SELL %d @ %.2f, order=%s",
-                        group.group_id, fill_qty, group.target_price, order_id)
+            logger.info("BuyBot TARGET: group=%s, SELL %d @ %.2f, order=%s [%s]",
+                        group.group_id, fill_qty, group.target_price, order_id, target_oid)
         else:
             logger.error("BuyBot TARGET FAILED: group=%s, SELL %d @ %.2f",
                          group.group_id, fill_qty, group.target_price)
 
         # Pair trade: BUY TATSILV entry → SELL pair symbol
         if self.config.has_pair:
+            pair_oid = generate_order_id("PR", group.subset_index, "A", group.group_id)
             pair_id = self.client.place_market_order(
                 self.config.pair_symbol, "SELL", self.config.pair_qty,
-                self.config.exchange, self.config.product)
+                self.config.exchange, self.config.product,
+                order_unique_id=pair_oid)
             if pair_id:
                 group.pair_order_id = pair_id
-                logger.info("BuyBot PAIR: group=%s, SELL %s %d, order=%s",
+                logger.info("BuyBot PAIR: group=%s, SELL %s %d, order=%s [%s]",
                             group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_id)
+                            self.config.pair_qty, pair_id, pair_oid)
             else:
                 logger.error("BuyBot PAIR FAILED: group=%s, SELL %s %d",
                              group.group_id, self.config.pair_symbol,
@@ -166,13 +172,15 @@ class BuyBot:
 
         # Reverse pair: SELL target filled → BUY pair symbol back
         if self.config.has_pair:
+            pair_oid = generate_order_id("PR", group.subset_index, "A", group.group_id)
             pair_id = self.client.place_market_order(
                 self.config.pair_symbol, "BUY", self.config.pair_qty,
-                self.config.exchange, self.config.product)
+                self.config.exchange, self.config.product,
+                order_unique_id=pair_oid)
             if pair_id:
-                logger.info("BuyBot PAIR UNWIND: group=%s, BUY %s %d, order=%s",
+                logger.info("BuyBot PAIR UNWIND: group=%s, BUY %s %d, order=%s [%s]",
                             group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_id)
+                            self.config.pair_qty, pair_id, pair_oid)
             else:
                 logger.error("BuyBot PAIR UNWIND FAILED: group=%s, BUY %s %d",
                              group.group_id, self.config.pair_symbol,

@@ -193,3 +193,19 @@ class GridConfig:
         print(f"  Effective spread  : {2 * self.base_grid_space:.2f} "
               f"({2 * self.base_grid_space * 100:.0f} paisa)")
         print(f"{'='*60}\n")
+
+
+def generate_order_id(role: str, subset_index: int, bot: str, group_id: str) -> str:
+    """
+    Generate a human-readable order identifier for XTS orderUniqueIdentifier.
+
+    Format: {ROLE}{LEVEL}{BOT}_{GROUP_ID}
+    - ROLE: EN (entry), TP (target/take-profit), PR (pair hedge)
+    - LEVEL: -N for Bot A (buy below anchor), +N for Bot B (sell above anchor)
+    - BOT: A (BuyBot) or B (SellBot)
+    - GROUP_ID: 8-char hex from Group.create()
+
+    Examples: EN-0A_a1b2c3d4, TP+2B_e5f6g7h8, PR-1A_c3d4e5f6
+    """
+    level_str = f"-{subset_index}" if bot == "A" else f"+{subset_index}"
+    return f"{role}{level_str}{bot}_{group_id}"
