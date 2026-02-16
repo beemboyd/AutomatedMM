@@ -41,6 +41,9 @@ class Group:
     entry_order_id: Optional[str] = None
     target_order_id: Optional[str] = None
     pair_order_id: Optional[str] = None   # paired hedge order (e.g., SPCENET)
+    pair_hedge_price: Optional[float] = None   # price at which hedge was placed
+    pair_unwind_price: Optional[float] = None  # price at which unwind was placed
+    pair_pnl: float = 0.0                      # realized PnL from pair trade
 
     # Fill info (actual prices from broker)
     entry_fill_price: Optional[float] = None
@@ -89,6 +92,9 @@ class Group:
             'entry_order_id': self.entry_order_id,
             'target_order_id': self.target_order_id,
             'pair_order_id': self.pair_order_id,
+            'pair_hedge_price': self.pair_hedge_price,
+            'pair_unwind_price': self.pair_unwind_price,
+            'pair_pnl': self.pair_pnl,
             'entry_fill_price': self.entry_fill_price,
             'entry_fill_qty': self.entry_fill_qty,
             'target_fill_price': self.target_fill_price,
@@ -114,6 +120,9 @@ class Group:
             entry_order_id=d.get('entry_order_id'),
             target_order_id=d.get('target_order_id'),
             pair_order_id=d.get('pair_order_id'),
+            pair_hedge_price=d.get('pair_hedge_price'),
+            pair_unwind_price=d.get('pair_unwind_price'),
+            pair_pnl=d.get('pair_pnl', 0.0),
             entry_fill_price=d.get('entry_fill_price'),
             entry_fill_qty=d.get('entry_fill_qty'),
             target_fill_price=d.get('target_fill_price'),

@@ -59,10 +59,16 @@ def _compute_summary(state: dict) -> dict:
     long_exposure = sum(g.get('qty', 0) for g in filled_groups if g.get('entry_side') == 'BUY')
     short_exposure = sum(g.get('qty', 0) for g in filled_groups if g.get('entry_side') == 'SELL')
 
+    # Pair PnL from closed groups
+    pair_pnl = round(sum(g.get('pair_pnl', 0.0) for g in closed_groups), 2)
+    combined_pnl = round(total_pnl + pair_pnl, 2)
+
     return {
         'symbol': state.get('symbol', ''),
         'anchor_price': state.get('anchor_price', 0),
         'total_pnl': round(total_pnl, 2),
+        'pair_pnl': pair_pnl,
+        'combined_pnl': combined_pnl,
         'total_cycles': total_cycles,
         'open_groups': len(open_groups),
         'win_rate': round(win_rate, 1),
@@ -74,7 +80,7 @@ def _compute_summary(state: dict) -> dict:
     }
 
 
-def create_app(symbol: str, pair_symbol: str = "") -> Flask:
+def create_app(symbol: str, pair_symbol: str = "", pair_qty: int = 0) -> Flask:
     """Create Flask app for the given symbol."""
     app = Flask(__name__)
     app.config['SYMBOL'] = symbol
@@ -91,12 +97,12 @@ def create_app(symbol: str, pair_symbol: str = "") -> Flask:
 
     @app.route('/')
     def index():
-        return Response(_build_html(symbol, pair_symbol), mimetype='text/html')
+        return Response(_build_html(symbol, pair_symbol, pair_qty), mimetype='text/html')
 
     return app
 
 
-def _build_html(symbol: str, pair_symbol: str = "") -> str:
+def _build_html(symbol: str, pair_symbol: str = "", pair_qty: int = 0) -> str:
     """Build the complete self-contained HTML dashboard."""
     pair_display = pair_symbol or "None"
     return f'''<!DOCTYPE html>
@@ -286,8 +292,16 @@ tr:hover td {{ background: rgba(68, 138, 255, 0.05); }}
 
 <div class="kpis">
     <div class="kpi">
-        <div class="label">Total PnL</div>
+        <div class="label">{symbol} PnL</div>
         <div class="value" id="kpi-pnl">—</div>
+    </div>
+    <div class="kpi">
+        <div class="label">{pair_display} PnL</div>
+        <div class="value" id="kpi-pair-pnl">—</div>
+    </div>
+    <div class="kpi">
+        <div class="label">Combined PnL</div>
+        <div class="value" id="kpi-combined-pnl">—</div>
     </div>
     <div class="kpi">
         <div class="label">Cycles</div>
@@ -392,7 +406,9 @@ tr:hover td {{ background: rgba(68, 138, 255, 0.05); }}
                 <th>Subset</th>
                 <th>Action</th>
                 <th>Pair Side</th>
-                <th>{pair_display} Entry</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Pair PnL</th>
                 <th>Status</th>
                 <th>Time</th>
             </tr>
@@ -448,6 +464,16 @@ function update() {{
                     const pnlEl = document.getElementById('kpi-pnl');
                     pnlEl.textContent = (s.total_pnl >= 0 ? '+' : '') + (s.total_pnl || 0).toFixed(2);
                     pnlEl.className = 'value ' + (s.total_pnl >= 0 ? 'green' : 'red');
+
+                    const pairPnlEl = document.getElementById('kpi-pair-pnl');
+                    const pp = s.pair_pnl || 0;
+                    pairPnlEl.textContent = (pp >= 0 ? '+' : '') + pp.toFixed(2);
+                    pairPnlEl.className = 'value ' + (pp >= 0 ? 'green' : 'red');
+
+                    const combPnlEl = document.getElementById('kpi-combined-pnl');
+                    const cp = s.combined_pnl || 0;
+                    combPnlEl.textContent = (cp >= 0 ? '+' : '') + cp.toFixed(2);
+                    combPnlEl.className = 'value ' + (cp >= 0 ? 'green' : 'red');
 
                     document.getElementById('kpi-cycles').textContent = s.total_cycles || 0;
                     document.getElementById('kpi-open').textContent = s.open_groups || 0;
@@ -541,7 +567,8 @@ function update() {{
                     // Bot A entry=BUY → pair=SELL; Bot B entry=SELL → pair=BUY
                     const pairSide = g.entry_side === 'BUY' ? 'SELL' : 'BUY';
                     openHedges++;
-                    netPairQty += (pairSide === 'BUY' ? 1 : -1);
+                    netPairQty += (pairSide === 'BUY' ? {pair_qty} : -{pair_qty});
+                    const hedgeP = g.pair_hedge_price ? g.pair_hedge_price.toFixed(2) : '—';
                     pairRows.push('<tr>' +
                         '<td style="font-size:11px;color:var(--purple);">' + pid + '</td>' +
                         '<td>' + g.group_id + '</td>' +
@@ -549,6 +576,8 @@ function update() {{
                         '<td>' + g.subset_index + '</td>' +
                         '<td style="color:var(--orange);">HEDGE</td>' +
                         '<td>' + pairSide + '</td>' +
+                        '<td>{pair_qty}</td>' +
+                        '<td>' + hedgeP + '</td>' +
                         '<td>—</td>' +
                         '<td><span class="status-badge status-TARGET_PENDING">OPEN</span></td>' +
                         '<td>' + fmtTime(g.entry_filled_at) + '</td>' +
@@ -564,6 +593,11 @@ function update() {{
                 const hedgeSide = g.entry_side === 'BUY' ? 'SELL' : 'BUY';
                 const unwindSide = g.entry_side === 'BUY' ? 'BUY' : 'SELL';
                 completedPairs++;
+                const cHedgeP = g.pair_hedge_price ? g.pair_hedge_price.toFixed(2) : '—';
+                const cUnwindP = g.pair_unwind_price ? g.pair_unwind_price.toFixed(2) : '—';
+                const pairPnlVal = g.pair_pnl || 0;
+                const pairPnlStr = (pairPnlVal >= 0 ? '+' : '') + pairPnlVal.toFixed(2);
+                const pairPnlColor = pairPnlVal >= 0 ? 'var(--green)' : 'var(--red)';
                 // Hedge row
                 pairRows.push('<tr style="opacity:0.6;">' +
                     '<td style="font-size:11px;color:var(--purple);">' + pid + '</td>' +
@@ -572,7 +606,9 @@ function update() {{
                     '<td>' + g.subset_index + '</td>' +
                     '<td style="color:var(--orange);">HEDGE</td>' +
                     '<td>' + hedgeSide + '</td>' +
-                    '<td>—</td>' +
+                    '<td>{pair_qty}</td>' +
+                    '<td>' + cHedgeP + '</td>' +
+                    '<td style="color:' + pairPnlColor + ';">' + pairPnlStr + '</td>' +
                     '<td><span class="status-badge status-CLOSED">CLOSED</span></td>' +
                     '<td>' + fmtTime(g.entry_filled_at) + '</td>' +
                     '</tr>');
@@ -584,7 +620,9 @@ function update() {{
                     '<td>' + g.subset_index + '</td>' +
                     '<td style="color:var(--green);">UNWIND</td>' +
                     '<td>' + unwindSide + '</td>' +
-                    '<td>—</td>' +
+                    '<td>{pair_qty}</td>' +
+                    '<td>' + cUnwindP + '</td>' +
+                    '<td></td>' +
                     '<td><span class="status-badge status-CLOSED">CLOSED</span></td>' +
                     '<td>' + fmtTime(g.target_filled_at) + '</td>' +
                     '</tr>');
@@ -607,13 +645,17 @@ function update() {{
             // PnL chart
             const allClosed = state.closed_groups || [];
             if (allClosed.length > 0) {{
-                let cum = 0;
+                let cumPrimary = 0;
+                let cumCombined = 0;
                 const labels = [];
-                const data = [];
+                const primaryData = [];
+                const combinedData = [];
                 allClosed.forEach((g, i) => {{
-                    cum += g.realized_pnl || 0;
+                    cumPrimary += g.realized_pnl || 0;
+                    cumCombined += (g.realized_pnl || 0) + (g.pair_pnl || 0);
                     labels.push(i + 1);
-                    data.push(parseFloat(cum.toFixed(2)));
+                    primaryData.push(parseFloat(cumPrimary.toFixed(2)));
+                    combinedData.push(parseFloat(cumCombined.toFixed(2)));
                 }});
                 const ctx = document.getElementById('pnl-chart').getContext('2d');
                 if (pnlChart) pnlChart.destroy();
@@ -622,10 +664,19 @@ function update() {{
                     data: {{
                         labels: labels,
                         datasets: [{{
-                            label: 'Cumulative PnL',
-                            data: data,
-                            borderColor: data[data.length-1] >= 0 ? '#00c853' : '#ff1744',
-                            backgroundColor: (data[data.length-1] >= 0 ? 'rgba(0,200,83,' : 'rgba(255,23,68,') + '0.1)',
+                            label: '{symbol} PnL',
+                            data: primaryData,
+                            borderColor: '#448aff',
+                            backgroundColor: 'rgba(68,138,255,0.1)',
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                        }}, {{
+                            label: 'Combined PnL',
+                            data: combinedData,
+                            borderColor: combinedData[combinedData.length-1] >= 0 ? '#00c853' : '#ff1744',
+                            backgroundColor: (combinedData[combinedData.length-1] >= 0 ? 'rgba(0,200,83,' : 'rgba(255,23,68,') + '0.1)',
                             fill: true,
                             tension: 0.3,
                             pointRadius: 0,
@@ -636,7 +687,7 @@ function update() {{
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {{
-                            legend: {{ display: false }},
+                            legend: {{ display: true, labels: {{ color: '#aaa' }} }},
                         }},
                         scales: {{
                             x: {{
@@ -671,6 +722,7 @@ def main():
     parser = argparse.ArgumentParser(description='TG Grid Bot Dashboard')
     parser.add_argument('--symbol', required=True, help='Trading symbol (e.g., TATSILV)')
     parser.add_argument('--pair-symbol', default='', help='Pair hedge symbol (e.g., SPCENET)')
+    parser.add_argument('--pair-qty', type=int, default=0, help='Pair qty per transaction (e.g., 10)')
     parser.add_argument('--port', type=int, default=7777, help='Dashboard port (default: 7777)')
     parser.add_argument('--host', default='0.0.0.0', help='Bind host (default: 0.0.0.0)')
     args = parser.parse_args()
@@ -678,7 +730,7 @@ def main():
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s %(name)s %(levelname)s %(message)s')
 
-    app = create_app(args.symbol, args.pair_symbol)
+    app = create_app(args.symbol, args.pair_symbol, args.pair_qty)
     logger.info("Starting TG dashboard for %s on %s:%d", args.symbol, args.host, args.port)
     app.run(host=args.host, port=args.port, debug=False)
 

@@ -139,15 +139,16 @@ class BuyBot:
         # Pair trade: BUY TATSILV entry → SELL pair symbol
         if self.config.has_pair:
             pair_oid = generate_order_id("PR", group.subset_index, "A", group.group_id)
-            pair_id = self.client.place_market_order(
+            pair_id, pair_price = self.client.place_market_order(
                 self.config.pair_symbol, "SELL", self.config.pair_qty,
                 self.config.exchange, self.config.product,
                 order_unique_id=pair_oid)
             if pair_id:
                 group.pair_order_id = pair_id
-                logger.info("BuyBot PAIR: group=%s, SELL %s %d, order=%s [%s]",
+                group.pair_hedge_price = pair_price
+                logger.info("BuyBot PAIR: group=%s, SELL %s %d @ %.2f, order=%s [%s]",
                             group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_id, pair_oid)
+                            self.config.pair_qty, pair_price, pair_id, pair_oid)
             else:
                 logger.error("BuyBot PAIR FAILED: group=%s, SELL %s %d",
                              group.group_id, self.config.pair_symbol,
@@ -173,14 +174,19 @@ class BuyBot:
         # Reverse pair: SELL target filled → BUY pair symbol back
         if self.config.has_pair:
             pair_oid = generate_order_id("PR", group.subset_index, "A", group.group_id)
-            pair_id = self.client.place_market_order(
+            pair_id, pair_price = self.client.place_market_order(
                 self.config.pair_symbol, "BUY", self.config.pair_qty,
                 self.config.exchange, self.config.product,
                 order_unique_id=pair_oid)
             if pair_id:
-                logger.info("BuyBot PAIR UNWIND: group=%s, BUY %s %d, order=%s [%s]",
+                group.pair_unwind_price = pair_price
+                # Pair PnL: sold at hedge, bought back at unwind
+                if group.pair_hedge_price:
+                    group.pair_pnl = round(
+                        (group.pair_hedge_price - pair_price) * self.config.pair_qty, 2)
+                logger.info("BuyBot PAIR UNWIND: group=%s, BUY %s %d @ %.2f, pair_pnl=%.2f, order=%s [%s]",
                             group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_id, pair_oid)
+                            self.config.pair_qty, pair_price, group.pair_pnl, pair_id, pair_oid)
             else:
                 logger.error("BuyBot PAIR UNWIND FAILED: group=%s, BUY %s %d",
                              group.group_id, self.config.pair_symbol,
