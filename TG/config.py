@@ -97,24 +97,28 @@ class GridConfig:
         """
         Compute grid subsets with geometric doubling.
 
+        Each subset's distance from anchor is its own grid_space (not cumulative).
+        Subset 0: distance = base_grid_space
+        Subset 1: distance = base_grid_space * 2
+        Subset 2: distance = base_grid_space * 4
+        ...
+
         Returns list of SubsetConfig, one per grid band.
         Qty allocation: subset_qty per band, remainder in final band.
         """
         subsets = []
         remaining = self.total_qty
-        cumulative = 0.0
         i = 0
         while remaining > 0:
             qty = min(self.subset_qty, remaining)
             space = round(self.base_grid_space * (2 ** i), 10)
             target = round(self.base_target * (2 ** i), 10)
-            cumulative = round(cumulative + space, 10)
             subsets.append(SubsetConfig(
                 index=i,
                 qty=qty,
                 grid_space=space,
                 target=target,
-                distance_from_anchor=cumulative,
+                distance_from_anchor=space,
             ))
             remaining -= qty
             i += 1

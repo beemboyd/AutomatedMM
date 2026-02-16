@@ -283,7 +283,7 @@ class HybridClient:
         try:
             resp = self.xt.cancel_order(
                 appOrderID=int(order_id),
-                orderUniqueIdentifier=order_unique_id,
+                orderUniqueIdentifier=order_unique_id or f"CANCEL_{order_id}",
             )
             if isinstance(resp, str) or (isinstance(resp, dict) and resp.get('type') == 'error'):
                 logger.error("CANCEL FAILED: %s -> %s", order_id, resp)
