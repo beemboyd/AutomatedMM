@@ -1,5 +1,26 @@
 # Activity Log
 
+## 2026-02-16 23:30 IST - Claude
+**TG Dashboard — Monitor panel refinements**
+
+### Changes
+1. **Renamed dashboard** from "TG GRID BOT CONTROL PANEL" to "TG GRID BOT MONITOR PANEL" (`TG/dashboard.py`)
+2. **Removed Configuration tab** from 7777 dashboard — will be a separate dashboard on port 7779
+3. **Added secondary ticker transactions** to Recent History (Trades tab):
+   - Each closed cycle now shows a sub-row with SPCENET hedge/unwind prices and pair PnL
+   - Supports both old format (`pair_hedge_price`) and new cumulative format (`pair_hedge_vwap`)
+   - Purple-highlighted rows with arrow indicator for easy visual distinction
+4. **Closed all open positions** in `TG/state/TATSILV_grid_state.json`:
+   - Moved 19 open groups (3 TARGET_PENDING, 16 ENTRY_PENDING) to closed_groups with CANCELLED status
+   - User manually closed positions on broker side
+5. **Made Live Monitor the default tab** (no more config tab on load)
+
+### Files Modified
+- `TG/dashboard.py` — Removed config tab, edit modal, config JS functions; added hedge transaction rows in trades
+- `TG/state/TATSILV_grid_state.json` — All 19 open groups moved to closed_groups (total: 21 closed)
+
+---
+
 ## 2026-02-16 22:00 IST - Claude
 **TG — Multi-Primary Grid Bot with Config Dashboard**
 
