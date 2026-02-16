@@ -257,6 +257,25 @@ class HybridClient:
                          transaction_type, symbol, qty, price, e)
             return None
 
+    def place_market_order(self, symbol: str, transaction_type: str, qty: int,
+                           exchange: str = "NSE",
+                           product: str = "NRML") -> Optional[str]:
+        """
+        Place a market-like order by using LIMIT at current LTP.
+
+        XTS may not reliably support true MARKET orders; LIMIT at LTP
+        is safer and functionally equivalent for liquid instruments.
+
+        Returns AppOrderID as string, or None on failure.
+        """
+        ltp = self.get_ltp(symbol, exchange)
+        if ltp is None:
+            logger.error("MARKET ORDER FAILED: cannot get LTP for %s", symbol)
+            return None
+        logger.info("MARKET ORDER: %s %s %d @ LTP=%.2f (LIMIT)",
+                     transaction_type, symbol, qty, ltp)
+        return self.place_order(symbol, transaction_type, qty, ltp, exchange, product)
+
     def cancel_order(self, order_id: str, order_unique_id: str = "") -> bool:
         """Cancel a pending order by AppOrderID via XTS."""
         try:

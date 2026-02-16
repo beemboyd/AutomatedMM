@@ -37,9 +37,10 @@ class Group:
     qty: int
     status: str = GroupStatus.ENTRY_PENDING
 
-    # Order IDs from Zerodha
+    # Order IDs from broker
     entry_order_id: Optional[str] = None
     target_order_id: Optional[str] = None
+    pair_order_id: Optional[str] = None   # paired hedge order (e.g., SPCENET)
 
     # Fill info (actual prices from broker)
     entry_fill_price: Optional[float] = None
@@ -87,6 +88,7 @@ class Group:
             'status': self.status,
             'entry_order_id': self.entry_order_id,
             'target_order_id': self.target_order_id,
+            'pair_order_id': self.pair_order_id,
             'entry_fill_price': self.entry_fill_price,
             'entry_fill_qty': self.entry_fill_qty,
             'target_fill_price': self.target_fill_price,
@@ -111,6 +113,7 @@ class Group:
             status=d.get('status', GroupStatus.ENTRY_PENDING),
             entry_order_id=d.get('entry_order_id'),
             target_order_id=d.get('target_order_id'),
+            pair_order_id=d.get('pair_order_id'),
             entry_fill_price=d.get('entry_fill_price'),
             entry_fill_qty=d.get('entry_fill_qty'),
             target_fill_price=d.get('target_fill_price'),

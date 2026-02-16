@@ -107,6 +107,9 @@ class GridEngine:
 
         # Enter main loop
         self.running = True
+        if self.config.has_pair:
+            logger.info("Pair trading ENABLED: %s qty=%d (opposite direction)",
+                        self.config.pair_symbol, self.config.pair_qty)
         logger.info("Grid engine started. Polling every %.1fs", self.config.poll_interval)
         self._run_loop()
 

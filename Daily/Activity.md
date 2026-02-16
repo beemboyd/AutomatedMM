@@ -1,5 +1,21 @@
 # Activity Log
 
+## 2026-02-16 12:30 IST - Claude
+**TG — Pair Trading Support (TATSILV-SPCENET)**
+
+**Modified Files:**
+- `TG/config.py` — Added `pair_symbol`, `pair_qty` fields and `has_pair` property to GridConfig; updated `print_grid_layout()` to display pair info
+- `TG/group.py` — Added `pair_order_id` field to Group dataclass; updated `to_dict()`/`from_dict()` for persistence
+- `TG/hybrid_client.py` — Added `place_market_order()` method (LIMIT at LTP for market-like execution)
+- `TG/bot_buy.py` — On entry fill: SELL pair symbol; on target fill: BUY pair symbol back (unwind)
+- `TG/bot_sell.py` — On entry fill: BUY pair symbol; on target fill: SELL pair symbol back (unwind)
+- `TG/engine.py` — Added pair trading info to startup log
+- `TG/run.py` — Added `--pair-symbol` and `--pair-qty` CLI arguments
+
+**Trade Flow:** When TATSILV grid entry fills, simultaneously trade SPCENET in opposite direction as hedge. When TATSILV target fills, reverse the SPCENET position to unwind. Both instruments use same qty, exchange, and product settings.
+
+**Impact:** Backward-compatible — pair trading only activates when `--pair-symbol` and `--pair-qty` are provided. Existing single-instrument grid trading is unaffected.
+
 ## 2026-02-16 01:00 IST - Claude
 **TG1 — Grid OCO Trading Bot (Two-Token Cross-Instrument Hedging)**
 

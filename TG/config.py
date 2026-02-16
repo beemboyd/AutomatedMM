@@ -70,6 +70,10 @@ class GridConfig:
     exchange: str = "NSE"
     product: str = "NRML"       # XTS: NRML for carry-forward, MIS for intraday
 
+    # Pair trading parameters
+    pair_symbol: str = ""           # e.g., "SPCENET" — opposite-direction hedge
+    pair_qty: int = 0               # qty per pair trade (0 = disabled)
+
     # Operational parameters
     auto_reenter: bool = True       # re-place entry after target fills
     poll_interval: float = 2.0      # seconds between order status polls
@@ -83,6 +87,11 @@ class GridConfig:
 
     # XTS API root URL
     xts_root: str = _DEFAULT_XTS_ROOT
+
+    @property
+    def has_pair(self) -> bool:
+        """True if pair trading is configured."""
+        return bool(self.pair_symbol and self.pair_qty > 0)
 
     def compute_subsets(self) -> List[SubsetConfig]:
         """
@@ -155,6 +164,10 @@ class GridConfig:
         print(f"  Product          : {self.product}")
         print(f"  Broker           : XTS + Zerodha (user={self.zerodha_user})")
         print(f"  Auto Re-enter    : {self.auto_reenter}")
+        if self.has_pair:
+            print(f"  Pair Symbol      : {self.pair_symbol}")
+            print(f"  Pair Qty         : {self.pair_qty}")
+            print(f"  Pair Mode        : OPPOSITE (entry→hedge, target→unwind)")
         print(f"{'='*60}")
 
         print(f"\n  BUY GRID (Bot A) — entries below anchor")

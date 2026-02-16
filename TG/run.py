@@ -91,6 +91,12 @@ def parse_args():
     parser.add_argument('--subset-qty', type=int, default=300,
                         help='Quantity per grid subset (default: 300)')
 
+    # Pair trading
+    parser.add_argument('--pair-symbol', default='',
+                        help='Pair hedge symbol (e.g., SPCENET). Trades opposite direction on fills.')
+    parser.add_argument('--pair-qty', type=int, default=0,
+                        help='Qty per pair trade (0 = disabled)')
+
     # Broker parameters
     parser.add_argument('--exchange', default='NSE',
                         help='Exchange (default: NSE)')
@@ -163,6 +169,8 @@ def main():
         base_target=args.target,
         total_qty=args.total_qty,
         subset_qty=args.subset_qty,
+        pair_symbol=args.pair_symbol,
+        pair_qty=args.pair_qty,
         exchange=args.exchange,
         product=args.product,
         interactive_key=args.interactive_key,

@@ -159,6 +159,21 @@ class SellBot:
             logger.error("SellBot TARGET FAILED: group=%s, BUY %d @ %.2f",
                          group.group_id, fill_qty, group.target_price)
 
+        # Pair trade: SELL TATSILV entry → BUY pair symbol
+        if self.config.has_pair:
+            pair_id = self.client.place_market_order(
+                self.config.pair_symbol, "BUY", self.config.pair_qty,
+                self.config.exchange, self.config.product)
+            if pair_id:
+                group.pair_order_id = pair_id
+                logger.info("SellBot PAIR: group=%s, BUY %s %d, order=%s",
+                            group.group_id, self.config.pair_symbol,
+                            self.config.pair_qty, pair_id)
+            else:
+                logger.error("SellBot PAIR FAILED: group=%s, BUY %s %d",
+                             group.group_id, self.config.pair_symbol,
+                             self.config.pair_qty)
+
     def on_target_fill(self, group: Group, fill_price: float, fill_qty: int):
         """
         Handle buy target fill → close group, compute PnL.
@@ -175,6 +190,20 @@ class SellBot:
 
         logger.info("SellBot TARGET FILLED: group=%s, BUY %d @ %.2f, PnL=%.2f",
                      group.group_id, fill_qty, fill_price, group.realized_pnl)
+
+        # Reverse pair: BUY target filled → SELL pair symbol back
+        if self.config.has_pair:
+            pair_id = self.client.place_market_order(
+                self.config.pair_symbol, "SELL", self.config.pair_qty,
+                self.config.exchange, self.config.product)
+            if pair_id:
+                logger.info("SellBot PAIR UNWIND: group=%s, SELL %s %d, order=%s",
+                            group.group_id, self.config.pair_symbol,
+                            self.config.pair_qty, pair_id)
+            else:
+                logger.error("SellBot PAIR UNWIND FAILED: group=%s, SELL %s %d",
+                             group.group_id, self.config.pair_symbol,
+                             self.config.pair_qty)
 
         # Free the level
         if group.subset_index in self.level_groups:
