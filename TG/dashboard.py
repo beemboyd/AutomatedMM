@@ -1,14 +1,14 @@
 """
-TG Grid Bot Monitor Dashboard — Live monitoring web UI on port 7777.
+TG Grid Bot Dashboard — Monitor (7777) + Config (7779) web UI.
 
 Features:
-- State monitoring: Poll TG/state/{SYMBOL}_grid_state.json for each primary
-- Process management: Launch/stop bot subprocesses, track PIDs
-- Config management: Read/write TG/state/tg_config.json (used by config dashboard on 7779)
-- Self-contained: Single file, inline HTML/CSS/JS
+- Monitor mode (--mode monitor, port 7777): Live PnL, open positions, trade history
+- Config mode (--mode config, port 7779): Edit config, start/stop bots, manage primaries
+- Shared backend: Config, state, and process management APIs
 
 Usage:
-    python -m TG.dashboard --port 7777
+    python -m TG.dashboard --port 7777 --mode monitor
+    python -m TG.dashboard --port 7779 --mode config
 """
 
 import argparse
@@ -235,8 +235,8 @@ def _compute_summary(state: dict) -> dict:
     }
 
 
-def create_app() -> Flask:
-    """Create Flask app for config + monitor dashboard."""
+def create_app(mode: str = 'monitor') -> Flask:
+    """Create Flask app. mode='monitor' for 7777, mode='config' for 7779."""
     app = Flask(__name__)
 
     @app.route('/api/config', methods=['GET'])
@@ -310,6 +310,8 @@ def create_app() -> Flask:
 
     @app.route('/')
     def index():
+        if mode == 'config':
+            return Response(_build_config_html(), mimetype='text/html')
         return Response(_build_html(), mimetype='text/html')
 
     return app
@@ -886,10 +888,440 @@ setTimeout(updateMonitor, 500);
 </html>'''
 
 
+def _build_config_html() -> str:
+    """Build the config dashboard HTML (port 7779)."""
+    return '''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TG Grid Bot Config Panel</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    :root {
+        --bg: #0f1117;
+        --card: #1a1d27;
+        --border: #2a2d3a;
+        --text: #e0e0e0;
+        --dim: #888;
+        --green: #00c853;
+        --red: #ff1744;
+        --blue: #448aff;
+        --orange: #ff9100;
+        --purple: #b388ff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+    }
+    .pulse {
+        display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+        margin-right: 6px; animation: pulse 2s ease-in-out infinite;
+    }
+    .pulse-green { background: var(--green); }
+    .pulse-red { background: var(--red); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .status-badge {
+        display: inline-block; padding: 2px 6px; border-radius: 4px;
+        font-size: 10px; font-weight: 600;
+    }
+    .badge-running { background: rgba(0,200,83,0.15); color: var(--green); }
+    .badge-stopped { background: rgba(255,23,68,0.15); color: var(--red); }
+    input, select {
+        background: #0f1117; border: 1px solid var(--border); color: var(--text);
+        padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 12px;
+        width: 100%;
+    }
+    input:focus, select:focus { outline: 1px solid var(--blue); }
+    button {
+        font-family: inherit; font-size: 12px; cursor: pointer; border: none;
+        border-radius: 4px; padding: 6px 14px; font-weight: 600;
+        transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-green { background: var(--green); color: #000; }
+    .btn-red { background: var(--red); color: #fff; }
+    .btn-blue { background: var(--blue); color: #fff; }
+    .btn-dim { background: var(--border); color: var(--text); }
+    .btn-orange { background: var(--orange); color: #000; }
+    .field-hint {
+        font-size: 10px; color: var(--dim); margin-top: 2px; line-height: 1.3;
+    }
+</style>
+</head>
+<body class="p-4 max-w-4xl mx-auto">
+
+<!-- HEADER -->
+<div class="flex justify-between items-center p-3 rounded-lg mb-4" style="background:var(--card);border:1px solid var(--border);">
+    <div>
+        <h1 class="text-lg font-bold">TG GRID BOT CONFIG PANEL</h1>
+        <span style="color:var(--dim);font-size:12px;">Manage primaries, parameters, and bot processes</span>
+    </div>
+    <div class="text-right" style="font-size:12px;">
+        <span class="pulse pulse-green" id="status-pulse"></span>
+        <span id="status-text">Loading...</span><br>
+        <span style="color:var(--dim);" id="hdr-time">--</span>
+    </div>
+</div>
+
+<!-- SAVE STATUS TOAST -->
+<div id="toast" class="fixed top-4 right-4 px-4 py-2 rounded-lg text-sm font-semibold" style="background:var(--green);color:#000;display:none;z-index:100;">Saved</div>
+
+<!-- GLOBAL SETTINGS -->
+<div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
+    <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Global Settings</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">Secondary Symbol</label>
+            <input id="cfg-secondary" value="SPCENET">
+            <div class="field-hint">Pair hedge symbol for all primaries</div>
+        </div>
+        <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">Zerodha User</label>
+            <input id="cfg-zerodha-user" value="Sai">
+            <div class="field-hint">Market data source</div>
+        </div>
+        <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">XTS API Key</label>
+            <input id="cfg-xts-key" style="font-size:10px;">
+        </div>
+        <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">XTS Root URL</label>
+            <input id="cfg-xts-root" style="font-size:10px;">
+        </div>
+    </div>
+</div>
+
+<!-- PRIMARY CONFIGS -->
+<div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
+    <div class="flex justify-between items-center mb-3">
+        <h2 class="text-sm font-semibold" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Primary Symbols</h2>
+        <button class="btn-blue text-xs" onclick="addPrimary()">+ Add Primary</button>
+    </div>
+    <div id="primaries-container"></div>
+</div>
+
+<!-- ACTION BUTTONS -->
+<div class="flex gap-2 mb-4">
+    <button class="btn-green" onclick="saveConfig()">Save Config</button>
+    <button class="btn-dim" onclick="loadConfig()">Reload</button>
+    <button class="btn-red" onclick="stopAllBots()" style="margin-left:auto;">Stop All Bots</button>
+</div>
+
+<!-- EDIT MODAL -->
+<div id="edit-modal" class="fixed inset-0 flex items-center justify-center" style="background:rgba(0,0,0,0.7);display:none;z-index:50;">
+    <div class="rounded-lg p-6 w-full max-w-xl" style="background:var(--card);border:1px solid var(--border);">
+        <h3 class="text-base font-semibold mb-4" id="modal-title">Edit Primary</h3>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Symbol</label>
+                <input id="m-symbol">
+                <div class="field-hint">NSE trading symbol (e.g. TATSILV)</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Product</label>
+                <select id="m-product">
+                    <option value="NRML">NRML (carry-forward)</option>
+                    <option value="MIS">MIS (intraday)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Grid Space (INR)</label>
+                <input id="m-grid-space" type="number" step="0.01">
+                <div class="field-hint">Distance between grid levels</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Target (INR)</label>
+                <input id="m-target" type="number" step="0.01">
+                <div class="field-hint">Profit target per level</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Total Qty</label>
+                <input id="m-total-qty" type="number">
+                <div class="field-hint">Total position size across all levels</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Subset Qty</label>
+                <input id="m-subset-qty" type="number">
+                <div class="field-hint">Qty per grid level</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Hedge Ratio</label>
+                <input id="m-hedge-ratio" type="number">
+                <div class="field-hint">Secondary shares per primary on COMPLETE fill (0=disabled)</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Partial Hedge Ratio</label>
+                <input id="m-partial-hedge-ratio" type="number">
+                <div class="field-hint">Secondary shares per primary on PARTIAL fill (0=disabled)</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Holdings Override</label>
+                <input id="m-holdings" type="number">
+                <div class="field-hint">SellBot available shares. -1=use broker API, 0+=override</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Poll Interval (s)</label>
+                <input id="m-poll" type="number" step="0.5">
+                <div class="field-hint">Order status check frequency</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Anchor Price</label>
+                <input id="m-anchor" type="number" step="0.01">
+                <div class="field-hint">Grid center price (0 if auto)</div>
+            </div>
+            <div class="flex flex-col justify-center">
+                <label class="flex items-center gap-2 text-xs cursor-pointer" style="color:var(--text);">
+                    <input type="checkbox" id="m-auto-anchor" style="width:auto;"> Auto Anchor (use LTP)
+                </label>
+                <div class="field-hint mt-1">Fetch current price from Zerodha on start</div>
+            </div>
+        </div>
+        <div class="flex gap-2 mt-5 justify-end">
+            <button class="btn-dim" onclick="closeModal()">Cancel</button>
+            <button class="btn-green" onclick="saveModal()">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentConfig = {};
+let editingIdx = -1;
+let botStatuses = {};
+let botPids = {};
+
+function showToast(msg, color) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = color || 'var(--green)';
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 2000);
+}
+
+// --- Config ---
+function loadConfig() {
+    fetch('/api/config')
+        .then(r => r.json())
+        .then(cfg => {
+            currentConfig = cfg;
+            document.getElementById('cfg-secondary').value = cfg.secondary_symbol || '';
+            document.getElementById('cfg-zerodha-user').value = cfg.zerodha_user || 'Sai';
+            document.getElementById('cfg-xts-key').value = cfg.xts_interactive_key || '';
+            document.getElementById('cfg-xts-root').value = cfg.xts_root || '';
+            renderPrimaries();
+        })
+        .catch(e => console.error('Load config error:', e));
+}
+
+function saveConfig() {
+    currentConfig.secondary_symbol = document.getElementById('cfg-secondary').value.trim();
+    currentConfig.zerodha_user = document.getElementById('cfg-zerodha-user').value.trim();
+    currentConfig.xts_interactive_key = document.getElementById('cfg-xts-key').value.trim();
+    currentConfig.xts_root = document.getElementById('cfg-xts-root').value.trim();
+    fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(currentConfig),
+    })
+    .then(r => r.json())
+    .then(r => {
+        if (r.status === 'ok') showToast('Config saved');
+        else showToast('Save failed: ' + (r.error || ''), 'var(--red)');
+    })
+    .catch(e => showToast('Save error', 'var(--red)'));
+}
+
+// --- Primaries ---
+function renderPrimaries() {
+    const container = document.getElementById('primaries-container');
+    const primaries = currentConfig.primaries || [];
+    if (primaries.length === 0) {
+        container.innerHTML = '<div style="color:var(--dim);text-align:center;padding:20px;">No primaries configured. Click "+ Add Primary" to get started.</div>';
+        return;
+    }
+    container.innerHTML = primaries.map((p, i) => {
+        const sym = p.symbol || 'UNNAMED';
+        const running = botStatuses[sym] || false;
+        const pid = botPids[sym] || '';
+        const statusBadge = running
+            ? '<span class="status-badge badge-running">Running' + (pid ? ' (PID ' + pid + ')' : '') + '</span>'
+            : '<span class="status-badge badge-stopped">Stopped</span>';
+        const startStopBtn = running
+            ? `<button class="btn-red text-xs" onclick="stopBot('${sym}')">Stop</button>`
+            : `<button class="btn-green text-xs" onclick="startBot('${sym}')">Start</button>`;
+        const anchor = p.auto_anchor ? 'Auto (LTP)' : (p.anchor_price || 'N/A');
+        return `
+        <div class="rounded p-3 mb-2" style="background:#0f1117;border:1px solid var(--border);">
+            <div class="flex justify-between items-center mb-2">
+                <div>
+                    <span class="font-bold text-sm" style="color:var(--blue);">${sym}</span> ${statusBadge}
+                </div>
+                <div class="flex gap-1">
+                    ${startStopBtn}
+                    <button class="btn-blue text-xs" onclick="editPrimary(${i})">Edit</button>
+                    <button class="btn-dim text-xs" onclick="removePrimary(${i})">Remove</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-4 gap-x-4 gap-y-1 text-xs" style="color:var(--dim);">
+                <div>Anchor: <span style="color:var(--text);">${anchor}</span></div>
+                <div>Space: <span style="color:var(--text);">${p.grid_space}</span></div>
+                <div>Target: <span style="color:var(--text);">${p.target}</span></div>
+                <div>Product: <span style="color:var(--text);">${p.product || 'NRML'}</span></div>
+                <div>Total Qty: <span style="color:var(--text);">${p.total_qty}</span></div>
+                <div>Subset Qty: <span style="color:var(--text);">${p.subset_qty}</span></div>
+                <div>Hedge: <span style="color:var(--text);">${p.hedge_ratio}</span></div>
+                <div>Partial: <span style="color:var(--text);">${p.partial_hedge_ratio}</span></div>
+                <div>Holdings: <span style="color:var(--text);">${p.holdings_override}</span></div>
+                <div>Poll: <span style="color:var(--text);">${p.poll_interval}s</span></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function addPrimary() {
+    if (!currentConfig.primaries) currentConfig.primaries = [];
+    currentConfig.primaries.push({
+        symbol: '', enabled: true, auto_anchor: true, anchor_price: 0,
+        grid_space: 0.01, target: 0.03, total_qty: 10, subset_qty: 1,
+        hedge_ratio: 1, partial_hedge_ratio: 1, holdings_override: 1000,
+        product: 'NRML', poll_interval: 2.0,
+    });
+    editPrimary(currentConfig.primaries.length - 1);
+}
+
+function removePrimary(idx) {
+    const sym = currentConfig.primaries[idx].symbol || 'this primary';
+    if (confirm('Remove ' + sym + '?')) {
+        currentConfig.primaries.splice(idx, 1);
+        renderPrimaries();
+    }
+}
+
+function editPrimary(idx) {
+    editingIdx = idx;
+    const p = currentConfig.primaries[idx];
+    document.getElementById('modal-title').textContent = p.symbol ? 'Edit ' + p.symbol : 'New Primary';
+    document.getElementById('m-symbol').value = p.symbol || '';
+    document.getElementById('m-product').value = p.product || 'NRML';
+    document.getElementById('m-grid-space').value = p.grid_space || 0.01;
+    document.getElementById('m-target').value = p.target || 0.03;
+    document.getElementById('m-total-qty').value = p.total_qty || 10;
+    document.getElementById('m-subset-qty').value = p.subset_qty || 1;
+    document.getElementById('m-hedge-ratio').value = p.hedge_ratio || 0;
+    document.getElementById('m-partial-hedge-ratio').value = p.partial_hedge_ratio || 0;
+    document.getElementById('m-holdings').value = p.holdings_override != null ? p.holdings_override : -1;
+    document.getElementById('m-poll').value = p.poll_interval || 2.0;
+    document.getElementById('m-anchor').value = p.anchor_price || 0;
+    document.getElementById('m-auto-anchor').checked = p.auto_anchor !== false;
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+    editingIdx = -1;
+}
+
+function saveModal() {
+    if (editingIdx < 0) return;
+    const p = currentConfig.primaries[editingIdx];
+    p.symbol = document.getElementById('m-symbol').value.toUpperCase().trim();
+    p.product = document.getElementById('m-product').value;
+    p.grid_space = parseFloat(document.getElementById('m-grid-space').value);
+    p.target = parseFloat(document.getElementById('m-target').value);
+    p.total_qty = parseInt(document.getElementById('m-total-qty').value);
+    p.subset_qty = parseInt(document.getElementById('m-subset-qty').value);
+    p.hedge_ratio = parseInt(document.getElementById('m-hedge-ratio').value);
+    p.partial_hedge_ratio = parseInt(document.getElementById('m-partial-hedge-ratio').value);
+    p.holdings_override = parseInt(document.getElementById('m-holdings').value);
+    p.poll_interval = parseFloat(document.getElementById('m-poll').value);
+    p.anchor_price = parseFloat(document.getElementById('m-anchor').value);
+    p.auto_anchor = document.getElementById('m-auto-anchor').checked;
+    closeModal();
+    renderPrimaries();
+}
+
+// --- Bot control ---
+function startBot(symbol) {
+    fetch('/api/bot/start/' + symbol, {method: 'POST'})
+        .then(r => r.json())
+        .then(r => {
+            if (r.status === 'started') showToast(symbol + ' started');
+            else showToast(r.error || 'Failed', 'var(--red)');
+            updateProcesses();
+        })
+        .catch(e => showToast('Start error', 'var(--red)'));
+}
+
+function stopBot(symbol) {
+    fetch('/api/bot/stop/' + symbol, {method: 'POST'})
+        .then(r => r.json())
+        .then(r => {
+            if (r.status === 'stopped') showToast(symbol + ' stopped');
+            else showToast(r.error || 'Not running', 'var(--orange)');
+            updateProcesses();
+        })
+        .catch(e => showToast('Stop error', 'var(--red)'));
+}
+
+function stopAllBots() {
+    if (!confirm('Stop ALL running bots?')) return;
+    fetch('/api/bot/stop-all', {method: 'POST'})
+        .then(r => r.json())
+        .then(r => { showToast('All bots stopped'); updateProcesses(); })
+        .catch(e => showToast('Error', 'var(--red)'));
+}
+
+function updateProcesses() {
+    fetch('/api/processes')
+        .then(r => r.json())
+        .then(procs => {
+            botStatuses = {};
+            botPids = {};
+            for (const [sym, info] of Object.entries(procs)) {
+                botStatuses[sym] = info.running;
+                if (info.running) botPids[sym] = info.pid;
+            }
+            renderPrimaries();
+            updateStatusIndicator();
+        })
+        .catch(e => {});
+}
+
+function updateStatusIndicator() {
+    const running = Object.values(botStatuses).some(v => v);
+    const pulse = document.getElementById('status-pulse');
+    const text = document.getElementById('status-text');
+    if (running) {
+        pulse.className = 'pulse pulse-green';
+        const count = Object.values(botStatuses).filter(v => v).length;
+        text.textContent = count + ' bot' + (count > 1 ? 's' : '') + ' running';
+    } else {
+        pulse.className = 'pulse pulse-red';
+        text.textContent = 'All stopped';
+    }
+    document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('en-IN',
+        {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+}
+
+// --- Init ---
+loadConfig();
+updateProcesses();
+setInterval(updateProcesses, 5000);
+</script>
+</body>
+</html>'''
+
+
 def main():
     parser = argparse.ArgumentParser(description='TG Grid Bot Dashboard')
     parser.add_argument('--port', type=int, default=7777, help='Dashboard port (default: 7777)')
     parser.add_argument('--host', default='0.0.0.0', help='Bind host (default: 0.0.0.0)')
+    parser.add_argument('--mode', default='monitor', choices=['monitor', 'config'],
+                        help='Dashboard mode: monitor (7777) or config (7779)')
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO,
@@ -899,13 +1331,13 @@ def main():
     if not os.path.exists(CONFIG_FILE):
         _save_config(_DEFAULT_CONFIG)
 
-    app = create_app()
+    app = create_app(mode=args.mode)
 
     # Cleanup on exit
     import atexit
     atexit.register(_stop_all_bots)
 
-    logger.info("Starting TG Dashboard on %s:%d", args.host, args.port)
+    logger.info("Starting TG Dashboard (%s) on %s:%d", args.mode, args.host, args.port)
     app.run(host=args.host, port=args.port, debug=False)
 
 
