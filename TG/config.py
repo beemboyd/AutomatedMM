@@ -95,30 +95,26 @@ class GridConfig:
 
     def compute_subsets(self) -> List[SubsetConfig]:
         """
-        Compute grid subsets with geometric doubling.
+        Compute uniform grid subsets.
 
-        Each subset's distance from anchor is its own grid_space (not cumulative).
-        Subset 0: distance = base_grid_space
-        Subset 1: distance = base_grid_space * 2
-        Subset 2: distance = base_grid_space * 4
-        ...
+        All levels use the same grid_space and target offset.
+        Subset i is placed at anchor ± (i+1) * base_grid_space.
 
-        Returns list of SubsetConfig, one per grid band.
-        Qty allocation: subset_qty per band, remainder in final band.
+        Returns list of SubsetConfig, one per grid level.
+        Qty allocation: subset_qty per level, remainder in final level.
         """
         subsets = []
         remaining = self.total_qty
         i = 0
         while remaining > 0:
             qty = min(self.subset_qty, remaining)
-            space = round(self.base_grid_space * (2 ** i), 10)
-            target = round(self.base_target * (2 ** i), 10)
+            distance = round(self.base_grid_space * (i + 1), 10)
             subsets.append(SubsetConfig(
                 index=i,
                 qty=qty,
-                grid_space=space,
-                target=target,
-                distance_from_anchor=space,
+                grid_space=self.base_grid_space,
+                target=self.base_target,
+                distance_from_anchor=distance,
             ))
             remaining -= qty
             i += 1
