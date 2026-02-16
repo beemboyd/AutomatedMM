@@ -40,10 +40,19 @@ class Group:
     # Order IDs from broker
     entry_order_id: Optional[str] = None
     target_order_id: Optional[str] = None
-    pair_order_id: Optional[str] = None   # paired hedge order (e.g., SPCENET)
-    pair_hedge_price: Optional[float] = None   # price at which hedge was placed
-    pair_unwind_price: Optional[float] = None  # price at which unwind was placed
-    pair_pnl: float = 0.0                      # realized PnL from pair trade
+
+    # Partial fill tracking
+    entry_filled_so_far: int = 0           # cumulative entry fills (for increment calc)
+    target_filled_so_far: int = 0          # cumulative target fills
+
+    # Pair tracking (cumulative across all partial + final fills)
+    pair_hedged_qty: int = 0               # total secondary shares hedged
+    pair_hedge_total: float = 0.0          # sum(price * qty) for hedge PnL calc
+    pair_hedge_seq: int = 0                # sequence counter for PH order naming
+    pair_unwound_qty: int = 0              # total secondary shares unwound
+    pair_unwind_total: float = 0.0         # sum(price * qty) for unwind PnL calc
+    pair_unwind_seq: int = 0               # sequence counter for PU order naming
+    pair_pnl: float = 0.0                  # realized pair PnL
 
     # Fill info (actual prices from broker)
     entry_fill_price: Optional[float] = None
@@ -79,6 +88,16 @@ class Group:
         """The opposite side of the entry."""
         return "SELL" if self.entry_side == "BUY" else "BUY"
 
+    @property
+    def pair_hedge_vwap(self) -> float:
+        """Volume-weighted average price of all hedge fills."""
+        return round(self.pair_hedge_total / self.pair_hedged_qty, 2) if self.pair_hedged_qty else 0.0
+
+    @property
+    def pair_unwind_vwap(self) -> float:
+        """Volume-weighted average price of all unwind fills."""
+        return round(self.pair_unwind_total / self.pair_unwound_qty, 2) if self.pair_unwound_qty else 0.0
+
     def to_dict(self) -> dict:
         return {
             'group_id': self.group_id,
@@ -91,10 +110,17 @@ class Group:
             'status': self.status,
             'entry_order_id': self.entry_order_id,
             'target_order_id': self.target_order_id,
-            'pair_order_id': self.pair_order_id,
-            'pair_hedge_price': self.pair_hedge_price,
-            'pair_unwind_price': self.pair_unwind_price,
+            'entry_filled_so_far': self.entry_filled_so_far,
+            'target_filled_so_far': self.target_filled_so_far,
+            'pair_hedged_qty': self.pair_hedged_qty,
+            'pair_hedge_total': self.pair_hedge_total,
+            'pair_hedge_seq': self.pair_hedge_seq,
+            'pair_unwound_qty': self.pair_unwound_qty,
+            'pair_unwind_total': self.pair_unwind_total,
+            'pair_unwind_seq': self.pair_unwind_seq,
             'pair_pnl': self.pair_pnl,
+            'pair_hedge_vwap': self.pair_hedge_vwap,
+            'pair_unwind_vwap': self.pair_unwind_vwap,
             'entry_fill_price': self.entry_fill_price,
             'entry_fill_qty': self.entry_fill_qty,
             'target_fill_price': self.target_fill_price,
@@ -119,9 +145,14 @@ class Group:
             status=d.get('status', GroupStatus.ENTRY_PENDING),
             entry_order_id=d.get('entry_order_id'),
             target_order_id=d.get('target_order_id'),
-            pair_order_id=d.get('pair_order_id'),
-            pair_hedge_price=d.get('pair_hedge_price'),
-            pair_unwind_price=d.get('pair_unwind_price'),
+            entry_filled_so_far=d.get('entry_filled_so_far', 0),
+            target_filled_so_far=d.get('target_filled_so_far', 0),
+            pair_hedged_qty=d.get('pair_hedged_qty', 0),
+            pair_hedge_total=d.get('pair_hedge_total', 0.0),
+            pair_hedge_seq=d.get('pair_hedge_seq', 0),
+            pair_unwound_qty=d.get('pair_unwound_qty', 0),
+            pair_unwind_total=d.get('pair_unwind_total', 0.0),
+            pair_unwind_seq=d.get('pair_unwind_seq', 0),
             pair_pnl=d.get('pair_pnl', 0.0),
             entry_fill_price=d.get('entry_fill_price'),
             entry_fill_qty=d.get('entry_fill_qty'),

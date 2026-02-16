@@ -108,7 +108,9 @@ class SellBot:
             qty=level.qty,
         )
 
-        entry_oid = generate_order_id("EN", level.subset_index, "B", group.group_id)
+        entry_oid = generate_order_id(
+            self.config.symbol, self.config.pair_symbol or "NONE",
+            level.subset_index, "EN", "B", group.group_id)
         order_id = self.client.place_order(
             symbol=self.config.symbol,
             transaction_type="SELL",
@@ -147,7 +149,9 @@ class SellBot:
                      group.group_id, fill_qty, fill_price, group.entry_price)
 
         # Place buy target at the theoretical target price
-        target_oid = generate_order_id("TP", group.subset_index, "B", group.group_id)
+        target_oid = generate_order_id(
+            self.config.symbol, self.config.pair_symbol or "NONE",
+            group.subset_index, "TP", "B", group.group_id)
         order_id = self.client.place_order(
             symbol=self.config.symbol,
             transaction_type="BUY",
@@ -168,24 +172,6 @@ class SellBot:
             logger.error("SellBot TARGET FAILED: group=%s, BUY %d @ %.2f",
                          group.group_id, fill_qty, group.target_price)
 
-        # Pair trade: SELL TATSILV entry → BUY pair symbol
-        if self.config.has_pair:
-            pair_oid = generate_order_id("PR", group.subset_index, "B", group.group_id)
-            pair_id, pair_price = self.client.place_market_order(
-                self.config.pair_symbol, "BUY", self.config.pair_qty,
-                self.config.exchange, self.config.product,
-                order_unique_id=pair_oid)
-            if pair_id:
-                group.pair_order_id = pair_id
-                group.pair_hedge_price = pair_price
-                logger.info("SellBot PAIR: group=%s, BUY %s %d @ %.2f, order=%s [%s]",
-                            group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_price, pair_id, pair_oid)
-            else:
-                logger.error("SellBot PAIR FAILED: group=%s, BUY %s %d",
-                             group.group_id, self.config.pair_symbol,
-                             self.config.pair_qty)
-
     def on_target_fill(self, group: Group, fill_price: float, fill_qty: int):
         """
         Handle buy target fill → close group, compute PnL.
@@ -202,27 +188,6 @@ class SellBot:
 
         logger.info("SellBot TARGET FILLED: group=%s, BUY %d @ %.2f, PnL=%.2f",
                      group.group_id, fill_qty, fill_price, group.realized_pnl)
-
-        # Reverse pair: BUY target filled → SELL pair symbol back
-        if self.config.has_pair:
-            pair_oid = generate_order_id("PR", group.subset_index, "B", group.group_id)
-            pair_id, pair_price = self.client.place_market_order(
-                self.config.pair_symbol, "SELL", self.config.pair_qty,
-                self.config.exchange, self.config.product,
-                order_unique_id=pair_oid)
-            if pair_id:
-                group.pair_unwind_price = pair_price
-                # Pair PnL: bought at hedge, sold back at unwind
-                if group.pair_hedge_price:
-                    group.pair_pnl = round(
-                        (pair_price - group.pair_hedge_price) * self.config.pair_qty, 2)
-                logger.info("SellBot PAIR UNWIND: group=%s, SELL %s %d @ %.2f, pair_pnl=%.2f, order=%s [%s]",
-                            group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_price, group.pair_pnl, pair_id, pair_oid)
-            else:
-                logger.error("SellBot PAIR UNWIND FAILED: group=%s, SELL %s %d",
-                             group.group_id, self.config.pair_symbol,
-                             self.config.pair_qty)
 
         # Free the level
         if group.subset_index in self.level_groups:
@@ -244,6 +209,61 @@ class SellBot:
                                        "insufficient holdings (%d < %d)",
                                        level.subset_index, available, level.qty)
                     break
+
+    def place_pair_hedge(self, group: Group, pair_qty: int):
+        """
+        Place pair HEDGE: SELL primary entry → BUY secondary.
+
+        Updates group cumulative tracking fields.
+        """
+        group.pair_hedge_seq += 1
+        pair_oid = generate_order_id(
+            self.config.symbol, self.config.pair_symbol,
+            group.subset_index, "PH", "B", group.group_id,
+            seq=group.pair_hedge_seq)
+        pair_id, pair_price = self.client.place_market_order(
+            self.config.pair_symbol, "BUY", pair_qty,
+            self.config.exchange, self.config.product,
+            order_unique_id=pair_oid)
+        if pair_id:
+            group.pair_hedged_qty += pair_qty
+            group.pair_hedge_total += pair_price * pair_qty
+            logger.info("SellBot PAIR HEDGE: group=%s, BUY %s %d @ %.2f (total_hedged=%d, vwap=%.2f), order=%s [%s]",
+                        group.group_id, self.config.pair_symbol,
+                        pair_qty, pair_price, group.pair_hedged_qty,
+                        group.pair_hedge_vwap, pair_id, pair_oid)
+        else:
+            logger.error("SellBot PAIR HEDGE FAILED: group=%s, BUY %s %d",
+                         group.group_id, self.config.pair_symbol, pair_qty)
+
+    def place_pair_unwind(self, group: Group, pair_qty: int):
+        """
+        Place pair UNWIND: BUY primary target → SELL secondary back.
+
+        Updates group cumulative tracking and computes pair PnL.
+        SellBot PnL = unwind_total - hedge_total (bought low, sold back high).
+        """
+        group.pair_unwind_seq += 1
+        pair_oid = generate_order_id(
+            self.config.symbol, self.config.pair_symbol,
+            group.subset_index, "PU", "B", group.group_id,
+            seq=group.pair_unwind_seq)
+        pair_id, pair_price = self.client.place_market_order(
+            self.config.pair_symbol, "SELL", pair_qty,
+            self.config.exchange, self.config.product,
+            order_unique_id=pair_oid)
+        if pair_id:
+            group.pair_unwound_qty += pair_qty
+            group.pair_unwind_total += pair_price * pair_qty
+            # Pair PnL: bought at hedge, sold back at unwind
+            group.pair_pnl = round(group.pair_unwind_total - group.pair_hedge_total, 2)
+            logger.info("SellBot PAIR UNWIND: group=%s, SELL %s %d @ %.2f (total_unwound=%d, pair_pnl=%.2f), order=%s [%s]",
+                        group.group_id, self.config.pair_symbol,
+                        pair_qty, pair_price, group.pair_unwound_qty,
+                        group.pair_pnl, pair_id, pair_oid)
+        else:
+            logger.error("SellBot PAIR UNWIND FAILED: group=%s, SELL %s %d",
+                         group.group_id, self.config.pair_symbol, pair_qty)
 
     def cancel_all(self):
         """Cancel all active entry and target orders for this bot."""

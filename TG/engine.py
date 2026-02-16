@@ -61,8 +61,8 @@ class GridEngine:
         self.buy_bot = BuyBot(self.buy_levels, self.client, self.state, config)
         self.sell_bot = SellBot(self.sell_levels, self.client, self.state, config)
 
-        # Order status cache: order_id → last known status
-        # Prevents reprocessing the same fill
+        # Order status cache: order_id → "status:filled_qty"
+        # Detects incremental partial fills and prevents reprocessing
         self._order_status_cache: Dict[str, str] = {}
 
     def start(self):
@@ -108,8 +108,9 @@ class GridEngine:
         # Enter main loop
         self.running = True
         if self.config.has_pair:
-            logger.info("Pair trading ENABLED: %s qty=%d (opposite direction)",
-                        self.config.pair_symbol, self.config.pair_qty)
+            logger.info("Pair trading ENABLED: %s hedge_ratio=%d partial_ratio=%d (opposite direction)",
+                        self.config.pair_symbol, self.config.hedge_ratio,
+                        self.config.partial_hedge_ratio)
         logger.info("Grid engine started. Polling every %.1fs", self.config.poll_interval)
         self._run_loop()
 
@@ -141,9 +142,10 @@ class GridEngine:
 
     def _poll_orders(self) -> int:
         """
-        Poll all orders from Zerodha and process status changes.
+        Poll all orders from XTS and process status changes.
 
-        Returns number of fills processed.
+        Returns number of fills processed. Cache key includes filled_qty
+        to detect incremental partial fills.
         """
         orders = self.client.get_orders()
         if not orders:
@@ -153,14 +155,16 @@ class GridEngine:
         for order in orders:
             order_id = str(order.get('order_id', ''))
             status = order.get('status', '')
+            filled_qty = int(order.get('filled_quantity', 0))
 
-            # Skip if no status change
-            if self._order_status_cache.get(order_id) == status:
+            # Cache key includes filled_qty so partial increments are detected
+            cache_key = f"{status}:{filled_qty}"
+            if self._order_status_cache.get(order_id) == cache_key:
                 continue
-            self._order_status_cache[order_id] = status
+            self._order_status_cache[order_id] = cache_key
 
-            if status == 'COMPLETE':
-                if self._handle_fill(order):
+            if status in ('COMPLETE', 'PARTIAL'):
+                if self._handle_fill_event(order):
                     fills_processed += 1
             elif status == 'REJECTED':
                 self._handle_rejection(order)
@@ -169,46 +173,84 @@ class GridEngine:
 
         return fills_processed
 
-    def _handle_fill(self, order: dict) -> bool:
+    def _handle_fill_event(self, order: dict) -> bool:
         """
-        Route a filled order to the correct bot.
+        Handle PARTIAL or COMPLETE fill events with dual hedge ratio logic.
 
-        Determines if this is an entry fill or target fill
-        based on the group's current state.
+        On each fill event:
+        1. Compute increment = current_filled_qty - previously_filled_qty
+        2. If PARTIAL: pair_qty = increment * partial_hedge_ratio
+        3. If COMPLETE: target_total = filled_qty * hedge_ratio, remaining = target - already_hedged
         """
         order_id = str(order['order_id'])
+        status = order.get('status', '')
         group = self.state.get_group_by_order(order_id)
         if not group:
             return False
 
         fill_price = float(order.get('average_price', 0))
-        fill_qty = int(order.get('filled_quantity', 0))
+        filled_qty = int(order.get('filled_quantity', 0))
 
-        if fill_price == 0 or fill_qty == 0:
+        if fill_price == 0 or filled_qty == 0:
             logger.warning("Fill with zero price/qty: order=%s", order_id)
             return False
 
-        # Determine if this is entry or target fill (check group status to prevent duplicates)
+        bot = self.buy_bot if group.bot == 'A' else self.sell_bot
+        is_complete = (status == 'COMPLETE')
+
+        # --- Entry order ---
         if order_id == group.entry_order_id:
             if group.status != GroupStatus.ENTRY_PENDING:
                 logger.debug("Skipping entry fill for group=%s (status=%s, already processed)",
                              group.group_id, group.status)
                 return False
-            if group.bot == 'A':
-                self.buy_bot.on_entry_fill(group, fill_price, fill_qty)
-            else:
-                self.sell_bot.on_entry_fill(group, fill_price, fill_qty)
+
+            increment = filled_qty - group.entry_filled_so_far
+            if increment > 0 and self.config.has_pair:
+                if is_complete:
+                    # Final fill: hedge to target ratio, accounting for partials already hedged
+                    target_hedge = filled_qty * self.config.hedge_ratio
+                    remaining = target_hedge - group.pair_hedged_qty
+                    if remaining > 0:
+                        bot.place_pair_hedge(group, remaining)
+                else:
+                    # Partial: hedge at partial ratio
+                    if self.config.partial_hedge_ratio > 0:
+                        pair_qty = increment * self.config.partial_hedge_ratio
+                        bot.place_pair_hedge(group, pair_qty)
+
+            group.entry_filled_so_far = filled_qty
+            group.entry_fill_price = fill_price
+
+            if is_complete:
+                bot.on_entry_fill(group, fill_price, filled_qty)
             return True
 
+        # --- Target order ---
         elif order_id == group.target_order_id:
             if group.status != GroupStatus.TARGET_PENDING:
                 logger.debug("Skipping target fill for group=%s (status=%s, already processed)",
                              group.group_id, group.status)
                 return False
-            if group.bot == 'A':
-                self.buy_bot.on_target_fill(group, fill_price, fill_qty)
-            else:
-                self.sell_bot.on_target_fill(group, fill_price, fill_qty)
+
+            increment = filled_qty - group.target_filled_so_far
+            if increment > 0 and self.config.has_pair:
+                if is_complete:
+                    # Final fill: unwind to target ratio
+                    target_unwind = filled_qty * self.config.hedge_ratio
+                    remaining = target_unwind - group.pair_unwound_qty
+                    if remaining > 0:
+                        bot.place_pair_unwind(group, remaining)
+                else:
+                    # Partial: unwind at partial ratio
+                    if self.config.partial_hedge_ratio > 0:
+                        pair_qty = increment * self.config.partial_hedge_ratio
+                        bot.place_pair_unwind(group, pair_qty)
+
+            group.target_filled_so_far = filled_qty
+
+            if is_complete:
+                bot.on_target_fill(group, fill_price, filled_qty)
             return True
 
         return False
@@ -270,7 +312,7 @@ class GridEngine:
                         fill_qty = int(broker_order.get('filled_quantity', 0))
                         logger.info("Reconcile: entry fill detected for group=%s",
                                      group.group_id)
-                        self._handle_fill(broker_order)
+                        self._handle_fill_event(broker_order)
                     elif status in ('CANCELLED', 'REJECTED'):
                         logger.info("Reconcile: entry %s for group=%s",
                                      status, group.group_id)
@@ -289,7 +331,7 @@ class GridEngine:
                     if status == 'COMPLETE':
                         logger.info("Reconcile: target fill detected for group=%s",
                                      group.group_id)
-                        self._handle_fill(broker_order)
+                        self._handle_fill_event(broker_order)
 
         self.state.save()
         logger.info("Reconciliation complete")

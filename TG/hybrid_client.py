@@ -17,6 +17,8 @@ Instrument mapping:
 
 import sys
 import os
+import json
+import time
 import configparser
 import logging
 from typing import Optional, List, Dict, Any
@@ -67,6 +69,11 @@ _PRODUCT_MAP = {
 
 # Path to Daily/config.ini
 _CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Daily')
+
+# Shared XTS session file for multi-primary support
+_SESSION_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'state')
+_SESSION_FILE = os.path.join(_SESSION_DIR, '.xts_session.json')
+_SESSION_MAX_AGE = 8 * 3600  # 8 hours
 
 
 def _load_zerodha_credentials(user_name: str = "Sai") -> dict:
@@ -132,18 +139,24 @@ class HybridClient:
         """
         Login to XTS interactive + initialize Zerodha instrument cache.
 
-        1. XTS interactive login (for trading)
-        2. Zerodha KiteConnect init (for market data)
-        3. Fetch kite.instruments('NSE') and build symbol -> exchange_token map
+        Supports session sharing for multi-primary bots:
+        1. Try reusing existing XTS session from shared file
+        2. If not available/expired, do fresh login and save session
+        3. Zerodha KiteConnect init (for market data)
+        4. Fetch kite.instruments('NSE') and build symbol -> exchange_token map
         """
         try:
-            # --- XTS Interactive login ---
-            resp = self.xt.interactive_login()
-            if isinstance(resp, str) or resp.get('type') == 'error':
-                logger.error("XTS Interactive login failed: %s", resp)
-                return False
-            self.client_id = resp['result']['userID']
-            logger.info("XTS Interactive login OK: userID=%s", self.client_id)
+            # --- XTS Interactive: reuse or fresh login ---
+            if self._try_reuse_session():
+                logger.info("XTS session reused from file: userID=%s", self.client_id)
+            else:
+                resp = self.xt.interactive_login()
+                if isinstance(resp, str) or resp.get('type') == 'error':
+                    logger.error("XTS Interactive login failed: %s", resp)
+                    return False
+                self.client_id = resp['result']['userID']
+                logger.info("XTS Interactive fresh login OK: userID=%s", self.client_id)
+                self._save_session(resp['result']['token'], self.client_id)
 
             # --- Zerodha init ---
             creds = _load_zerodha_credentials(self.zerodha_user)
@@ -160,6 +173,60 @@ class HybridClient:
         except Exception as e:
             logger.error("Hybrid client connection failed: %s", e)
             return False
+
+    def _try_reuse_session(self) -> bool:
+        """Try to reuse an existing XTS session from shared file."""
+        try:
+            if not os.path.exists(_SESSION_FILE):
+                return False
+
+            with open(_SESSION_FILE) as f:
+                session = json.load(f)
+
+            # Check age
+            saved_time = session.get('timestamp', 0)
+            if time.time() - saved_time > _SESSION_MAX_AGE:
+                logger.info("XTS session file expired (age=%.0f hours)",
+                            (time.time() - saved_time) / 3600)
+                return False
+
+            token = session.get('token', '')
+            user_id = session.get('userID', '')
+            if not token or not user_id:
+                return False
+
+            # Set token on XTS SDK directly
+            self.xt._set_common_variables(token, user_id, False)
+            self.client_id = user_id
+
+            # Validate by attempting a lightweight API call
+            resp = self.xt.get_order_book()
+            if isinstance(resp, str) or (isinstance(resp, dict) and resp.get('type') == 'error'):
+                logger.info("XTS session file invalid, will re-login")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.debug("Session reuse failed: %s", e)
+            return False
+
+    def _save_session(self, token: str, user_id: str):
+        """Save XTS session token to shared file for other processes."""
+        try:
+            os.makedirs(_SESSION_DIR, exist_ok=True)
+            session = {
+                'token': token,
+                'userID': user_id,
+                'timestamp': time.time(),
+            }
+            tmp = _SESSION_FILE + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump(session, f)
+            os.replace(tmp, _SESSION_FILE)
+            logger.info("XTS session saved to %s", _SESSION_FILE)
+        except Exception as e:
+            logger.warning("Failed to save XTS session: %s", e)
 
     def _build_instrument_cache(self):
         """

@@ -72,7 +72,8 @@ class GridConfig:
 
     # Pair trading parameters
     pair_symbol: str = ""           # e.g., "SPCENET" — opposite-direction hedge
-    pair_qty: int = 0               # qty per pair trade (0 = disabled)
+    hedge_ratio: int = 0            # target pair ratio on COMPLETE (0 = disabled)
+    partial_hedge_ratio: int = 0    # pair ratio on PARTIAL fills (0 = no partial hedging)
 
     # Holdings override (bypasses XTS holdings API which may return empty)
     holdings_override: int = -1     # -1 = use API, 0+ = override with this qty
@@ -94,7 +95,7 @@ class GridConfig:
     @property
     def has_pair(self) -> bool:
         """True if pair trading is configured."""
-        return bool(self.pair_symbol and self.pair_qty > 0)
+        return bool(self.pair_symbol and self.hedge_ratio > 0)
 
     def compute_subsets(self) -> List[SubsetConfig]:
         """
@@ -169,7 +170,8 @@ class GridConfig:
         print(f"  Auto Re-enter    : {self.auto_reenter}")
         if self.has_pair:
             print(f"  Pair Symbol      : {self.pair_symbol}")
-            print(f"  Pair Qty         : {self.pair_qty}")
+            print(f"  Hedge Ratio      : {self.hedge_ratio} (on COMPLETE)")
+            print(f"  Partial Hedge    : {self.partial_hedge_ratio} (on PARTIAL, 0=disabled)")
             print(f"  Pair Mode        : OPPOSITE (entry→hedge, target→unwind)")
         print(f"{'='*60}")
 
@@ -198,17 +200,23 @@ class GridConfig:
         print(f"{'='*60}\n")
 
 
-def generate_order_id(role: str, subset_index: int, bot: str, group_id: str) -> str:
+def generate_order_id(primary: str, secondary: str, subset_index: int,
+                      role: str, bot: str, group_id: str, seq: int = 0) -> str:
     """
     Generate a human-readable order identifier for XTS orderUniqueIdentifier.
 
-    Format: {ROLE}{LEVEL}{BOT}_{GROUP_ID}
-    - ROLE: EN (entry), TP (target/take-profit), PR (pair hedge)
-    - LEVEL: -N for Bot A (buy below anchor), +N for Bot B (sell above anchor)
-    - BOT: A (BuyBot) or B (SellBot)
-    - GROUP_ID: 8-char hex from Group.create()
+    Format: {PRIMARY}-{SECONDARY}-L{LEVEL}-{ROLE}[{SEQ}]-{BOT}-{GROUP_ID}
 
-    Examples: EN-0A_a1b2c3d4, TP+2B_e5f6g7h8, PR-1A_c3d4e5f6
+    For PH/PU roles, seq is appended (1-indexed).
+    EN/TP roles don't need seq.
+
+    Examples:
+      TATSILV-SPCENET-L0-EN-A-abc12345
+      TATSILV-SPCENET-L0-PH1-A-abc12345
+      TATSILV-SPCENET-L0-TP-A-abc12345
+      TATSILV-SPCENET-L0-PU1-A-abc12345
     """
-    level_str = f"-{subset_index}" if bot == "A" else f"+{subset_index}"
-    return f"{role}{level_str}{bot}_{group_id}"
+    base = f"{primary}-{secondary}-L{subset_index}-{role}"
+    if seq > 0:
+        base += str(seq)
+    return f"{base}-{bot}-{group_id}"

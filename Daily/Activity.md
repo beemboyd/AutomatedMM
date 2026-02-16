@@ -1,5 +1,73 @@
 # Activity Log
 
+## 2026-02-16 22:00 IST - Claude
+**TG — Multi-Primary Grid Bot with Config Dashboard**
+
+### Changes Summary
+Major refactor of TG grid bot to support multiple primaries, partial fill hedging, and a config+monitor web dashboard.
+
+### 1. Naming Convention Overhaul (`TG/config.py`)
+- `generate_order_id()` now produces full symbol names: `TATSILV-SPCENET-L0-EN-A-abc12345`
+- Roles: EN (entry), TP (take-profit), PH (pair hedge), PU (pair unwind)
+- PH/PU roles include sequence numbers for partial fills: PH1, PH2, PU1, etc.
+
+### 2. Dual Hedge Ratios (`TG/config.py`)
+- Replaced `pair_qty` with two new params: `hedge_ratio` (on COMPLETE) and `partial_hedge_ratio` (on PARTIAL)
+- `has_pair` property now checks `hedge_ratio > 0` instead of `pair_qty > 0`
+
+### 3. Cumulative Pair Tracking (`TG/group.py`)
+- Replaced single-value `pair_order_id`, `pair_hedge_price`, `pair_unwind_price` with cumulative tracking:
+  - `entry_filled_so_far`, `target_filled_so_far` for increment calculations
+  - `pair_hedged_qty`, `pair_hedge_total`, `pair_hedge_seq` for hedge accumulation
+  - `pair_unwound_qty`, `pair_unwind_total`, `pair_unwind_seq` for unwind accumulation
+- Added VWAP computed properties: `pair_hedge_vwap`, `pair_unwind_vwap`
+
+### 4. Extracted Pair Methods (`TG/bot_buy.py`, `TG/bot_sell.py`)
+- New `place_pair_hedge(group, pair_qty)` and `place_pair_unwind(group, pair_qty)` methods
+- Pair code removed from `on_entry_fill()` and `on_target_fill()` — now driven by engine
+- BuyBot: hedge=SELL secondary, unwind=BUY secondary, PnL=hedge_total-unwind_total
+- SellBot: hedge=BUY secondary, unwind=SELL secondary, PnL=unwind_total-hedge_total
+
+### 5. Partial Fill Handler (`TG/engine.py`)
+- Replaced `_handle_fill()` with `_handle_fill_event()` handling both PARTIAL and COMPLETE
+- Cache key changed from `order_id → status` to `order_id → "status:filled_qty"` to detect incremental partials
+- On PARTIAL: hedge at `partial_hedge_ratio` per increment
+- On COMPLETE: top up to full `hedge_ratio` target, accounting for already-hedged qty
+
+### 6. XTS Session Sharing (`TG/hybrid_client.py`)
+- Added `_try_reuse_session()` and `_save_session()` for multi-primary support
+- Session token saved to `TG/state/.xts_session.json` with 8-hour TTL
+- Second bot process reuses existing session instead of creating new login
+- Validates reused session with lightweight `get_order_book()` call
+
+### 7. CLI Updates (`TG/run.py`)
+- Replaced `--pair-qty` with `--hedge-ratio` and `--partial-hedge-ratio`
+
+### 8. EOD Flatten Update (`TG/eod_flatten.py`)
+- Updated pair order detection to match new naming: checks for `-PH` and `-PU` in addition to legacy `PR` prefix
+
+### 9. Config + Monitor Dashboard (`TG/dashboard.py`) — Complete Rewrite
+- **Config management**: Read/write `TG/state/tg_config.json` with per-primary settings
+- **Process management**: Start/stop bot subprocesses via API, track PIDs
+- **State monitoring**: Aggregates state from all `{SYMBOL}_grid_state.json` files
+- **Web UI**: Tailwind CSS, 3 tabs (Configuration, Live Monitor, Trades)
+- **API endpoints**: `/api/config`, `/api/bot/start/<sym>`, `/api/bot/stop/<sym>`, `/api/state`, `/api/processes`
+- **Per-primary PnL breakdown**: Shows 1° PnL, 2° PnL, Combined per primary with totals row
+- Port 7777, no longer requires `--symbol` arg
+
+### Files Modified
+- `TG/config.py` — naming + dual hedge ratios
+- `TG/group.py` — cumulative pair tracking
+- `TG/bot_buy.py` — extracted pair methods + naming
+- `TG/bot_sell.py` — extracted pair methods + naming
+- `TG/engine.py` — partial fill handler
+- `TG/hybrid_client.py` — XTS session sharing
+- `TG/run.py` — CLI args
+- `TG/eod_flatten.py` — pair order prefix update
+- `TG/dashboard.py` — complete rewrite
+
+---
+
 ## 2026-02-16 13:35 IST - Claude
 **TG — SPCENET Pair Order Fill Fix + Reconciliation Bug Fix + PnL Tracking**
 

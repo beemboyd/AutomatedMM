@@ -74,11 +74,11 @@ def flatten_pair_position(client: HybridClient, pair_symbol: str,
     """
     orders = client.get_orders()
 
-    # Calculate net qty from filled pair orders
+    # Calculate net qty from filled pair orders (PH=hedge, PU=unwind, PR=legacy)
     net_qty = 0
     for o in orders:
         uid = o.get('order_unique_id', '')
-        if not uid.startswith('PR'):
+        if not (uid.startswith('PR') or '-PH' in uid or '-PU' in uid):
             continue
         if o['status'] != 'COMPLETE':
             continue
