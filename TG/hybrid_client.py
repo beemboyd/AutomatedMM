@@ -318,9 +318,9 @@ class HybridClient:
                 normalized.append({
                     'order_id': str(o.get('AppOrderID', '')),
                     'status': _STATUS_MAP.get(xts_status, xts_status),
-                    'average_price': float(o.get('OrderAverageTradedPrice', 0)),
-                    'filled_quantity': int(o.get('CumulativeQuantity', 0)),
-                    'quantity': int(o.get('OrderQuantity', 0)),
+                    'average_price': float(o.get('OrderAverageTradedPrice', 0) or 0),
+                    'filled_quantity': int(o.get('CumulativeQuantity', 0) or 0),
+                    'quantity': int(o.get('OrderQuantity', 0) or 0),
                     'status_message': o.get('CancelRejectReason', ''),
                     'transaction_type': o.get('OrderSide', ''),
                     'order_unique_id': o.get('OrderUniqueIdentifier', ''),
