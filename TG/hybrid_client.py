@@ -260,23 +260,31 @@ class HybridClient:
     def place_market_order(self, symbol: str, transaction_type: str, qty: int,
                            exchange: str = "NSE",
                            product: str = "NRML",
-                           order_unique_id: str = "") -> Optional[str]:
+                           order_unique_id: str = "",
+                           slippage: float = 0.02) -> tuple:
         """
-        Place a market-like order by using LIMIT at current LTP.
+        Place a market-like order by using aggressive LIMIT at LTP ± slippage.
 
-        XTS may not reliably support true MARKET orders; LIMIT at LTP
-        is safer and functionally equivalent for liquid instruments.
+        For illiquid instruments, LTP alone won't fill a SELL (need to hit bid).
+        We add slippage: SELL at LTP - slippage, BUY at LTP + slippage.
 
-        Returns AppOrderID as string, or None on failure.
+        Returns (AppOrderID, price) tuple, or (None, 0.0) on failure.
         """
         ltp = self.get_ltp(symbol, exchange)
         if ltp is None:
             logger.error("MARKET ORDER FAILED: cannot get LTP for %s", symbol)
-            return None
-        logger.info("MARKET ORDER: %s %s %d @ LTP=%.2f (LIMIT)",
-                     transaction_type, symbol, qty, ltp)
-        return self.place_order(symbol, transaction_type, qty, ltp, exchange, product,
-                                order_unique_id=order_unique_id)
+            return None, 0.0
+
+        if transaction_type == "SELL":
+            price = round(ltp - slippage, 2)
+        else:
+            price = round(ltp + slippage, 2)
+
+        logger.info("MARKET ORDER: %s %s %d @ LTP=%.2f -> LIMIT=%.2f (slip=%.2f)",
+                     transaction_type, symbol, qty, ltp, price, slippage)
+        order_id = self.place_order(symbol, transaction_type, qty, price, exchange, product,
+                                    order_unique_id=order_unique_id)
+        return order_id, price
 
     def cancel_order(self, order_id: str, order_unique_id: str = "") -> bool:
         """Cancel a pending order by AppOrderID via XTS."""

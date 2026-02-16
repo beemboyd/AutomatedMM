@@ -188,8 +188,12 @@ class GridEngine:
             logger.warning("Fill with zero price/qty: order=%s", order_id)
             return False
 
-        # Determine if this is entry or target fill
+        # Determine if this is entry or target fill (check group status to prevent duplicates)
         if order_id == group.entry_order_id:
+            if group.status != GroupStatus.ENTRY_PENDING:
+                logger.debug("Skipping entry fill for group=%s (status=%s, already processed)",
+                             group.group_id, group.status)
+                return False
             if group.bot == 'A':
                 self.buy_bot.on_entry_fill(group, fill_price, fill_qty)
             else:
@@ -197,6 +201,10 @@ class GridEngine:
             return True
 
         elif order_id == group.target_order_id:
+            if group.status != GroupStatus.TARGET_PENDING:
+                logger.debug("Skipping target fill for group=%s (status=%s, already processed)",
+                             group.group_id, group.status)
+                return False
             if group.bot == 'A':
                 self.buy_bot.on_target_fill(group, fill_price, fill_qty)
             else:
