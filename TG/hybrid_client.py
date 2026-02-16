@@ -365,10 +365,26 @@ class HybridClient:
         """Get holdings from XTS (Findoc account)."""
         try:
             resp = self.xt.get_holding()
+            logger.info("Holdings raw response type=%s, keys=%s",
+                        type(resp).__name__,
+                        list(resp.keys()) if isinstance(resp, dict) else 'N/A')
             if isinstance(resp, str) or resp.get('type') == 'error':
                 logger.error("Holdings fetch failed: %s", resp)
                 return []
-            return resp.get('result', [])
+            result = resp.get('result', [])
+            logger.info("Holdings result type=%s, len=%s, sample=%s",
+                        type(result).__name__,
+                        len(result) if isinstance(result, (list, dict)) else 'N/A',
+                        str(result)[:500] if result else 'empty')
+            # XTS may nest holdings under 'RMSHoldings' or 'ClientHoldings'
+            if isinstance(result, dict):
+                result = (result.get('RMSHoldings') or
+                          result.get('ClientHoldings') or
+                          result.get('holdings') or [])
+                logger.info("Holdings unwrapped: type=%s, len=%s",
+                            type(result).__name__,
+                            len(result) if isinstance(result, list) else 'N/A')
+            return result if isinstance(result, list) else []
         except Exception as e:
             logger.error("Holdings exception: %s", e)
             return []
@@ -377,13 +393,28 @@ class HybridClient:
         """Get available quantity of a symbol in XTS holdings."""
         holdings = self.get_holdings()
         if not isinstance(holdings, list):
+            logger.warning("Holdings not a list: %s", type(holdings))
             return 0
         for h in holdings:
             if isinstance(h, dict):
-                holding_symbol = h.get('TradingSymbol', h.get('tradingSymbol', ''))
+                # XTS uses various field names across versions
+                holding_symbol = (h.get('TradingSymbol') or
+                                  h.get('tradingSymbol') or
+                                  h.get('ScripName') or
+                                  h.get('Symbol') or '')
                 if holding_symbol.upper() == symbol.upper():
-                    total = int(h.get('Quantity', h.get('quantity', 0)))
+                    qty = (h.get('HoldingQuantity') or
+                           h.get('Quantity') or
+                           h.get('quantity') or
+                           h.get('FreeQuantity') or
+                           h.get('holdingQuantity') or 0)
+                    total = int(qty)
+                    logger.info("Holdings for %s: qty=%d (raw keys: %s)",
+                                symbol, total, list(h.keys()))
                     return total
+        logger.warning("Symbol %s not found in %d holdings", symbol, len(holdings))
+        if holdings:
+            logger.info("Sample holding keys: %s", list(holdings[0].keys()) if isinstance(holdings[0], dict) else type(holdings[0]))
         return 0
 
     def get_positions(self) -> Dict[str, Any]:

@@ -74,6 +74,9 @@ class GridConfig:
     pair_symbol: str = ""           # e.g., "SPCENET" — opposite-direction hedge
     pair_qty: int = 0               # qty per pair trade (0 = disabled)
 
+    # Holdings override (bypasses XTS holdings API which may return empty)
+    holdings_override: int = -1     # -1 = use API, 0+ = override with this qty
+
     # Operational parameters
     auto_reenter: bool = True       # re-place entry after target fills
     poll_interval: float = 2.0      # seconds between order status polls

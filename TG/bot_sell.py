@@ -61,9 +61,14 @@ class SellBot:
         Checks available holdings before placing. Sells are placed
         from the nearest level outward, stopping when holdings run out.
         """
-        available = self.client.get_available_qty(self.config.symbol)
-        logger.info("SellBot: available holdings for %s = %d",
-                     self.config.symbol, available)
+        if self.config.holdings_override >= 0:
+            available = self.config.holdings_override
+            logger.info("SellBot: using holdings override for %s = %d",
+                         self.config.symbol, available)
+        else:
+            available = self.client.get_available_qty(self.config.symbol)
+            logger.info("SellBot: available holdings for %s = %d (from API)",
+                         self.config.symbol, available)
 
         # Account for qty already committed in pending sell entries
         committed = sum(
@@ -166,15 +171,16 @@ class SellBot:
         # Pair trade: SELL TATSILV entry → BUY pair symbol
         if self.config.has_pair:
             pair_oid = generate_order_id("PR", group.subset_index, "B", group.group_id)
-            pair_id = self.client.place_market_order(
+            pair_id, pair_price = self.client.place_market_order(
                 self.config.pair_symbol, "BUY", self.config.pair_qty,
                 self.config.exchange, self.config.product,
                 order_unique_id=pair_oid)
             if pair_id:
                 group.pair_order_id = pair_id
-                logger.info("SellBot PAIR: group=%s, BUY %s %d, order=%s [%s]",
+                group.pair_hedge_price = pair_price
+                logger.info("SellBot PAIR: group=%s, BUY %s %d @ %.2f, order=%s [%s]",
                             group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_id, pair_oid)
+                            self.config.pair_qty, pair_price, pair_id, pair_oid)
             else:
                 logger.error("SellBot PAIR FAILED: group=%s, BUY %s %d",
                              group.group_id, self.config.pair_symbol,
@@ -200,14 +206,19 @@ class SellBot:
         # Reverse pair: BUY target filled → SELL pair symbol back
         if self.config.has_pair:
             pair_oid = generate_order_id("PR", group.subset_index, "B", group.group_id)
-            pair_id = self.client.place_market_order(
+            pair_id, pair_price = self.client.place_market_order(
                 self.config.pair_symbol, "SELL", self.config.pair_qty,
                 self.config.exchange, self.config.product,
                 order_unique_id=pair_oid)
             if pair_id:
-                logger.info("SellBot PAIR UNWIND: group=%s, SELL %s %d, order=%s [%s]",
+                group.pair_unwind_price = pair_price
+                # Pair PnL: bought at hedge, sold back at unwind
+                if group.pair_hedge_price:
+                    group.pair_pnl = round(
+                        (pair_price - group.pair_hedge_price) * self.config.pair_qty, 2)
+                logger.info("SellBot PAIR UNWIND: group=%s, SELL %s %d @ %.2f, pair_pnl=%.2f, order=%s [%s]",
                             group.group_id, self.config.pair_symbol,
-                            self.config.pair_qty, pair_id, pair_oid)
+                            self.config.pair_qty, pair_price, group.pair_pnl, pair_id, pair_oid)
             else:
                 logger.error("SellBot PAIR UNWIND FAILED: group=%s, SELL %s %d",
                              group.group_id, self.config.pair_symbol,

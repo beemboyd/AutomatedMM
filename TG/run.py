@@ -96,6 +96,8 @@ def parse_args():
                         help='Pair hedge symbol (e.g., SPCENET). Trades opposite direction on fills.')
     parser.add_argument('--pair-qty', type=int, default=0,
                         help='Qty per pair trade (0 = disabled)')
+    parser.add_argument('--holdings', type=int, default=-1,
+                        help='Override holdings qty for SellBot (-1 = use API, 0+ = override)')
 
     # Broker parameters
     parser.add_argument('--exchange', default='NSE',
@@ -177,6 +179,7 @@ def main():
         interactive_secret=args.interactive_secret,
         zerodha_user=args.user,
         xts_root=args.xts_root,
+        holdings_override=args.holdings,
         auto_reenter=not args.no_reenter,
         poll_interval=args.poll_interval,
     )
