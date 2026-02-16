@@ -18,6 +18,7 @@ import sys
 import signal
 import subprocess
 import logging
+import time
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -55,8 +56,37 @@ _DEFAULT_CONFIG = {
     ],
 }
 
-# Track running bot processes
-_running_bots: Dict[str, subprocess.Popen] = {}
+# Shared PID file for cross-process bot state
+_PID_FILE = os.path.join(STATE_DIR, '.bot_pids.json')
+
+
+def _load_bot_pids() -> Dict[str, int]:
+    """Load bot PIDs from shared file."""
+    if not os.path.exists(_PID_FILE):
+        return {}
+    try:
+        with open(_PID_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_bot_pids(pids: Dict[str, int]):
+    """Save bot PIDs to shared file with atomic write."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = _PID_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(pids, f, indent=2)
+    os.replace(tmp, _PID_FILE)
+
+
+def _pid_alive(pid: int) -> bool:
+    """Check if a PID is still running."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
 
 
 def _load_config() -> dict:
@@ -103,21 +133,33 @@ def _get_primary_config(config: dict, symbol: str) -> Optional[dict]:
 
 
 def _is_bot_running(symbol: str) -> bool:
-    """Check if a bot process is running for a symbol."""
-    proc = _running_bots.get(symbol)
-    if proc is None:
+    """Check if a bot process is running for a symbol (via shared PID file)."""
+    pids = _load_bot_pids()
+    pid = pids.get(symbol)
+    if pid is None:
         return False
-    if proc.poll() is not None:
-        # Process has exited
-        del _running_bots[symbol]
-        return False
-    return True
+    if _pid_alive(pid):
+        return True
+    # Stale PID — clean it up
+    pids.pop(symbol, None)
+    _save_bot_pids(pids)
+    return False
+
+
+def _get_bot_pid(symbol: str) -> Optional[int]:
+    """Get the PID for a running bot, or None."""
+    pids = _load_bot_pids()
+    pid = pids.get(symbol)
+    if pid and _pid_alive(pid):
+        return pid
+    return None
 
 
 def _start_bot(symbol: str, config: dict) -> bool:
     """Launch TG.run as subprocess for a primary symbol."""
     if _is_bot_running(symbol):
-        logger.warning("Bot for %s is already running (PID=%d)", symbol, _running_bots[symbol].pid)
+        pid = _get_bot_pid(symbol)
+        logger.warning("Bot for %s is already running (PID=%s)", symbol, pid)
         return False
 
     primary = _get_primary_config(config, symbol)
@@ -162,31 +204,53 @@ def _start_bot(symbol: str, config: dict) -> bool:
             cmd, cwd=PROJECT_ROOT,
             stdout=lf, stderr=subprocess.STDOUT,
         )
-    _running_bots[symbol] = proc
+
+    # Record PID in shared file
+    pids = _load_bot_pids()
+    pids[symbol] = proc.pid
+    _save_bot_pids(pids)
+
     logger.info("Started bot for %s: PID=%d, cmd=%s", symbol, proc.pid, ' '.join(cmd))
     return True
 
 
 def _stop_bot(symbol: str) -> bool:
-    """Stop a running bot process."""
-    proc = _running_bots.get(symbol)
-    if proc is None or proc.poll() is not None:
-        _running_bots.pop(symbol, None)
+    """Stop a running bot process via shared PID file."""
+    pids = _load_bot_pids()
+    pid = pids.get(symbol)
+    if pid is None:
+        return False
+    if not _pid_alive(pid):
+        # Already dead, clean up
+        pids.pop(symbol, None)
+        _save_bot_pids(pids)
         return False
     try:
-        proc.terminate()
-        proc.wait(timeout=10)
-        logger.info("Stopped bot for %s (PID=%d)", symbol, proc.pid)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        logger.warning("Force-killed bot for %s (PID=%d)", symbol, proc.pid)
-    _running_bots.pop(symbol, None)
+        os.kill(pid, signal.SIGTERM)
+        # Wait up to 10s for process to exit
+        for _ in range(20):
+            time.sleep(0.5)
+            if not _pid_alive(pid):
+                break
+        else:
+            # Force kill if still alive
+            os.kill(pid, signal.SIGKILL)
+            logger.warning("Force-killed bot for %s (PID=%d)", symbol, pid)
+        logger.info("Stopped bot for %s (PID=%d)", symbol, pid)
+    except ProcessLookupError:
+        pass
+    except Exception as e:
+        logger.error("Error stopping bot %s (PID=%d): %s", symbol, pid, e)
+
+    pids.pop(symbol, None)
+    _save_bot_pids(pids)
     return True
 
 
 def _stop_all_bots():
     """Stop all running bot processes."""
-    for symbol in list(_running_bots.keys()):
+    pids = _load_bot_pids()
+    for symbol in list(pids.keys()):
         _stop_bot(symbol)
 
 
@@ -283,7 +347,7 @@ def create_app(mode: str = 'monitor') -> Flask:
                 'state': state,
                 'summary': _compute_summary(state),
                 'running': _is_bot_running(sym),
-                'pid': _running_bots[sym].pid if sym in _running_bots and _running_bots[sym].poll() is None else None,
+                'pid': _get_bot_pid(sym),
             }
         return jsonify(result)
 
@@ -298,14 +362,22 @@ def create_app(mode: str = 'monitor') -> Flask:
 
     @app.route('/api/processes')
     def api_processes():
+        pids = _load_bot_pids()
         result = {}
-        for sym, proc in list(_running_bots.items()):
-            running = proc.poll() is None
+        stale = []
+        for sym, pid in pids.items():
+            alive = _pid_alive(pid)
             result[sym] = {
-                'pid': proc.pid,
-                'running': running,
-                'returncode': proc.returncode if not running else None,
+                'pid': pid,
+                'running': alive,
             }
+            if not alive:
+                stale.append(sym)
+        # Clean up stale PIDs
+        if stale:
+            for sym in stale:
+                pids.pop(sym, None)
+            _save_bot_pids(pids)
         return jsonify(result)
 
     @app.route('/')
