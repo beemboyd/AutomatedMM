@@ -52,6 +52,7 @@ _DEFAULT_CONFIG = {
             "holdings_override": 1000,
             "product": "NRML",
             "poll_interval": 2.0,
+            "max_qty": 2000,
         }
     ],
 }
@@ -184,6 +185,7 @@ def _start_bot(symbol: str, config: dict) -> bool:
         '--user', config.get('zerodha_user', 'Sai'),
         '--xts-root', config.get('xts_root', 'https://xts.myfindoc.com'),
         '--poll-interval', str(primary.get('poll_interval', 2.0)),
+        '--max-qty', str(primary.get('max_qty', 2000)),
     ]
 
     if primary.get('auto_anchor'):
@@ -1373,6 +1375,11 @@ def _build_config_html() -> str:
                 <div class="field-hint">SellBot available shares. -1=use broker API, 0+=override</div>
             </div>
             <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Max Qty</label>
+                <input id="m-max-qty" type="number">
+                <div class="field-hint">Max net position across re-anchors (0=unlimited)</div>
+            </div>
+            <div>
                 <label class="block text-xs mb-1" style="color:var(--dim);">Poll Interval (s)</label>
                 <input id="m-poll" type="number" step="0.5">
                 <div class="field-hint">Order status check frequency</div>
@@ -1484,6 +1491,7 @@ function renderPrimaries() {
                 <div>Hedge: <span style="color:var(--text);">${p.hedge_ratio}</span></div>
                 <div>Partial: <span style="color:var(--text);">${p.partial_hedge_ratio}</span></div>
                 <div>Holdings: <span style="color:var(--text);">${p.holdings_override}</span></div>
+                <div>Max Qty: <span style="color:var(--text);">${p.max_qty || 2000}</span></div>
                 <div>Poll: <span style="color:var(--text);">${p.poll_interval}s</span></div>
             </div>
         </div>`;
@@ -1496,7 +1504,7 @@ function addPrimary() {
         symbol: '', enabled: true, auto_anchor: true, anchor_price: 0,
         grid_space: 0.01, target: 0.03, total_qty: 10, subset_qty: 1,
         hedge_ratio: 1, partial_hedge_ratio: 1, holdings_override: 1000,
-        product: 'NRML', poll_interval: 2.0,
+        product: 'NRML', poll_interval: 2.0, max_qty: 2000,
     });
     editPrimary(currentConfig.primaries.length - 1);
 }
@@ -1522,6 +1530,7 @@ function editPrimary(idx) {
     document.getElementById('m-hedge-ratio').value = p.hedge_ratio || 0;
     document.getElementById('m-partial-hedge-ratio').value = p.partial_hedge_ratio || 0;
     document.getElementById('m-holdings').value = p.holdings_override != null ? p.holdings_override : -1;
+    document.getElementById('m-max-qty').value = p.max_qty != null ? p.max_qty : 2000;
     document.getElementById('m-poll').value = p.poll_interval || 2.0;
     document.getElementById('m-anchor').value = p.anchor_price || 0;
     document.getElementById('m-auto-anchor').checked = p.auto_anchor !== false;
@@ -1545,6 +1554,7 @@ function saveModal() {
     p.hedge_ratio = parseInt(document.getElementById('m-hedge-ratio').value);
     p.partial_hedge_ratio = parseInt(document.getElementById('m-partial-hedge-ratio').value);
     p.holdings_override = parseInt(document.getElementById('m-holdings').value);
+    p.max_qty = parseInt(document.getElementById('m-max-qty').value);
     p.poll_interval = parseFloat(document.getElementById('m-poll').value);
     p.anchor_price = parseFloat(document.getElementById('m-anchor').value);
     p.auto_anchor = document.getElementById('m-auto-anchor').checked;

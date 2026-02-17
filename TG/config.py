@@ -80,6 +80,8 @@ class GridConfig:
 
     # Operational parameters
     auto_reenter: bool = True       # re-place entry after target fills
+    auto_reanchor: bool = True      # re-anchor grid when all levels exhausted
+    max_qty: int = 2000             # max net position across re-anchors
     poll_interval: float = 2.0      # seconds between order status polls
 
     # XTS Interactive credentials (order placement)

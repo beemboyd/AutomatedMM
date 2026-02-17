@@ -335,6 +335,7 @@ def start_bots(config: dict, dry_run: bool = False) -> int:
             '--user', config.get('zerodha_user', 'Sai'),
             '--xts-root', config.get('xts_root', 'https://xts.myfindoc.com'),
             '--poll-interval', str(primary.get('poll_interval', 2.0)),
+            '--max-qty', str(primary.get('max_qty', 2000)),
         ]
 
         if primary.get('auto_anchor'):

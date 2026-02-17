@@ -1,5 +1,28 @@
 # Activity Log
 
+## 2026-02-17 15:30 IST - Claude
+**TG — Auto re-anchor on grid exhaustion**
+
+### Changes
+1. **`TG/config.py`** — Added `auto_reanchor: bool = True` and `max_qty: int = 2000` fields to `GridConfig`
+2. **`TG/engine.py`** — Core re-anchor implementation:
+   - `_check_grid_exhausted()`: Detects when all N buy or sell levels are TARGET_PENDING, with 60s cooldown
+   - `_reanchor_grid()`: 7-step re-anchor sequence (get LTP → cancel orders → flatten SPCENET → close groups → clear state → recompute grid → place entries)
+   - `_flatten_pair_position()`: Computes net SPCENET qty from open groups and places offsetting market order; records pair PnL on each group
+   - Max qty cap: skips re-anchor if net position + new entries would exceed `max_qty`
+   - Modified `_run_loop()` to call exhaustion check after each poll cycle
+3. **`TG/run.py`** — Added `--no-reanchor` and `--max-qty` CLI flags
+4. **`TG/dashboard.py`** — Added `max_qty` field to: `_DEFAULT_CONFIG`, edit modal, `saveModal()`, `addPrimary()`, primary card display, `_start_bot()` command
+5. **`TG/warmup.py`** — Added `--max-qty` to bot start command construction
+
+### Impact
+- Fixes zombie state where all grid levels exhaust on one side (e.g., TATSILV anchor=22.82, price=22.39, all 10 buy levels filled with unreachable targets)
+- Bot automatically re-anchors to current LTP, flattens SPCENET hedge, and starts fresh grid
+- `max_qty` cap prevents unbounded position accumulation across re-anchors
+- Can be disabled per-bot via `--no-reanchor` flag
+
+---
+
 ## 2026-02-17 10:20 IST - Claude
 **TG — Bug documentation, morning warmup script, launchd scheduling**
 

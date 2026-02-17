@@ -16,7 +16,7 @@ future integration with real-time feeds.
 import time
 import signal
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from .config import GridConfig
@@ -64,6 +64,10 @@ class GridEngine:
         # Order status cache: order_id → "status:filled_qty"
         # Detects incremental partial fills and prevents reprocessing
         self._order_status_cache: Dict[str, str] = {}
+
+        # Re-anchor cooldown tracking
+        self._last_reanchor_time: Optional[datetime] = None
+        self._reanchor_cooldown = timedelta(seconds=60)
 
     def start(self):
         """
@@ -123,6 +127,10 @@ class GridEngine:
                 if fills_processed > 0:
                     self.state.save()
                     self.state.print_summary()
+
+                # Check for grid exhaustion → re-anchor
+                if self.config.auto_reanchor and self._check_grid_exhausted():
+                    self._reanchor_grid()
 
                 poll_count += 1
                 if poll_count % 100 == 0:
@@ -335,6 +343,195 @@ class GridEngine:
 
         self.state.save()
         logger.info("Reconciliation complete")
+
+    def _check_grid_exhausted(self) -> bool:
+        """
+        Check if all grid levels on one side are TARGET_PENDING.
+
+        Returns True if all buy levels OR all sell levels are exhausted
+        (all entries filled, all targets placed but unreachable).
+        Respects cooldown to prevent rapid re-anchoring.
+        """
+        # Cooldown check
+        if self._last_reanchor_time:
+            elapsed = datetime.now() - self._last_reanchor_time
+            if elapsed < self._reanchor_cooldown:
+                return False
+
+        num_levels = len(self.buy_levels)
+        if num_levels == 0:
+            return False
+
+        buy_tp = sum(1 for g in self.state.open_groups.values()
+                     if g.bot == 'A' and g.status == GroupStatus.TARGET_PENDING)
+        sell_tp = sum(1 for g in self.state.open_groups.values()
+                      if g.bot == 'B' and g.status == GroupStatus.TARGET_PENDING)
+
+        if buy_tp >= num_levels:
+            logger.info("GRID EXHAUSTED: all %d buy levels are TARGET_PENDING", buy_tp)
+            return True
+        if sell_tp >= num_levels:
+            logger.info("GRID EXHAUSTED: all %d sell levels are TARGET_PENDING", sell_tp)
+            return True
+        return False
+
+    def _reanchor_grid(self):
+        """
+        Re-anchor the grid to current LTP when all levels on one side are exhausted.
+
+        Sequence:
+        1. Get current LTP as new anchor
+        2. Cancel all open orders on XTS
+        3. Flatten SPCENET net pair position
+        4. Close all open groups as CANCELLED (realized_pnl=0, pair PnL preserved)
+        5. Clear bot state
+        6. Recompute grid with new anchor
+        7. Place fresh entries
+        """
+        old_anchor = self.config.anchor_price
+
+        # Step 1: Get current LTP
+        new_anchor = self.client.get_ltp(self.config.symbol, self.config.exchange)
+        if new_anchor is None:
+            logger.error("REANCHOR ABORTED: cannot get LTP for %s", self.config.symbol)
+            return
+        new_anchor = round(new_anchor, 2)
+
+        logger.info("=" * 60)
+        logger.info("REANCHORING GRID: %.2f -> %.2f", old_anchor, new_anchor)
+        logger.info("=" * 60)
+
+        # Max qty check: compute current net position from open groups
+        net_primary_qty = 0
+        for g in self.state.open_groups.values():
+            if g.status == GroupStatus.TARGET_PENDING:
+                if g.entry_side == 'BUY':
+                    net_primary_qty += g.qty
+                else:
+                    net_primary_qty -= g.qty
+        # New entries would add total_qty on the exhausted side
+        if abs(net_primary_qty) + self.config.total_qty > self.config.max_qty:
+            logger.warning("REANCHOR SKIPPED: net_qty=%d + new=%d would exceed max_qty=%d",
+                           abs(net_primary_qty), self.config.total_qty, self.config.max_qty)
+            self._last_reanchor_time = datetime.now()
+            return
+
+        # Step 2: Cancel all open orders
+        logger.info("Step 2: Cancelling all orders...")
+        self.cancel_all()
+
+        # Step 3: Flatten SPCENET pair position
+        if self.config.has_pair:
+            self._flatten_pair_position()
+
+        # Step 4: Close all open groups as CANCELLED
+        logger.info("Step 4: Closing %d open groups as CANCELLED...",
+                     len(self.state.open_groups))
+        for group in list(self.state.open_groups.values()):
+            group.status = GroupStatus.CANCELLED
+            group.realized_pnl = 0.0  # primary PnL not realized (shares still held)
+            group.closed_at = datetime.now().isoformat()
+            self.state.closed_groups.append(group)
+        # Accumulate pair PnL from these groups into total (pair was actually realized)
+        # Note: pair PnL is tracked on the group but NOT added to total_pnl
+        # (total_pnl only tracks primary cycles). Pair PnL is tracked separately.
+
+        # Step 5: Clear state
+        logger.info("Step 5: Clearing bot state...")
+        self.state.open_groups = {}
+        self.state.order_to_group = {}
+        self.buy_bot.level_groups = {}
+        self.sell_bot.level_groups = {}
+        self._order_status_cache = {}
+
+        # Step 6: Recompute grid
+        logger.info("Step 6: Recomputing grid at anchor=%.2f...", new_anchor)
+        self.config.anchor_price = new_anchor
+        self.state.anchor_price = new_anchor
+        self.grid = GridCalculator(self.config)
+        self.buy_levels = self.grid.compute_buy_levels()
+        self.sell_levels = self.grid.compute_sell_levels()
+        self.buy_bot.levels = self.buy_levels
+        self.sell_bot.levels = self.sell_levels
+
+        # Step 7: Place fresh entries
+        logger.info("Step 7: Placing fresh entries...")
+        self.buy_bot.place_entries()
+        self.sell_bot.place_entries()
+
+        # Save state and update cooldown
+        self.state.save()
+        self._last_reanchor_time = datetime.now()
+        self.state.print_summary()
+
+        logger.info("=" * 60)
+        logger.info("REANCHOR COMPLETE: %.2f -> %.2f | Open groups: %d",
+                     old_anchor, new_anchor, len(self.state.open_groups))
+        logger.info("=" * 60)
+
+    def _flatten_pair_position(self):
+        """
+        Flatten net SPCENET position from open groups before re-anchor.
+
+        Computes net pair qty from all open groups:
+        - BuyBot (A) hedges = SELL secondary → net negative
+        - SellBot (B) hedges = BUY secondary → net positive
+        Net = sum(hedged - unwound) per group, signed by direction.
+        """
+        net_pair_qty = 0
+        for g in self.state.open_groups.values():
+            remaining = g.pair_hedged_qty - g.pair_unwound_qty
+            if remaining <= 0:
+                continue
+            if g.bot == 'A':
+                # BuyBot hedged by SELLING secondary → we are short
+                net_pair_qty -= remaining
+            else:
+                # SellBot hedged by BUYING secondary → we are long
+                net_pair_qty += remaining
+
+        if net_pair_qty == 0:
+            logger.info("No net %s position to flatten", self.config.pair_symbol)
+            return
+
+        # Flatten: positive = long → SELL, negative = short → BUY
+        if net_pair_qty > 0:
+            side = "SELL"
+            qty = net_pair_qty
+        else:
+            side = "BUY"
+            qty = abs(net_pair_qty)
+
+        logger.info("Flattening %s: %s %d (net=%d)",
+                     self.config.pair_symbol, side, qty, net_pair_qty)
+        order_id, price = self.client.place_market_order(
+            self.config.pair_symbol, side, qty,
+            self.config.exchange, self.config.product,
+            order_unique_id=f"RA_{self.config.symbol}",
+            slippage=0.05,
+        )
+        if order_id:
+            logger.info("Pair flatten order placed: %s %s %d @ %.2f, order=%s",
+                         side, self.config.pair_symbol, qty, price, order_id)
+            # Record pair PnL on each group being closed
+            for g in self.state.open_groups.values():
+                remaining = g.pair_hedged_qty - g.pair_unwound_qty
+                if remaining > 0:
+                    g.pair_unwound_qty = g.pair_hedged_qty
+                    g.pair_unwind_total += price * remaining
+                    if g.bot == 'A':
+                        g.pair_pnl = round(g.pair_hedge_total - g.pair_unwind_total, 2)
+                    else:
+                        g.pair_pnl = round(g.pair_unwind_total - g.pair_hedge_total, 2)
+                    g.pair_orders.append({
+                        'xts_id': order_id, 'custom_id': f"RA_{self.config.symbol}",
+                        'side': side, 'qty': remaining, 'price': price,
+                        'role': 'REANCHOR_FLATTEN',
+                        'ts': datetime.now().isoformat(),
+                    })
+        else:
+            logger.error("Pair flatten FAILED: %s %s %d",
+                         side, self.config.pair_symbol, qty)
 
     def cancel_all(self):
         """Cancel all open orders for both bots."""

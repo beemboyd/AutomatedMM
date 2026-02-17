@@ -122,6 +122,10 @@ def parse_args():
                         help='Order poll interval in seconds (default: 2.0)')
     parser.add_argument('--no-reenter', action='store_true',
                         help='Disable auto re-entry after target fill')
+    parser.add_argument('--no-reanchor', action='store_true',
+                        help='Disable auto re-anchoring on grid exhaustion')
+    parser.add_argument('--max-qty', type=int, default=2000,
+                        help='Max net position across re-anchors (default: 2000)')
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='Logging level (default: INFO)')
@@ -184,6 +188,8 @@ def main():
         xts_root=args.xts_root,
         holdings_override=args.holdings,
         auto_reenter=not args.no_reenter,
+        auto_reanchor=not args.no_reanchor,
+        max_qty=args.max_qty,
         poll_interval=args.poll_interval,
     )
 
