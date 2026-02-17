@@ -1,5 +1,44 @@
 # Activity Log
 
+## 2026-02-17 10:20 IST - Claude
+**TG — Bug documentation, morning warmup script, launchd scheduling**
+
+### Changes
+1. **Bug documentation** (`TG/docs/BUGS_AND_FIXES.md`):
+   - Created catalog of all 10 bugs found and fixed during TG grid bot development
+   - Each entry includes: Severity, File, Symptom, Root Cause, Fix with code snippets
+   - Covers: XTS 20-char order ID limit, illiquid SPCENET fills, duplicate orders on restart, order book parse crashes, apiOrderSource rejection, SELL+NRML RMS block, multi-bot session conflicts, partial fill hedging, PnL calculation, pair order visibility
+
+2. **Morning warmup script** (`TG/warmup.py`):
+   - 7-step startup sequence: kill stale processes, fresh XTS login, cancel orders, reset state, start dashboards, start bots, verify
+   - CLI flags: `--dry-run`, `--verify-only`, `--skip-bots`, `--skip-dashboards`, `--skip-verify`
+   - Follows same patterns as `eod_flatten.py`: logging, argparse, XTS credentials, process management
+   - Records bot PIDs in shared `.bot_pids.json` for cross-process visibility
+   - State reset preserves closed_groups/total_pnl/total_cycles, moves open groups to CANCELLED
+
+3. **Launchd scheduling** (`Daily/scheduler/plists/com.india-ts.tg-warmup.plist`):
+   - Runs weekdays (Mon-Fri) at 9:00 AM IST via `StartCalendarInterval` array
+   - Installed to `/Users/maverick/Library/LaunchAgents/`
+   - Logs to `TG/logs/warmup_stdout.log` and `TG/logs/warmup_stderr.log`
+
+### Daily Lifecycle
+```
+9:00 AM   — warmup.py (kill stale, fresh login, cancel orders, reset state, start dashboards + bots)
+9:15 AM   — Market opens, grid bots trading
+3:12 PM   — eod_flatten.py (kill bots, cancel orders, flatten SPCENET)
+3:30 PM   — Market closes
+```
+
+### Files Created
+- `TG/docs/BUGS_AND_FIXES.md` — Bug catalog (10 entries)
+- `TG/warmup.py` — Morning warmup script
+- `Daily/scheduler/plists/com.india-ts.tg-warmup.plist` — Launchd plist
+
+### Files Modified
+- `Daily/Activity.md` — This entry
+
+---
+
 ## 2026-02-17 01:00 IST - Claude
 **TG — SPCENET pair order tracking + dashboard tab, seed purchases, IDEA bot**
 
