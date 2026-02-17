@@ -1,5 +1,30 @@
 # Activity Log
 
+## 2026-02-17 01:00 IST - Claude
+**TG — SPCENET pair order tracking + dashboard tab, seed purchases, IDEA bot**
+
+### Changes
+1. **Seed purchases**: Bought 1000 shares each of TATSILV (@22.81), TATAGOLD (@14.73), SPCENET (@5.42), IDEA (@11.39) to provide broker holdings for SELL+NRML orders (XTS RMS block fix).
+2. **Added `pair_orders` tracking to Group** (`TG/group.py`):
+   - New field `pair_orders: List[Dict]` stores `{xts_id, custom_id, side, qty, price, role, ts}` for each pair hedge/unwind order
+   - Updated `to_dict()` and `from_dict()` for serialization
+3. **BuyBot/SellBot pair order recording** (`TG/bot_buy.py`, `TG/bot_sell.py`):
+   - `place_pair_hedge()` and `place_pair_unwind()` now append to `group.pair_orders` with XTS order ID, custom ID, side, qty, price, role (HEDGE/UNWIND), and timestamp
+4. **SPCENET dashboard tab** (`TG/dashboard.py`):
+   - New tab on 7777 monitor showing all SPCENET pair orders across all primaries
+   - KPIs: Symbol, Total Pair Orders, Net Qty, Pair PnL
+   - Table: Time, Primary, Bot, Level, Role, Side, Qty, Price, XTS Order ID, Custom ID, Group
+   - Auto-refreshes when tab is active
+5. **Started 3 bots**: TATSILV, TATAGOLD, IDEA — all trading against SPCENET (60 total orders: 20 per bot)
+
+### Files Modified
+- `TG/group.py` — Added `pair_orders` field with serialization
+- `TG/bot_buy.py` — Append pair order records in hedge/unwind methods
+- `TG/bot_sell.py` — Append pair order records in hedge/unwind methods
+- `TG/dashboard.py` — Added SPCENET tab (`buildSecondaryPanelHTML`, `renderSecondaryPanel`, tab switching)
+
+---
+
 ## 2026-02-16 23:30 IST - Claude
 **TG Dashboard — Monitor panel refinements**
 

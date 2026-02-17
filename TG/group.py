@@ -12,7 +12,7 @@ import uuid
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ class Group:
     pair_unwind_total: float = 0.0         # sum(price * qty) for unwind PnL calc
     pair_unwind_seq: int = 0               # sequence counter for PU order naming
     pair_pnl: float = 0.0                  # realized pair PnL
+    pair_orders: List[Dict] = field(default_factory=list)  # [{xts_id, custom_id, side, qty, price, ts, role}]
 
     # Fill info (actual prices from broker)
     entry_fill_price: Optional[float] = None
@@ -119,6 +120,7 @@ class Group:
             'pair_unwind_total': self.pair_unwind_total,
             'pair_unwind_seq': self.pair_unwind_seq,
             'pair_pnl': self.pair_pnl,
+            'pair_orders': self.pair_orders,
             'pair_hedge_vwap': self.pair_hedge_vwap,
             'pair_unwind_vwap': self.pair_unwind_vwap,
             'entry_fill_price': self.entry_fill_price,
@@ -154,6 +156,7 @@ class Group:
             pair_unwind_total=d.get('pair_unwind_total', 0.0),
             pair_unwind_seq=d.get('pair_unwind_seq', 0),
             pair_pnl=d.get('pair_pnl', 0.0),
+            pair_orders=d.get('pair_orders', []),
             entry_fill_price=d.get('entry_fill_price'),
             entry_fill_qty=d.get('entry_fill_qty'),
             target_fill_price=d.get('target_fill_price'),

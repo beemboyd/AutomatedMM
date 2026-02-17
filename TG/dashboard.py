@@ -597,6 +597,21 @@ function buildTabs(primaries) {
         document.getElementById('bot-panels').appendChild(panel);
     });
 
+    // Add SPCENET (secondary) tab
+    const secBtn = document.createElement('button');
+    secBtn.className = 'tab-btn tab-btn-dynamic';
+    secBtn.id = 'tab-SECONDARY';
+    secBtn.textContent = secondarySymbol || 'SPCENET';
+    secBtn.style.borderColor = 'var(--purple)';
+    secBtn.onclick = () => switchTab('SECONDARY');
+    bar.appendChild(secBtn);
+
+    const secPanel = document.createElement('div');
+    secPanel.id = 'panel-SECONDARY';
+    secPanel.style.display = 'none';
+    secPanel.innerHTML = buildSecondaryPanelHTML();
+    document.getElementById('bot-panels').appendChild(secPanel);
+
     knownPrimaries = primaries;
 }
 
@@ -608,6 +623,9 @@ function switchTab(tab) {
         const p = document.getElementById('panel-' + sym);
         if (p) p.style.display = 'none';
     });
+    const secP = document.getElementById('panel-SECONDARY');
+    if (secP) secP.style.display = 'none';
+
     // Show selected
     const target = document.getElementById('panel-' + tab);
     if (target) target.style.display = 'block';
@@ -617,8 +635,10 @@ function switchTab(tab) {
         btn.classList.toggle('active', btn.id === 'tab-' + tab);
     });
 
-    // Refresh per-bot panel data if it's a bot tab
-    if (tab !== 'monitor' && allStatesCache[tab]) {
+    // Refresh panel data
+    if (tab === 'SECONDARY') {
+        renderSecondaryPanel(allStatesCache);
+    } else if (tab !== 'monitor' && allStatesCache[tab]) {
         renderBotPanel(tab, allStatesCache[tab]);
     }
 }
@@ -723,6 +743,119 @@ function computeGridLevels(anchor, gridSpace, target, totalQty, subsetQty) {
         i++;
     }
     return { buy: buyLevels, sell: sellLevels };
+}
+
+// --- Secondary (SPCENET) panel ---
+function buildSecondaryPanelHTML() {
+    const sym = secondarySymbol || 'SPCENET';
+    return `
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Symbol</div>
+            <div class="text-base font-bold" style="color:var(--purple);">${sym}</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Total Pair Orders</div>
+            <div class="text-base font-bold" id="sec-total-orders">0</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Net Qty</div>
+            <div class="text-base font-bold" id="sec-net-qty">0</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Pair PnL (All)</div>
+            <div class="text-base font-bold" id="sec-total-pnl">0.00</div>
+        </div>
+    </div>
+    <!-- Orders table -->
+    <div class="rounded-lg p-4" style="background:var(--card);border:1px solid var(--border);">
+        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">
+            ${sym} Pair Orders</h2>
+        <div style="overflow-x:auto;">
+            <table class="data-table" style="min-width:900px;">
+                <thead><tr>
+                    <th>Time</th>
+                    <th>Primary</th>
+                    <th>Bot</th>
+                    <th>Level</th>
+                    <th>Role</th>
+                    <th>Side</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>XTS Order ID</th>
+                    <th>Custom ID</th>
+                    <th>Group</th>
+                </tr></thead>
+                <tbody id="sec-orders-tbody"></tbody>
+            </table>
+        </div>
+        <div id="sec-orders-empty" class="text-center py-6" style="color:var(--dim);">No pair orders yet</div>
+    </div>`;
+}
+
+function renderSecondaryPanel(allStates) {
+    if (!allStates) return;
+    const orders = [];
+    let totalPairPnl = 0;
+
+    for (const [sym, data] of Object.entries(allStates)) {
+        const state = data.state || {};
+        const allGroups = Object.values(state.open_groups || {}).concat(state.closed_groups || []);
+        allGroups.forEach(g => {
+            (g.pair_orders || []).forEach(po => {
+                orders.push({
+                    primary: sym, bot: g.bot, level: g.subset_index,
+                    group_id: g.group_id, ...po
+                });
+            });
+            totalPairPnl += (g.pair_pnl || 0);
+        });
+    }
+
+    // Sort newest first
+    orders.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+
+    // KPIs
+    document.getElementById('sec-total-orders').textContent = orders.length;
+    const buyQty = orders.filter(o => o.side === 'BUY').reduce((s, o) => s + (o.qty || 0), 0);
+    const sellQty = orders.filter(o => o.side === 'SELL').reduce((s, o) => s + (o.qty || 0), 0);
+    const netQty = buyQty - sellQty;
+    const netEl = document.getElementById('sec-net-qty');
+    netEl.textContent = (netQty >= 0 ? '+' : '') + netQty;
+    netEl.className = 'text-base font-bold ' + (netQty === 0 ? '' : netQty > 0 ? 'pnl-pos' : 'pnl-neg');
+    const pnlEl = document.getElementById('sec-total-pnl');
+    pnlEl.textContent = fmtPnlText(totalPairPnl);
+    pnlEl.className = 'text-base font-bold ' + (totalPairPnl >= 0 ? 'pnl-pos' : 'pnl-neg');
+
+    // Table
+    const tbody = document.getElementById('sec-orders-tbody');
+    const empty = document.getElementById('sec-orders-empty');
+    if (orders.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+    } else {
+        empty.style.display = 'none';
+        tbody.innerHTML = orders.map(o => {
+            const roleCls = o.role === 'HEDGE'
+                ? 'background:rgba(179,136,255,0.15);color:var(--purple);'
+                : 'background:rgba(0,200,83,0.15);color:var(--green);';
+            const sideCls = o.side === 'BUY' ? 'badge-buy' : 'badge-sell';
+            return '<tr>' +
+                '<td style="white-space:nowrap;">' + fmtTime(o.ts) + '</td>' +
+                '<td class="font-bold">' + o.primary + '</td>' +
+                '<td>' + (o.bot === 'A' ? 'A (Buy)' : 'B (Sell)') + '</td>' +
+                '<td>L' + o.level + '</td>' +
+                '<td><span class="status-badge" style="' + roleCls + '">' + o.role + '</span></td>' +
+                '<td><span class="status-badge ' + sideCls + '">' + o.side + '</span></td>' +
+                '<td>' + o.qty + '</td>' +
+                '<td>' + (o.price ? o.price.toFixed(2) : '—') + '</td>' +
+                '<td style="font-family:monospace;font-size:12px;">' + (o.xts_id || '—') + '</td>' +
+                '<td style="font-family:monospace;font-size:12px;">' + (o.custom_id || '—') + '</td>' +
+                '<td style="font-family:monospace;font-size:11px;color:var(--dim);">' + o.group_id + '</td>' +
+                '</tr>';
+        }).join('');
+    }
 }
 
 // --- Render per-bot panel ---
@@ -981,6 +1114,9 @@ function updateMonitor() {
                 // Update per-bot panel if visible
                 if (activeTab === sym) renderBotPanel(sym, data);
             }
+
+            // Update secondary panel if visible
+            if (activeTab === 'SECONDARY') renderSecondaryPanel(allStatesCache);
 
             // Aggregate KPIs
             const aggCombined = aggPrimary + aggPair;

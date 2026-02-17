@@ -190,6 +190,11 @@ class BuyBot:
         if pair_id:
             group.pair_hedged_qty += pair_qty
             group.pair_hedge_total += pair_price * pair_qty
+            group.pair_orders.append({
+                'xts_id': pair_id, 'custom_id': pair_oid,
+                'side': 'SELL', 'qty': pair_qty, 'price': pair_price,
+                'role': 'HEDGE', 'ts': datetime.now().isoformat(),
+            })
             logger.info("BuyBot PAIR HEDGE: group=%s, SELL %s %d @ %.2f (total_hedged=%d, vwap=%.2f), order=%s [%s]",
                         group.group_id, self.config.pair_symbol,
                         pair_qty, pair_price, group.pair_hedged_qty,
@@ -219,6 +224,11 @@ class BuyBot:
             group.pair_unwind_total += pair_price * pair_qty
             # Pair PnL: sold at hedge, bought back at unwind
             group.pair_pnl = round(group.pair_hedge_total - group.pair_unwind_total, 2)
+            group.pair_orders.append({
+                'xts_id': pair_id, 'custom_id': pair_oid,
+                'side': 'BUY', 'qty': pair_qty, 'price': pair_price,
+                'role': 'UNWIND', 'ts': datetime.now().isoformat(),
+            })
             logger.info("BuyBot PAIR UNWIND: group=%s, BUY %s %d @ %.2f (total_unwound=%d, pair_pnl=%.2f), order=%s [%s]",
                         group.group_id, self.config.pair_symbol,
                         pair_qty, pair_price, group.pair_unwound_qty,
