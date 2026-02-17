@@ -326,8 +326,8 @@ def start_bots(config: dict, dry_run: bool = False) -> int:
             '--partial-hedge-ratio', str(primary.get('partial_hedge_ratio', 0)),
             '--grid-space', str(primary.get('grid_space', 0.01)),
             '--target', str(primary.get('target', 0.02)),
-            '--total-qty', str(primary.get('total_qty', 1000)),
-            '--subset-qty', str(primary.get('subset_qty', 300)),
+            '--levels-per-side', str(primary.get('levels_per_side', 10)),
+            '--qty-per-level', str(primary.get('qty_per_level', 100)),
             '--holdings', str(primary.get('holdings_override', -1)),
             '--product', primary.get('product', 'NRML'),
             '--interactive-key', config.get('xts_interactive_key', ''),
@@ -335,7 +335,8 @@ def start_bots(config: dict, dry_run: bool = False) -> int:
             '--user', config.get('zerodha_user', 'Sai'),
             '--xts-root', config.get('xts_root', 'https://xts.myfindoc.com'),
             '--poll-interval', str(primary.get('poll_interval', 2.0)),
-            '--max-qty', str(primary.get('max_qty', 2000)),
+            '--reanchor-epoch', str(primary.get('reanchor_epoch', 100)),
+            '--max-grid-levels', str(primary.get('max_grid_levels', 2000)),
         ]
 
         if primary.get('auto_anchor'):

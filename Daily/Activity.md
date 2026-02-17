@@ -1,5 +1,28 @@
 # Activity Log
 
+## 2026-02-17 18:30 IST - Claude
+**TG — Epoch-based reanchor grid system (replace increasing-gap grid)**
+
+### Changes
+1. **`TG/config.py`** — Replaced `total_qty`/`subset_qty`/`max_qty` with `levels_per_side`(10)/`qty_per_level`(100)/`reanchor_epoch`(100)/`max_grid_levels`(2000). `compute_subsets()` now produces uniform spacing with optional `grid_space` override.
+2. **`TG/grid.py`** — `compute_buy_levels(grid_space=None)` and `compute_sell_levels(grid_space=None)` accept per-side spacing override. Removed `self.subsets` cache from `__init__`.
+3. **`TG/state.py`** — Added epoch state fields: `main_anchor`, `buy_grid_levels`, `sell_grid_levels`, `current_buy_spacing`, `current_sell_spacing`. Persisted in save/load.
+4. **`TG/engine.py`** — Complete rewrite of reanchor logic: `_check_grid_exhausted()` returns `'buy'`/`'sell'`/`None`. `_reanchor_grid(exhausted_side)` implements epoch-based spacing increase every `reanchor_epoch` reanchors, independent buy/sell spacing tracking, `max_grid_levels` stop condition. Added `_get_last_filled_price()` to find sub_anchor from deepest filled entry.
+5. **`TG/run.py`** — Replaced `--total-qty`/`--subset-qty`/`--max-qty` CLI args with `--levels-per-side`/`--qty-per-level`/`--reanchor-epoch`/`--max-grid-levels`.
+6. **`TG/dashboard.py`** — Updated `_DEFAULT_CONFIG`, `_start_bot()`, `_compute_summary()`, `api_state_all()`. Updated both monitor (7777) and config (7779) dashboards: new KPIs for reanchor count and spacing, updated edit modal, JS functions.
+7. **`TG/warmup.py`** — Updated `start_bots()` cmd construction for new CLI args.
+8. **`TG/state/tg_config.json`** — All 3 primaries (TATSILV, TATAGOLD, IDEA) updated with new params.
+
+### Impact
+- 10 uniform levels per side × 100 qty = 1000 shares per side per grid
+- When a side exhausts (all 10 entries filled) → reanchor to deepest fill price
+- Spacing increases by base_grid_space every 100 reanchors (epoch)
+- Bot stops after 2000 reanchors on one side (20 spacing increments)
+- Buy and sell spacing tracked independently
+- All new parameters configurable via dashboard at port 7779
+
+---
+
 ## 2026-02-17 17:30 IST - Claude
 **TG — Increasing-gap grid sets (replace uniform spacing)**
 

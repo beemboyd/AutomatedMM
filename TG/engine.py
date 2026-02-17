@@ -53,9 +53,13 @@ class GridEngine:
         self.state = StateManager(config.symbol)
         self.grid = GridCalculator(config)
 
-        # Compute grid levels
-        self.buy_levels = self.grid.compute_buy_levels()
-        self.sell_levels = self.grid.compute_sell_levels()
+        # Current spacing for each side (may increase over epochs)
+        self.current_buy_spacing = config.base_grid_space
+        self.current_sell_spacing = config.base_grid_space
+
+        # Compute grid levels with separate spacings
+        self.buy_levels = self.grid.compute_buy_levels(grid_space=self.current_buy_spacing)
+        self.sell_levels = self.grid.compute_sell_levels(grid_space=self.current_sell_spacing)
 
         # Initialize bots
         self.buy_bot = BuyBot(self.buy_levels, self.client, self.state, config)
@@ -83,19 +87,41 @@ class GridEngine:
             logger.error("Cannot start: XTS connection failed")
             return
 
-        # Print grid layout
-        self.config.print_grid_layout()
-
         # Load state or start fresh
         if self.state.load():
             logger.info("Resuming from saved state")
             self.state.anchor_price = self.config.anchor_price
+            # Restore spacing from persisted state
+            if self.state.current_buy_spacing > 0:
+                self.current_buy_spacing = self.state.current_buy_spacing
+            if self.state.current_sell_spacing > 0:
+                self.current_sell_spacing = self.state.current_sell_spacing
+            # Recompute levels with restored spacings
+            self.buy_levels = self.grid.compute_buy_levels(grid_space=self.current_buy_spacing)
+            self.sell_levels = self.grid.compute_sell_levels(grid_space=self.current_sell_spacing)
+            self.buy_bot.levels = self.buy_levels
+            self.sell_bot.levels = self.sell_levels
             self.buy_bot.restore_level_groups()
             self.sell_bot.restore_level_groups()
             self._reconcile_orders()
         else:
             logger.info("Starting fresh grid at anchor=%.2f", self.config.anchor_price)
             self.state.anchor_price = self.config.anchor_price
+
+        # Ensure main_anchor and spacings are always initialized
+        if self.state.main_anchor == 0.0:
+            self.state.main_anchor = self.config.anchor_price
+            logger.info("Set main_anchor=%.2f", self.state.main_anchor)
+        if self.state.current_buy_spacing == 0.0:
+            self.state.current_buy_spacing = self.current_buy_spacing
+        if self.state.current_sell_spacing == 0.0:
+            self.state.current_sell_spacing = self.current_sell_spacing
+
+        # Print grid layout with current spacings
+        self.config.print_grid_layout(
+            buy_spacing=self.current_buy_spacing,
+            sell_spacing=self.current_sell_spacing,
+        )
 
         # Place entry orders for any free levels
         self.buy_bot.place_entries()
@@ -129,8 +155,10 @@ class GridEngine:
                     self.state.print_summary()
 
                 # Check for grid exhaustion → re-anchor
-                if self.config.auto_reanchor and self._check_grid_exhausted():
-                    self._reanchor_grid()
+                if self.config.auto_reanchor:
+                    exhausted_side = self._check_grid_exhausted()
+                    if exhausted_side:
+                        self._reanchor_grid(exhausted_side)
 
                 poll_count += 1
                 if poll_count % 100 == 0:
@@ -344,23 +372,22 @@ class GridEngine:
         self.state.save()
         logger.info("Reconciliation complete")
 
-    def _check_grid_exhausted(self) -> bool:
+    def _check_grid_exhausted(self) -> Optional[str]:
         """
         Check if all grid levels on one side are TARGET_PENDING.
 
-        Returns True if all buy levels OR all sell levels are exhausted
-        (all entries filled, all targets placed but unreachable).
+        Returns 'buy' or 'sell' if that side is exhausted, None otherwise.
         Respects cooldown to prevent rapid re-anchoring.
         """
         # Cooldown check
         if self._last_reanchor_time:
             elapsed = datetime.now() - self._last_reanchor_time
             if elapsed < self._reanchor_cooldown:
-                return False
+                return None
 
         num_levels = len(self.buy_levels)
         if num_levels == 0:
-            return False
+            return None
 
         buy_tp = sum(1 for g in self.state.open_groups.values()
                      if g.bot == 'A' and g.status == GroupStatus.TARGET_PENDING)
@@ -369,93 +396,123 @@ class GridEngine:
 
         if buy_tp >= num_levels:
             logger.info("GRID EXHAUSTED: all %d buy levels are TARGET_PENDING", buy_tp)
-            return True
+            return 'buy'
         if sell_tp >= num_levels:
             logger.info("GRID EXHAUSTED: all %d sell levels are TARGET_PENDING", sell_tp)
-            return True
-        return False
+            return 'sell'
+        return None
 
-    def _reanchor_grid(self):
+    def _get_last_filled_price(self, side: str) -> float:
+        """Get the fill price of the most recently filled entry on given side."""
+        bot_id = 'A' if side == 'buy' else 'B'
+        candidates = [
+            g for g in self.state.open_groups.values()
+            if g.bot == bot_id and g.status == GroupStatus.TARGET_PENDING
+               and g.entry_fill_price is not None
+        ]
+        if not candidates:
+            return self.config.anchor_price
+        # Deepest filled = lowest price for buy, highest for sell
+        if side == 'buy':
+            return min(g.entry_fill_price for g in candidates)
+        else:
+            return max(g.entry_fill_price for g in candidates)
+
+    def _reanchor_grid(self, exhausted_side: str):
         """
-        Re-anchor the grid to current LTP when all levels on one side are exhausted.
+        Epoch-based re-anchor when all levels on one side are exhausted.
 
         Sequence:
-        1. Get current LTP as new anchor
-        2. Cancel all open orders on XTS
-        3. Flatten SPCENET net pair position
-        4. Close all open groups as CANCELLED (realized_pnl=0, pair PnL preserved)
-        5. Clear bot state
-        6. Recompute grid with new anchor
-        7. Place fresh entries
+        1. Find last filled price on exhausted side → new sub_anchor
+        2. Increment grid level counter for exhausted side
+        3. Check epoch: increase spacing every reanchor_epoch reanchors
+        4. Check stop: halt if max_grid_levels reached
+        5. Cancel all open orders (both sides)
+        6. Flatten SPCENET pair position
+        7. Close all open groups as CANCELLED
+        8. Recompute grid at new sub_anchor with current spacings
+        9. Place fresh entries on both sides
         """
         old_anchor = self.config.anchor_price
 
-        # Step 1: Get current LTP
-        new_anchor = self.client.get_ltp(self.config.symbol, self.config.exchange)
-        if new_anchor is None:
-            logger.error("REANCHOR ABORTED: cannot get LTP for %s", self.config.symbol)
-            return
-        new_anchor = round(new_anchor, 2)
+        # Step 1: Find last filled price on exhausted side
+        new_anchor = round(self._get_last_filled_price(exhausted_side), 2)
 
         logger.info("=" * 60)
-        logger.info("REANCHORING GRID: %.2f -> %.2f", old_anchor, new_anchor)
+        logger.info("REANCHORING GRID (%s exhausted): %.2f -> %.2f",
+                     exhausted_side.upper(), old_anchor, new_anchor)
         logger.info("=" * 60)
 
-        # Max qty check: compute current net position from open groups
-        net_primary_qty = 0
-        for g in self.state.open_groups.values():
-            if g.status == GroupStatus.TARGET_PENDING:
-                if g.entry_side == 'BUY':
-                    net_primary_qty += g.qty
-                else:
-                    net_primary_qty -= g.qty
-        # New entries would add total_qty on the exhausted side
-        if abs(net_primary_qty) + self.config.total_qty > self.config.max_qty:
-            logger.warning("REANCHOR SKIPPED: net_qty=%d + new=%d would exceed max_qty=%d",
-                           abs(net_primary_qty), self.config.total_qty, self.config.max_qty)
-            self._last_reanchor_time = datetime.now()
+        # Step 2: Increment grid level counter
+        if exhausted_side == 'buy':
+            self.state.buy_grid_levels += 1
+            grid_count = self.state.buy_grid_levels
+        else:
+            self.state.sell_grid_levels += 1
+            grid_count = self.state.sell_grid_levels
+
+        logger.info("Grid level count: buy=%d, sell=%d",
+                     self.state.buy_grid_levels, self.state.sell_grid_levels)
+
+        # Step 3: Check epoch — increase spacing every reanchor_epoch
+        if grid_count > 0 and grid_count % self.config.reanchor_epoch == 0:
+            if exhausted_side == 'buy':
+                self.current_buy_spacing = round(
+                    self.current_buy_spacing + self.config.base_grid_space, 10)
+                logger.info("BUY SPACING EPOCH: increased to %.4f (after %d grid levels)",
+                            self.current_buy_spacing, grid_count)
+            else:
+                self.current_sell_spacing = round(
+                    self.current_sell_spacing + self.config.base_grid_space, 10)
+                logger.info("SELL SPACING EPOCH: increased to %.4f (after %d grid levels)",
+                            self.current_sell_spacing, grid_count)
+
+        # Step 4: Check stop condition
+        if grid_count >= self.config.max_grid_levels:
+            logger.warning("MAX GRID LEVELS REACHED: %s side at %d (limit=%d). STOPPING BOT.",
+                           exhausted_side.upper(), grid_count, self.config.max_grid_levels)
+            self.state.save()
+            self.running = False
             return
 
-        # Step 2: Cancel all open orders
-        logger.info("Step 2: Cancelling all orders...")
+        # Step 5: Cancel all open orders
+        logger.info("Step 5: Cancelling all orders...")
         self.cancel_all()
 
-        # Step 3: Flatten SPCENET pair position
+        # Step 6: Flatten SPCENET pair position
         if self.config.has_pair:
             self._flatten_pair_position()
 
-        # Step 4: Close all open groups as CANCELLED
-        logger.info("Step 4: Closing %d open groups as CANCELLED...",
+        # Step 7: Close all open groups as CANCELLED
+        logger.info("Step 7: Closing %d open groups as CANCELLED...",
                      len(self.state.open_groups))
         for group in list(self.state.open_groups.values()):
             group.status = GroupStatus.CANCELLED
             group.realized_pnl = 0.0  # primary PnL not realized (shares still held)
             group.closed_at = datetime.now().isoformat()
             self.state.closed_groups.append(group)
-        # Accumulate pair PnL from these groups into total (pair was actually realized)
-        # Note: pair PnL is tracked on the group but NOT added to total_pnl
-        # (total_pnl only tracks primary cycles). Pair PnL is tracked separately.
 
-        # Step 5: Clear state
-        logger.info("Step 5: Clearing bot state...")
+        # Step 8: Clear state and recompute grid
+        logger.info("Step 8: Clearing bot state, recomputing grid at anchor=%.2f...", new_anchor)
         self.state.open_groups = {}
         self.state.order_to_group = {}
         self.buy_bot.level_groups = {}
         self.sell_bot.level_groups = {}
         self._order_status_cache = {}
 
-        # Step 6: Recompute grid
-        logger.info("Step 6: Recomputing grid at anchor=%.2f...", new_anchor)
         self.config.anchor_price = new_anchor
         self.state.anchor_price = new_anchor
+        self.state.current_buy_spacing = self.current_buy_spacing
+        self.state.current_sell_spacing = self.current_sell_spacing
         self.grid = GridCalculator(self.config)
-        self.buy_levels = self.grid.compute_buy_levels()
-        self.sell_levels = self.grid.compute_sell_levels()
+        self.buy_levels = self.grid.compute_buy_levels(grid_space=self.current_buy_spacing)
+        self.sell_levels = self.grid.compute_sell_levels(grid_space=self.current_sell_spacing)
         self.buy_bot.levels = self.buy_levels
         self.sell_bot.levels = self.sell_levels
 
-        # Step 7: Place fresh entries
-        logger.info("Step 7: Placing fresh entries...")
+        # Step 9: Place fresh entries
+        logger.info("Step 9: Placing fresh entries (buy_space=%.4f, sell_space=%.4f)...",
+                     self.current_buy_spacing, self.current_sell_spacing)
         self.buy_bot.place_entries()
         self.sell_bot.place_entries()
 
@@ -465,8 +522,9 @@ class GridEngine:
         self.state.print_summary()
 
         logger.info("=" * 60)
-        logger.info("REANCHOR COMPLETE: %.2f -> %.2f | Open groups: %d",
-                     old_anchor, new_anchor, len(self.state.open_groups))
+        logger.info("REANCHOR COMPLETE: %.2f -> %.2f | Side: %s | Open groups: %d",
+                     old_anchor, new_anchor, exhausted_side.upper(),
+                     len(self.state.open_groups))
         logger.info("=" * 60)
 
     def _flatten_pair_position(self):

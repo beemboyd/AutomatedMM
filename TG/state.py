@@ -44,6 +44,13 @@ class StateManager:
         self.total_pnl: float = 0.0
         self.total_cycles: int = 0                    # completed round-trips
 
+        # Epoch-based reanchor state
+        self.main_anchor: float = 0.0                # original anchor (set once)
+        self.buy_grid_levels: int = 0                # cumulative buy-side reanchors
+        self.sell_grid_levels: int = 0               # cumulative sell-side reanchors
+        self.current_buy_spacing: float = 0.0        # current buy grid spacing
+        self.current_sell_spacing: float = 0.0       # current sell grid spacing
+
     def add_group(self, group: Group):
         """Register a new group and its entry order."""
         self.open_groups[group.group_id] = group
@@ -96,6 +103,11 @@ class StateManager:
             'anchor_price': self.anchor_price,
             'total_pnl': self.total_pnl,
             'total_cycles': self.total_cycles,
+            'main_anchor': self.main_anchor,
+            'buy_grid_levels': self.buy_grid_levels,
+            'sell_grid_levels': self.sell_grid_levels,
+            'current_buy_spacing': self.current_buy_spacing,
+            'current_sell_spacing': self.current_sell_spacing,
             'last_updated': datetime.now().isoformat(),
             'open_groups': {gid: g.to_dict() for gid, g in self.open_groups.items()},
             'closed_groups': [g.to_dict() for g in self.closed_groups[-200:]],
@@ -121,6 +133,13 @@ class StateManager:
             self.anchor_price = state['anchor_price']
             self.total_pnl = state.get('total_pnl', 0.0)
             self.total_cycles = state.get('total_cycles', 0)
+
+            # Epoch-based reanchor state
+            self.main_anchor = state.get('main_anchor', 0.0)
+            self.buy_grid_levels = state.get('buy_grid_levels', 0)
+            self.sell_grid_levels = state.get('sell_grid_levels', 0)
+            self.current_buy_spacing = state.get('current_buy_spacing', 0.0)
+            self.current_sell_spacing = state.get('current_sell_spacing', 0.0)
 
             self.open_groups = {
                 gid: Group.from_dict(d)
@@ -150,7 +169,9 @@ class StateManager:
         target_pending_b = sum(1 for g in open_b if g.status == GroupStatus.TARGET_PENDING)
 
         print(f"\n  STATE SUMMARY — {self.symbol}")
-        print(f"  Anchor: {self.anchor_price:.2f}  |  PnL: {self.total_pnl:.2f}  |  Cycles: {self.total_cycles}")
+        print(f"  Anchor: {self.anchor_price:.2f}  |  Main Anchor: {self.main_anchor:.2f}  |  PnL: {self.total_pnl:.2f}  |  Cycles: {self.total_cycles}")
+        print(f"  Buy Grid Levels: {self.buy_grid_levels}  |  Buy Spacing: {self.current_buy_spacing}")
+        print(f"  Sell Grid Levels: {self.sell_grid_levels}  |  Sell Spacing: {self.current_sell_spacing}")
         print(f"  Bot A (Buy):  {entry_pending_a} entry pending, {target_pending_a} target pending")
         print(f"  Bot B (Sell): {entry_pending_b} entry pending, {target_pending_b} target pending")
         print(f"  Total open groups: {len(self.open_groups)}")

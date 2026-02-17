@@ -45,14 +45,15 @@ _DEFAULT_CONFIG = {
             "anchor_price": 0,
             "grid_space": 0.01,
             "target": 0.03,
-            "total_qty": 10,
-            "subset_qty": 1,
+            "levels_per_side": 10,
+            "qty_per_level": 100,
             "hedge_ratio": 1,
             "partial_hedge_ratio": 1,
-            "holdings_override": 1000,
+            "holdings_override": 2000,
             "product": "NRML",
             "poll_interval": 2.0,
-            "max_qty": 2000,
+            "reanchor_epoch": 100,
+            "max_grid_levels": 2000,
         }
     ],
 }
@@ -176,8 +177,8 @@ def _start_bot(symbol: str, config: dict) -> bool:
         '--partial-hedge-ratio', str(primary.get('partial_hedge_ratio', 0)),
         '--grid-space', str(primary.get('grid_space', 0.01)),
         '--target', str(primary.get('target', 0.02)),
-        '--total-qty', str(primary.get('total_qty', 1000)),
-        '--subset-qty', str(primary.get('subset_qty', 300)),
+        '--levels-per-side', str(primary.get('levels_per_side', 10)),
+        '--qty-per-level', str(primary.get('qty_per_level', 100)),
         '--holdings', str(primary.get('holdings_override', -1)),
         '--product', primary.get('product', 'NRML'),
         '--interactive-key', config.get('xts_interactive_key', ''),
@@ -185,7 +186,8 @@ def _start_bot(symbol: str, config: dict) -> bool:
         '--user', config.get('zerodha_user', 'Sai'),
         '--xts-root', config.get('xts_root', 'https://xts.myfindoc.com'),
         '--poll-interval', str(primary.get('poll_interval', 2.0)),
-        '--max-qty', str(primary.get('max_qty', 2000)),
+        '--reanchor-epoch', str(primary.get('reanchor_epoch', 100)),
+        '--max-grid-levels', str(primary.get('max_grid_levels', 2000)),
     ]
 
     if primary.get('auto_anchor'):
@@ -287,6 +289,7 @@ def _compute_summary(state: dict) -> dict:
     return {
         'symbol': state.get('symbol', ''),
         'anchor_price': state.get('anchor_price', 0),
+        'main_anchor': state.get('main_anchor', 0),
         'total_pnl': round(total_pnl, 2),
         'pair_pnl': pair_pnl,
         'combined_pnl': combined_pnl,
@@ -297,6 +300,10 @@ def _compute_summary(state: dict) -> dict:
         'bot_b': {'entry_pending': bot_b_entry, 'target_pending': bot_b_target},
         'long_exposure': long_exposure,
         'short_exposure': short_exposure,
+        'buy_grid_levels': state.get('buy_grid_levels', 0),
+        'sell_grid_levels': state.get('sell_grid_levels', 0),
+        'current_buy_spacing': state.get('current_buy_spacing', 0),
+        'current_sell_spacing': state.get('current_sell_spacing', 0),
         'last_updated': state.get('last_updated', ''),
     }
 
@@ -353,11 +360,13 @@ def create_app(mode: str = 'monitor') -> Flask:
                 'config': {
                     'grid_space': p.get('grid_space', 0.01),
                     'target': p.get('target', 0.03),
-                    'total_qty': p.get('total_qty', 10),
-                    'subset_qty': p.get('subset_qty', 1),
+                    'levels_per_side': p.get('levels_per_side', 10),
+                    'qty_per_level': p.get('qty_per_level', 100),
                     'hedge_ratio': p.get('hedge_ratio', 0),
                     'partial_hedge_ratio': p.get('partial_hedge_ratio', 0),
                     'product': p.get('product', 'NRML'),
+                    'reanchor_epoch': p.get('reanchor_epoch', 100),
+                    'max_grid_levels': p.get('max_grid_levels', 2000),
                 },
             }
         return jsonify(result)
@@ -670,6 +679,24 @@ function buildBotPanelHTML(sym) {
             <div class="text-base font-bold" id="${sym}-open-wr">—</div>
         </div>
     </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Buy Reanchors</div>
+            <div class="text-base font-bold" style="color:var(--green);" id="${sym}-buy-levels">0</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Buy Spacing</div>
+            <div class="text-base font-bold" style="color:var(--green);" id="${sym}-buy-spacing">—</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Sell Reanchors</div>
+            <div class="text-base font-bold" style="color:var(--red);" id="${sym}-sell-levels">0</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Sell Spacing</div>
+            <div class="text-base font-bold" style="color:var(--red);" id="${sym}-sell-spacing">—</div>
+        </div>
+    </div>
 
     <!-- Grid Levels -->
     <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
@@ -721,28 +748,26 @@ function buildBotPanelHTML(sym) {
 }
 
 // --- Compute grid levels client-side ---
-function computeGridLevels(anchor, gridSpace, target, totalQty, subsetQty) {
+function computeGridLevels(anchor, gridSpace, target, levelsPerSide, qtyPerLevel, buySpacing, sellSpacing) {
     if (!anchor || anchor <= 0) return { buy: [], sell: [] };
     const buyLevels = [], sellLevels = [];
-    let remaining = totalQty;
-    let i = 0;
-    while (remaining > 0) {
-        const qty = Math.min(subsetQty, remaining);
-        const dist = gridSpace * (i + 1);
+    const bSpace = buySpacing || gridSpace;
+    const sSpace = sellSpacing || gridSpace;
+    for (let i = 0; i < levelsPerSide; i++) {
+        const bDist = bSpace * (i + 1);
+        const sDist = sSpace * (i + 1);
         buyLevels.push({
             index: i,
-            entry: Math.round((anchor - dist) * 100) / 100,
-            target: Math.round((anchor - dist + target) * 100) / 100,
-            qty: qty,
+            entry: Math.round((anchor - bDist) * 100) / 100,
+            target: Math.round((anchor - bDist + target) * 100) / 100,
+            qty: qtyPerLevel,
         });
         sellLevels.push({
             index: i,
-            entry: Math.round((anchor + dist) * 100) / 100,
-            target: Math.round((anchor + dist - target) * 100) / 100,
-            qty: qty,
+            entry: Math.round((anchor + sDist) * 100) / 100,
+            target: Math.round((anchor + sDist - target) * 100) / 100,
+            qty: qtyPerLevel,
         });
-        remaining -= qty;
-        i++;
     }
     return { buy: buyLevels, sell: sellLevels };
 }
@@ -888,12 +913,24 @@ function renderBotPanel(sym, data) {
     const owrEl = document.getElementById(sym + '-open-wr');
     if (owrEl) owrEl.textContent = (s.open_groups || 0) + ' / ' + (s.win_rate || 0).toFixed(1) + '%';
 
+    // Epoch KPIs
+    const buyLvlEl = document.getElementById(sym + '-buy-levels');
+    if (buyLvlEl) buyLvlEl.textContent = s.buy_grid_levels || 0;
+    const buySpcEl = document.getElementById(sym + '-buy-spacing');
+    if (buySpcEl) buySpcEl.textContent = (s.current_buy_spacing || cfg.grid_space || 0.01).toFixed(4);
+    const sellLvlEl = document.getElementById(sym + '-sell-levels');
+    if (sellLvlEl) sellLvlEl.textContent = s.sell_grid_levels || 0;
+    const sellSpcEl = document.getElementById(sym + '-sell-spacing');
+    if (sellSpcEl) sellSpcEl.textContent = (s.current_sell_spacing || cfg.grid_space || 0.01).toFixed(4);
+
     // Grid levels
     const gridSpace = cfg.grid_space || 0.01;
     const targetOff = cfg.target || 0.03;
-    const totalQty = cfg.total_qty || 10;
-    const subsetQty = cfg.subset_qty || 1;
-    const grid = computeGridLevels(anchor, gridSpace, targetOff, totalQty, subsetQty);
+    const levelsPerSide = cfg.levels_per_side || 10;
+    const qtyPerLevel = cfg.qty_per_level || 100;
+    const buySpacing = s.current_buy_spacing || gridSpace;
+    const sellSpacing = s.current_sell_spacing || gridSpace;
+    const grid = computeGridLevels(anchor, gridSpace, targetOff, levelsPerSide, qtyPerLevel, buySpacing, sellSpacing);
 
     // Build index→status map from open groups
     const og = state.open_groups || {};
@@ -1350,14 +1387,14 @@ def _build_config_html() -> str:
                 <div class="field-hint">Profit target per level</div>
             </div>
             <div>
-                <label class="block text-xs mb-1" style="color:var(--dim);">Total Qty</label>
-                <input id="m-total-qty" type="number">
-                <div class="field-hint">Total position size across all levels</div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Levels Per Side</label>
+                <input id="m-levels-per-side" type="number">
+                <div class="field-hint">Grid levels on each side before reanchor</div>
             </div>
             <div>
-                <label class="block text-xs mb-1" style="color:var(--dim);">Subset Qty</label>
-                <input id="m-subset-qty" type="number">
-                <div class="field-hint">Qty per grid level</div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Qty Per Level</label>
+                <input id="m-qty-per-level" type="number">
+                <div class="field-hint">Shares per grid level order</div>
             </div>
             <div>
                 <label class="block text-xs mb-1" style="color:var(--dim);">Hedge Ratio</label>
@@ -1375,9 +1412,14 @@ def _build_config_html() -> str:
                 <div class="field-hint">SellBot available shares. -1=use broker API, 0+=override</div>
             </div>
             <div>
-                <label class="block text-xs mb-1" style="color:var(--dim);">Max Qty</label>
-                <input id="m-max-qty" type="number">
-                <div class="field-hint">Max net position across re-anchors (0=unlimited)</div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Reanchor Epoch</label>
+                <input id="m-reanchor-epoch" type="number">
+                <div class="field-hint">Reanchors before spacing increases</div>
+            </div>
+            <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Max Grid Levels</label>
+                <input id="m-max-grid-levels" type="number">
+                <div class="field-hint">Stop bot after N grid levels on one side</div>
             </div>
             <div>
                 <label class="block text-xs mb-1" style="color:var(--dim);">Poll Interval (s)</label>
@@ -1486,12 +1528,13 @@ function renderPrimaries() {
                 <div>Space: <span style="color:var(--text);">${p.grid_space}</span></div>
                 <div>Target: <span style="color:var(--text);">${p.target}</span></div>
                 <div>Product: <span style="color:var(--text);">${p.product || 'NRML'}</span></div>
-                <div>Total Qty: <span style="color:var(--text);">${p.total_qty}</span></div>
-                <div>Subset Qty: <span style="color:var(--text);">${p.subset_qty}</span></div>
+                <div>Levels/Side: <span style="color:var(--text);">${p.levels_per_side || 10}</span></div>
+                <div>Qty/Level: <span style="color:var(--text);">${p.qty_per_level || 100}</span></div>
                 <div>Hedge: <span style="color:var(--text);">${p.hedge_ratio}</span></div>
                 <div>Partial: <span style="color:var(--text);">${p.partial_hedge_ratio}</span></div>
                 <div>Holdings: <span style="color:var(--text);">${p.holdings_override}</span></div>
-                <div>Max Qty: <span style="color:var(--text);">${p.max_qty || 2000}</span></div>
+                <div>Epoch: <span style="color:var(--text);">${p.reanchor_epoch || 100}</span></div>
+                <div>Max Levels: <span style="color:var(--text);">${p.max_grid_levels || 2000}</span></div>
                 <div>Poll: <span style="color:var(--text);">${p.poll_interval}s</span></div>
             </div>
         </div>`;
@@ -1502,9 +1545,9 @@ function addPrimary() {
     if (!currentConfig.primaries) currentConfig.primaries = [];
     currentConfig.primaries.push({
         symbol: '', enabled: true, auto_anchor: true, anchor_price: 0,
-        grid_space: 0.01, target: 0.03, total_qty: 10, subset_qty: 1,
-        hedge_ratio: 1, partial_hedge_ratio: 1, holdings_override: 1000,
-        product: 'NRML', poll_interval: 2.0, max_qty: 2000,
+        grid_space: 0.01, target: 0.03, levels_per_side: 10, qty_per_level: 100,
+        hedge_ratio: 1, partial_hedge_ratio: 1, holdings_override: 2000,
+        product: 'NRML', poll_interval: 2.0, reanchor_epoch: 100, max_grid_levels: 2000,
     });
     editPrimary(currentConfig.primaries.length - 1);
 }
@@ -1525,12 +1568,13 @@ function editPrimary(idx) {
     document.getElementById('m-product').value = p.product || 'NRML';
     document.getElementById('m-grid-space').value = p.grid_space || 0.01;
     document.getElementById('m-target').value = p.target || 0.03;
-    document.getElementById('m-total-qty').value = p.total_qty || 10;
-    document.getElementById('m-subset-qty').value = p.subset_qty || 1;
+    document.getElementById('m-levels-per-side').value = p.levels_per_side || 10;
+    document.getElementById('m-qty-per-level').value = p.qty_per_level || 100;
     document.getElementById('m-hedge-ratio').value = p.hedge_ratio || 0;
     document.getElementById('m-partial-hedge-ratio').value = p.partial_hedge_ratio || 0;
     document.getElementById('m-holdings').value = p.holdings_override != null ? p.holdings_override : -1;
-    document.getElementById('m-max-qty').value = p.max_qty != null ? p.max_qty : 2000;
+    document.getElementById('m-reanchor-epoch').value = p.reanchor_epoch != null ? p.reanchor_epoch : 100;
+    document.getElementById('m-max-grid-levels').value = p.max_grid_levels != null ? p.max_grid_levels : 2000;
     document.getElementById('m-poll').value = p.poll_interval || 2.0;
     document.getElementById('m-anchor').value = p.anchor_price || 0;
     document.getElementById('m-auto-anchor').checked = p.auto_anchor !== false;
@@ -1549,12 +1593,13 @@ function saveModal() {
     p.product = document.getElementById('m-product').value;
     p.grid_space = parseFloat(document.getElementById('m-grid-space').value);
     p.target = parseFloat(document.getElementById('m-target').value);
-    p.total_qty = parseInt(document.getElementById('m-total-qty').value);
-    p.subset_qty = parseInt(document.getElementById('m-subset-qty').value);
+    p.levels_per_side = parseInt(document.getElementById('m-levels-per-side').value);
+    p.qty_per_level = parseInt(document.getElementById('m-qty-per-level').value);
     p.hedge_ratio = parseInt(document.getElementById('m-hedge-ratio').value);
     p.partial_hedge_ratio = parseInt(document.getElementById('m-partial-hedge-ratio').value);
     p.holdings_override = parseInt(document.getElementById('m-holdings').value);
-    p.max_qty = parseInt(document.getElementById('m-max-qty').value);
+    p.reanchor_epoch = parseInt(document.getElementById('m-reanchor-epoch').value);
+    p.max_grid_levels = parseInt(document.getElementById('m-max-grid-levels').value);
     p.poll_interval = parseFloat(document.getElementById('m-poll').value);
     p.anchor_price = parseFloat(document.getElementById('m-anchor').value);
     p.auto_anchor = document.getElementById('m-auto-anchor').checked;

@@ -9,7 +9,7 @@ Usage:
     # Custom grid parameters
     python -m TG.run --symbol IRFC --anchor 50.25 \\
         --grid-space 0.05 --target 0.10 \\
-        --total-qty 1000 --subset-qty 300
+        --levels-per-side 10 --qty-per-level 100
 
     # Dry run (print grid layout without trading)
     python -m TG.run --symbol IRFC --anchor 50.25 --dry-run
@@ -86,10 +86,14 @@ def parse_args():
                         help='Base grid spacing in INR (default: 0.01 = 1 paisa)')
     parser.add_argument('--target', type=float, default=0.02,
                         help='Base target offset in INR (default: 0.02 = 2 paisa)')
-    parser.add_argument('--total-qty', type=int, default=1000,
-                        help='Total position size (default: 1000)')
-    parser.add_argument('--subset-qty', type=int, default=300,
-                        help='Quantity per grid subset (default: 300)')
+    parser.add_argument('--levels-per-side', type=int, default=10,
+                        help='Grid levels on each side before reanchor (default: 10)')
+    parser.add_argument('--qty-per-level', type=int, default=100,
+                        help='Shares per grid level order (default: 100)')
+    parser.add_argument('--reanchor-epoch', type=int, default=100,
+                        help='Reanchors before spacing increases (default: 100)')
+    parser.add_argument('--max-grid-levels', type=int, default=2000,
+                        help='Stop bot after N grid levels on one side (default: 2000)')
 
     # Pair trading
     parser.add_argument('--pair-symbol', default='',
@@ -124,8 +128,6 @@ def parse_args():
                         help='Disable auto re-entry after target fill')
     parser.add_argument('--no-reanchor', action='store_true',
                         help='Disable auto re-anchoring on grid exhaustion')
-    parser.add_argument('--max-qty', type=int, default=2000,
-                        help='Max net position across re-anchors (default: 2000)')
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='Logging level (default: INFO)')
@@ -175,8 +177,10 @@ def main():
         anchor_price=anchor_price,
         base_grid_space=args.grid_space,
         base_target=args.target,
-        total_qty=args.total_qty,
-        subset_qty=args.subset_qty,
+        levels_per_side=args.levels_per_side,
+        qty_per_level=args.qty_per_level,
+        reanchor_epoch=args.reanchor_epoch,
+        max_grid_levels=args.max_grid_levels,
         pair_symbol=args.pair_symbol,
         hedge_ratio=args.hedge_ratio,
         partial_hedge_ratio=args.partial_hedge_ratio,
@@ -189,17 +193,14 @@ def main():
         holdings_override=args.holdings,
         auto_reenter=not args.no_reenter,
         auto_reanchor=not args.no_reanchor,
-        max_qty=args.max_qty,
         poll_interval=args.poll_interval,
     )
 
     # Dry run: just print the grid and exit
     if args.dry_run:
         config.print_grid_layout()
-        subsets = config.compute_subsets()
-        print(f"  Grid has {len(subsets)} subsets.")
-        print(f"  All buy targets converge to {anchor_price + config.base_grid_space:.2f}")
-        print(f"  All sell targets converge to {anchor_price - config.base_grid_space:.2f}")
+        print(f"  Grid has {config.levels_per_side} levels per side, {config.qty_per_level} qty each.")
+        print(f"  Reanchor epoch: {config.reanchor_epoch} | Max grid levels: {config.max_grid_levels}")
         print(f"\n  This is a dry run. No orders placed.")
         return
 

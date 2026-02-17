@@ -2,11 +2,10 @@
 Grid Level Calculator
 
 Computes entry and target prices for each grid level on both
-buy and sell sides, incorporating the geometric doubling of
-spacing and target per subset.
+buy and sell sides with uniform spacing.
 
-Key property: all buy targets converge to anchor + base_space,
-all sell targets converge to anchor - base_space.
+Supports dynamic spacing via grid_space parameter for
+epoch-based reanchor (spacing increases every N reanchors).
 """
 
 from dataclasses import dataclass
@@ -23,7 +22,7 @@ class GridLevel:
     entry_price: float
     target_price: float
     qty: int
-    grid_space: float   # spacing for this subset
+    grid_space: float   # spacing for this level
     target_offset: float  # target distance from entry
 
 
@@ -32,24 +31,26 @@ class GridCalculator:
     Computes grid levels for buy and sell sides.
 
     Buy levels are placed below anchor, sell levels above.
-    Spacing and target double with each successive subset.
+    Uniform spacing within each computation; spacing can vary
+    between buy and sell sides via the grid_space parameter.
     """
 
     def __init__(self, config: GridConfig):
         self.config = config
-        self.subsets = config.compute_subsets()
 
-    def compute_buy_levels(self) -> List[GridLevel]:
+    def compute_buy_levels(self, grid_space: float = None) -> List[GridLevel]:
         """
         Compute buy entry levels below anchor price.
 
-        Level i entry = anchor - cumulative_distance[i]
-        Level i target = entry + target_offset[i]
+        Level i entry = anchor - grid_space * (i + 1)
+        Level i target = entry + base_target
 
-        All targets converge to anchor + base_grid_space.
+        Args:
+            grid_space: Override spacing for buy side. Defaults to base_grid_space.
         """
+        subsets = self.config.compute_subsets(grid_space=grid_space)
         levels = []
-        for s in self.subsets:
+        for s in subsets:
             entry = round(self.config.anchor_price - s.distance_from_anchor, 2)
             target = round(entry + s.target, 2)
             levels.append(GridLevel(
@@ -63,17 +64,19 @@ class GridCalculator:
             ))
         return levels
 
-    def compute_sell_levels(self) -> List[GridLevel]:
+    def compute_sell_levels(self, grid_space: float = None) -> List[GridLevel]:
         """
         Compute sell entry levels above anchor price.
 
-        Level i entry = anchor + cumulative_distance[i]
-        Level i target = entry - target_offset[i]
+        Level i entry = anchor + grid_space * (i + 1)
+        Level i target = entry - base_target
 
-        All targets converge to anchor - base_grid_space.
+        Args:
+            grid_space: Override spacing for sell side. Defaults to base_grid_space.
         """
+        subsets = self.config.compute_subsets(grid_space=grid_space)
         levels = []
-        for s in self.subsets:
+        for s in subsets:
             entry = round(self.config.anchor_price + s.distance_from_anchor, 2)
             target = round(entry - s.target, 2)
             levels.append(GridLevel(

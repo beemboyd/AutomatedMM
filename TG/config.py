@@ -25,23 +25,18 @@ _DEFAULT_XTS_ROOT = 'https://xts.myfindoc.com'
 @dataclass
 class SubsetConfig:
     """
-    Configuration for a single grid subset/band.
+    Configuration for a single grid level.
 
-    Each successive subset has a linearly increasing gap and target,
-    creating a triangular grid that covers wider price range at deeper levels.
-
+    Uniform spacing: all levels have the same grid_space and target.
     Level i (0-indexed):
-      gap       = base_grid_space * (i + 1)
-      distance  = base_grid_space * (i+1)(i+2)/2   (triangular sum)
-      target    = base_target * (i + 1)
+      distance  = grid_space * (i + 1)
+      target    = base_target (constant)
 
-    Example with base_grid_space=0.01, base_target=0.03:
-      Subset 0:  space=0.01, target=0.03, distance=0.01,  qty=100
-      Subset 1:  space=0.02, target=0.06, distance=0.03,  qty=100
-      Subset 2:  space=0.03, target=0.09, distance=0.06,  qty=100
-      Subset 3:  space=0.04, target=0.12, distance=0.10,  qty=100
+    Example with grid_space=0.01, base_target=0.03, levels_per_side=10:
+      Level 0:  space=0.01, target=0.03, distance=0.01,  qty=100
+      Level 1:  space=0.01, target=0.03, distance=0.02,  qty=100
       ...
-      Subset 19: space=0.20, target=0.60, distance=2.10,  qty=100
+      Level 9:  space=0.01, target=0.03, distance=0.10,  qty=100
     """
     index: int
     qty: int
@@ -55,23 +50,26 @@ class GridConfig:
     """
     Main grid trading configuration.
 
-    Grid mechanics:
+    Grid mechanics (epoch-based reanchor):
     - Anchor price P0 is the center of the grid
     - Buy levels are placed below P0, sell levels above
-    - Total position is split into subsets of subset_qty shares
-    - Each successive subset has linearly increasing gap and target
-    - Level i: gap = base_grid_space*(i+1), target = base_target*(i+1)
-    - Distance from anchor = base_grid_space * (i+1)(i+2)/2 (triangular sum)
-    - Grid covers much wider range than uniform spacing
+    - levels_per_side uniform levels on each side, qty_per_level shares each
+    - When all levels on one side exhaust → reanchor to last filled price
+    - Every reanchor_epoch reanchors, spacing increases by base_grid_space
+    - Stop bot after max_grid_levels reanchors on one side
     """
     symbol: str
     anchor_price: float
 
     # Grid parameters
-    base_grid_space: float = 0.01   # 1 paisa
-    base_target: float = 0.02       # 2 paisa
-    total_qty: int = 1000
-    subset_qty: int = 300
+    base_grid_space: float = 0.01   # 1 paisa base spacing
+    base_target: float = 0.02       # 2 paisa target
+    levels_per_side: int = 10       # grid levels on each side before reanchor
+    qty_per_level: int = 100        # shares per grid level order
+
+    # Epoch-based reanchor parameters
+    reanchor_epoch: int = 100       # reanchors before spacing increases
+    max_grid_levels: int = 2000     # stop bot after N reanchors on one side
 
     # Broker parameters
     exchange: str = "NSE"
@@ -88,7 +86,6 @@ class GridConfig:
     # Operational parameters
     auto_reenter: bool = True       # re-place entry after target fills
     auto_reanchor: bool = True      # re-anchor grid when all levels exhausted
-    max_qty: int = 2000             # max net position across re-anchors
     poll_interval: float = 2.0      # seconds between order status polls
 
     # XTS Interactive credentials (order placement)
@@ -106,35 +103,28 @@ class GridConfig:
         """True if pair trading is configured."""
         return bool(self.pair_symbol and self.hedge_ratio > 0)
 
-    def compute_subsets(self) -> List[SubsetConfig]:
+    def compute_subsets(self, grid_space: float = None) -> List[SubsetConfig]:
         """
-        Compute grid subsets with increasing gaps.
+        Compute grid subsets with uniform spacing.
 
-        Level i (0-indexed) has:
-        - gap      = base_grid_space * (i + 1)
-        - distance = base_grid_space * (i+1)(i+2)/2  (triangular sum)
-        - target   = base_target * (i + 1)
+        All levels have the same spacing and target.
+        Level i (0-indexed): distance = grid_space * (i + 1)
 
-        Returns list of SubsetConfig, one per grid level.
-        Qty allocation: subset_qty per level, remainder in final level.
+        Args:
+            grid_space: Override spacing (used during reanchor with increased spacing).
+                        Defaults to base_grid_space.
         """
+        space = grid_space or self.base_grid_space
         subsets = []
-        remaining = self.total_qty
-        i = 0
-        while remaining > 0:
-            qty = min(self.subset_qty, remaining)
-            gap = self.base_grid_space * (i + 1)
-            distance = round(self.base_grid_space * (i + 1) * (i + 2) / 2, 10)
-            target = round(self.base_target * (i + 1), 10)
+        for i in range(self.levels_per_side):
+            distance = round(space * (i + 1), 10)
             subsets.append(SubsetConfig(
                 index=i,
-                qty=qty,
-                grid_space=gap,
-                target=target,
+                qty=self.qty_per_level,
+                grid_space=space,
+                target=self.base_target,
                 distance_from_anchor=distance,
             ))
-            remaining -= qty
-            i += 1
         return subsets
 
     @classmethod
@@ -166,18 +156,25 @@ class GridConfig:
             **overrides,
         )
 
-    def print_grid_layout(self):
+    def print_grid_layout(self, buy_spacing: float = None, sell_spacing: float = None):
         """Print the grid layout for visual verification before trading."""
-        subsets = self.compute_subsets()
+        buy_space = buy_spacing or self.base_grid_space
+        sell_space = sell_spacing or self.base_grid_space
+        buy_subsets = self.compute_subsets(grid_space=buy_space)
+        sell_subsets = self.compute_subsets(grid_space=sell_space)
+        total_qty = self.levels_per_side * self.qty_per_level
         print(f"\n{'='*60}")
         print(f"  GRID CONFIGURATION — {self.symbol}")
         print(f"{'='*60}")
         print(f"  Anchor Price     : {self.anchor_price:.2f}")
         print(f"  Base Grid Space  : {self.base_grid_space} ({self.base_grid_space*100:.0f} paisa)")
         print(f"  Base Target      : {self.base_target} ({self.base_target*100:.0f} paisa)")
-        print(f"  Total Qty        : {self.total_qty}")
-        print(f"  Subset Qty       : {self.subset_qty}")
-        print(f"  Subsets          : {len(subsets)}")
+        print(f"  Levels Per Side  : {self.levels_per_side}")
+        print(f"  Qty Per Level    : {self.qty_per_level}")
+        print(f"  Reanchor Epoch   : {self.reanchor_epoch}")
+        print(f"  Max Grid Levels  : {self.max_grid_levels}")
+        print(f"  Buy Spacing      : {buy_space}")
+        print(f"  Sell Spacing     : {sell_space}")
         print(f"  Product          : {self.product}")
         print(f"  Broker           : XTS + Zerodha (user={self.zerodha_user})")
         print(f"  Auto Re-enter    : {self.auto_reenter}")
@@ -189,25 +186,25 @@ class GridConfig:
         print(f"{'='*60}")
 
         print(f"\n  BUY GRID (Bot A) — entries below anchor")
-        print(f"  {'Subset':<8} {'Entry':>10} {'Target':>10} {'Qty':>6} {'Space':>8} {'TgtOff':>8}")
+        print(f"  {'Level':<8} {'Entry':>10} {'Target':>10} {'Qty':>6} {'Space':>8} {'TgtOff':>8}")
         print(f"  {'-'*52}")
-        for s in subsets:
+        for s in buy_subsets:
             entry = round(self.anchor_price - s.distance_from_anchor, 2)
             target = round(entry + s.target, 2)
             print(f"  {s.index:<8} {entry:>10.2f} {target:>10.2f} {s.qty:>6} {s.grid_space:>8.2f} {s.target:>8.2f}")
 
         print(f"\n  SELL GRID (Bot B) — entries above anchor")
-        print(f"  {'Subset':<8} {'Entry':>10} {'Target':>10} {'Qty':>6} {'Space':>8} {'TgtOff':>8}")
+        print(f"  {'Level':<8} {'Entry':>10} {'Target':>10} {'Qty':>6} {'Space':>8} {'TgtOff':>8}")
         print(f"  {'-'*52}")
-        for s in subsets:
+        for s in sell_subsets:
             entry = round(self.anchor_price + s.distance_from_anchor, 2)
             target = round(entry - s.target, 2)
             print(f"  {s.index:<8} {entry:>10.2f} {target:>10.2f} {s.qty:>6} {s.grid_space:>8.2f} {s.target:>8.2f}")
 
-        print(f"\n  Max buy exposure  : {self.total_qty} shares, "
-              f"deepest at {self.anchor_price - subsets[-1].distance_from_anchor:.2f}")
-        print(f"  Max sell exposure : {self.total_qty} shares, "
-              f"deepest at {self.anchor_price + subsets[-1].distance_from_anchor:.2f}")
+        print(f"\n  Max buy exposure  : {total_qty} shares, "
+              f"deepest at {self.anchor_price - buy_subsets[-1].distance_from_anchor:.2f}")
+        print(f"  Max sell exposure : {total_qty} shares, "
+              f"deepest at {self.anchor_price + sell_subsets[-1].distance_from_anchor:.2f}")
         print(f"  Effective spread  : {2 * self.base_grid_space:.2f} "
               f"({2 * self.base_grid_space * 100:.0f} paisa)")
         print(f"{'='*60}\n")
