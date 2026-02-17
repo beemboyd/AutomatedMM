@@ -348,6 +348,15 @@ def create_app(mode: str = 'monitor') -> Flask:
                 'summary': _compute_summary(state),
                 'running': _is_bot_running(sym),
                 'pid': _get_bot_pid(sym),
+                'config': {
+                    'grid_space': p.get('grid_space', 0.01),
+                    'target': p.get('target', 0.03),
+                    'total_qty': p.get('total_qty', 10),
+                    'subset_qty': p.get('subset_qty', 1),
+                    'hedge_ratio': p.get('hedge_ratio', 0),
+                    'partial_hedge_ratio': p.get('partial_hedge_ratio', 0),
+                    'product': p.get('product', 'NRML'),
+                },
             }
         return jsonify(result)
 
@@ -390,7 +399,7 @@ def create_app(mode: str = 'monitor') -> Flask:
 
 
 def _build_html() -> str:
-    """Build the complete self-contained HTML dashboard."""
+    """Build the complete self-contained HTML monitor dashboard with per-bot tabs."""
     return '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -412,6 +421,7 @@ def _build_html() -> str:
         --blue: #448aff;
         --orange: #ff9100;
         --purple: #b388ff;
+        --cyan: #18ffff;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -421,81 +431,45 @@ def _build_html() -> str:
         font-size: 13px;
     }
     .pulse {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 6px;
-        animation: pulse 2s ease-in-out infinite;
+        display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+        margin-right: 6px; animation: pulse 2s ease-in-out infinite;
     }
     .pulse-green { background: var(--green); }
     .pulse-red { background: var(--red); }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     .pnl-pos { color: var(--green); font-weight: 600; }
     .pnl-neg { color: var(--red); font-weight: 600; }
     .status-badge {
-        display: inline-block;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 600;
+        display: inline-block; padding: 2px 6px; border-radius: 4px;
+        font-size: 10px; font-weight: 600;
     }
     .badge-running { background: rgba(0,200,83,0.15); color: var(--green); }
     .badge-stopped { background: rgba(255,23,68,0.15); color: var(--red); }
     .badge-entry { background: rgba(255,145,0,0.15); color: var(--orange); }
     .badge-target { background: rgba(68,138,255,0.15); color: var(--blue); }
     .badge-closed { background: rgba(0,200,83,0.15); color: var(--green); }
-    input, select {
-        background: #0f1117;
-        border: 1px solid var(--border);
-        color: var(--text);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-family: inherit;
-        font-size: 12px;
-    }
-    input:focus, select:focus { outline: 1px solid var(--blue); }
+    .badge-buy { background: rgba(0,200,83,0.10); color: var(--green); }
+    .badge-sell { background: rgba(255,23,68,0.10); color: var(--red); }
     button {
-        font-family: inherit;
-        font-size: 12px;
-        cursor: pointer;
-        border: none;
-        border-radius: 4px;
-        padding: 6px 12px;
-        font-weight: 600;
+        font-family: inherit; font-size: 12px; cursor: pointer; border: none;
+        border-radius: 4px; padding: 6px 12px; font-weight: 600;
         transition: opacity 0.15s;
     }
     button:hover { opacity: 0.85; }
-    .btn-green { background: var(--green); color: #000; }
-    .btn-red { background: var(--red); color: #fff; }
-    .btn-blue { background: var(--blue); color: #fff; }
-    .btn-dim { background: var(--border); color: var(--text); }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th {
-        text-align: left;
-        padding: 6px 8px;
-        border-bottom: 1px solid var(--border);
-        color: var(--dim);
-        font-weight: 500;
-        font-size: 11px;
-        text-transform: uppercase;
+        text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+        color: var(--dim); font-weight: 500; font-size: 11px; text-transform: uppercase;
     }
-    td {
-        padding: 5px 8px;
-        border-bottom: 1px solid #1e2130;
-    }
+    td { padding: 5px 8px; border-bottom: 1px solid #1e2130; }
     tr:hover td { background: rgba(68,138,255,0.05); }
-    .tab-active {
-        border-bottom: 2px solid var(--blue);
-        color: var(--blue);
+    .tab-btn {
+        background: transparent; color: var(--dim); padding: 8px 12px;
+        border-bottom: 2px solid transparent; border-radius: 0;
     }
+    .tab-btn.active { border-bottom-color: var(--blue); color: var(--blue); }
+    .grid-row-active { background: rgba(68,138,255,0.08); }
+    .grid-row-filled { background: rgba(0,200,83,0.08); }
 </style>
 </head>
 <body class="p-4">
@@ -513,16 +487,15 @@ def _build_html() -> str:
     </div>
 </div>
 
-<!-- TABS -->
-<div class="flex gap-4 mb-4 border-b" style="border-color:var(--border);">
-    <button class="pb-2 px-1 bg-transparent tab-active" style="color:var(--blue);" onclick="switchTab('monitor')" id="tab-monitor">Live Monitor</button>
-    <button class="pb-2 px-1 bg-transparent" style="color:var(--dim);" onclick="switchTab('trades')" id="tab-trades">Trades</button>
+<!-- TABS (dynamically populated) -->
+<div class="flex gap-1 mb-4 border-b overflow-x-auto" style="border-color:var(--border);" id="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('monitor')" id="tab-monitor">Live Monitor</button>
+    <!-- Per-bot tabs inserted dynamically -->
 </div>
 
-<!-- MONITOR TAB -->
+<!-- LIVE MONITOR TAB (aggregate) -->
 <div id="panel-monitor">
-    <!-- Aggregate KPIs -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="agg-kpis">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
             <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Combined PnL</div>
             <div class="text-xl font-bold" id="agg-combined-pnl">—</div>
@@ -545,105 +518,388 @@ def _build_html() -> str:
         </div>
     </div>
 
-    <!-- Per-primary PnL breakdown table -->
     <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
         <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Per-Primary PnL Breakdown</h2>
         <table>
-            <thead>
-                <tr>
-                    <th>Primary</th>
-                    <th>Status</th>
-                    <th>Anchor</th>
-                    <th>1&deg; PnL</th>
-                    <th>2&deg; PnL</th>
-                    <th>Combined</th>
-                    <th>Cycles</th>
-                    <th>Open</th>
-                    <th>Win Rate</th>
-                </tr>
-            </thead>
+            <thead><tr>
+                <th>Primary</th><th>Status</th><th>Anchor</th>
+                <th>1&deg; PnL</th><th>2&deg; PnL</th><th>Combined</th>
+                <th>Cycles</th><th>Open</th><th>Win Rate</th>
+            </tr></thead>
             <tbody id="breakdown-tbody"></tbody>
         </table>
+    </div>
+
+    <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
+        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Cumulative PnL</h2>
+        <div style="height:200px;position:relative;"><canvas id="pnl-chart"></canvas></div>
+    </div>
+</div>
+
+<!-- Per-bot panels are created dynamically -->
+<div id="bot-panels"></div>
+
+<script>
+let currentConfig = {};
+let pnlChart = null;
+let secondarySymbol = '';
+let botStatuses = {};
+let allStatesCache = {};
+let activeTab = 'monitor';
+let knownPrimaries = [];
+
+// --- Helpers ---
+function fmtPnl(v) {
+    if (v == null || isNaN(v)) return '<span style="color:var(--dim);">—</span>';
+    const cls = v >= 0 ? 'pnl-pos' : 'pnl-neg';
+    return '<span class="' + cls + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '</span>';
+}
+function fmtPnlText(v) {
+    if (v == null || isNaN(v)) return '—';
+    return (v >= 0 ? '+' : '') + v.toFixed(2);
+}
+function fmtTime(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}); }
+    catch(e) { return iso; }
+}
+function fmtDateTime(iso) {
+    if (!iso) return '—';
+    try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) + ' ' +
+               d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    } catch(e) { return iso; }
+}
+
+// --- Tab management ---
+function buildTabs(primaries) {
+    const bar = document.getElementById('tab-bar');
+    // Remove old dynamic tabs
+    bar.querySelectorAll('.tab-btn-dynamic').forEach(b => b.remove());
+    // Remove old panels
+    document.getElementById('bot-panels').innerHTML = '';
+
+    primaries.forEach(sym => {
+        // Tab button
+        const btn = document.createElement('button');
+        btn.className = 'tab-btn tab-btn-dynamic';
+        btn.id = 'tab-' + sym;
+        btn.textContent = sym;
+        btn.onclick = () => switchTab(sym);
+        bar.appendChild(btn);
+
+        // Panel
+        const panel = document.createElement('div');
+        panel.id = 'panel-' + sym;
+        panel.style.display = 'none';
+        panel.innerHTML = buildBotPanelHTML(sym);
+        document.getElementById('bot-panels').appendChild(panel);
+    });
+
+    knownPrimaries = primaries;
+}
+
+function switchTab(tab) {
+    activeTab = tab;
+    // Hide all panels
+    document.getElementById('panel-monitor').style.display = 'none';
+    knownPrimaries.forEach(sym => {
+        const p = document.getElementById('panel-' + sym);
+        if (p) p.style.display = 'none';
+    });
+    // Show selected
+    const target = document.getElementById('panel-' + tab);
+    if (target) target.style.display = 'block';
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.id === 'tab-' + tab);
+    });
+
+    // Refresh per-bot panel data if it's a bot tab
+    if (tab !== 'monitor' && allStatesCache[tab]) {
+        renderBotPanel(tab, allStatesCache[tab]);
+    }
+}
+
+function buildBotPanelHTML(sym) {
+    return `
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Status</div>
+            <div class="text-base font-bold" id="${sym}-status">—</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Anchor</div>
+            <div class="text-base font-bold" style="color:var(--blue);" id="${sym}-anchor">—</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Combined PnL</div>
+            <div class="text-base font-bold" id="${sym}-combined">—</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Cycles</div>
+            <div class="text-base font-bold" style="color:var(--blue);" id="${sym}-cycles">—</div>
+        </div>
+        <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Open / Win Rate</div>
+            <div class="text-base font-bold" id="${sym}-open-wr">—</div>
+        </div>
+    </div>
+
+    <!-- Grid Levels -->
+    <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
+        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Grid Levels</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <h3 class="text-xs font-semibold mb-2" style="color:var(--green);">BUY GRID (Bot A) — entries below anchor</h3>
+                <table>
+                    <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Qty</th><th>Status</th></tr></thead>
+                    <tbody id="${sym}-buy-grid"></tbody>
+                </table>
+            </div>
+            <div>
+                <h3 class="text-xs font-semibold mb-2" style="color:var(--red);">SELL GRID (Bot B) — entries above anchor</h3>
+                <table>
+                    <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Qty</th><th>Status</th></tr></thead>
+                    <tbody id="${sym}-sell-grid"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- Open Positions -->
     <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
         <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Open Positions</h2>
         <table>
-            <thead>
-                <tr>
-                    <th>Primary</th>
-                    <th>Group</th>
-                    <th>Bot</th>
-                    <th>Level</th>
-                    <th>Side</th>
-                    <th>Entry</th>
-                    <th>Target</th>
-                    <th>Qty</th>
-                    <th>Hedged</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="open-tbody"></tbody>
+            <thead><tr>
+                <th>Group</th><th>Bot</th><th>Level</th><th>Side</th>
+                <th>Entry</th><th>Fill @</th><th>Target</th><th>Qty</th>
+                <th>Hedged</th><th>Status</th>
+            </tr></thead>
+            <tbody id="${sym}-open-tbody"></tbody>
         </table>
-        <div class="text-center py-4" style="color:var(--dim);font-style:italic;display:none;" id="open-empty">No open positions</div>
+        <div class="text-center py-3" style="color:var(--dim);font-style:italic;display:none;" id="${sym}-open-empty">No open positions</div>
     </div>
 
-    <!-- PnL Chart -->
+    <!-- Recent Transactions -->
     <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
-        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Cumulative PnL</h2>
-        <div style="height:200px;position:relative;">
-            <canvas id="pnl-chart"></canvas>
-        </div>
-    </div>
-</div>
-
-<!-- TRADES TAB -->
-<div id="panel-trades" style="display:none;">
-    <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
-        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Recent History (Last 50)</h2>
+        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Recent Transactions</h2>
         <table>
-            <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Group</th>
-                    <th>Bot</th>
-                    <th>Level</th>
-                    <th>Type</th>
-                    <th>Buy @</th>
-                    <th>Sell @</th>
-                    <th>Qty</th>
-                    <th>PnL</th>
-                    <th>Time</th>
-                </tr>
-            </thead>
-            <tbody id="closed-tbody"></tbody>
+            <thead><tr>
+                <th>Group</th><th>Bot</th><th>Level</th><th>Type</th>
+                <th>Buy @</th><th>Sell @</th><th>Qty</th><th>PnL</th><th>Time</th>
+            </tr></thead>
+            <tbody id="${sym}-closed-tbody"></tbody>
         </table>
-        <div class="text-center py-4" style="color:var(--dim);font-style:italic;display:none;" id="closed-empty">No completed trades yet</div>
-    </div>
-</div>
-
-<script>
-let currentConfig = {};
-let pnlChart = null;
-let secondarySymbol = '';
-
-// --- Tab switching ---
-function switchTab(tab) {
-    ['monitor','trades'].forEach(t => {
-        document.getElementById('panel-' + t).style.display = (t === tab) ? 'block' : 'none';
-        const btn = document.getElementById('tab-' + t);
-        if (t === tab) {
-            btn.classList.add('tab-active');
-            btn.style.color = 'var(--blue)';
-        } else {
-            btn.classList.remove('tab-active');
-            btn.style.color = 'var(--dim)';
-        }
-    });
+        <div class="text-center py-3" style="color:var(--dim);font-style:italic;display:none;" id="${sym}-closed-empty">No completed trades yet</div>
+    </div>`;
 }
 
-// --- Config load (for header info) ---
+// --- Compute grid levels client-side ---
+function computeGridLevels(anchor, gridSpace, target, totalQty, subsetQty) {
+    if (!anchor || anchor <= 0) return { buy: [], sell: [] };
+    const buyLevels = [], sellLevels = [];
+    let remaining = totalQty;
+    let i = 0;
+    while (remaining > 0) {
+        const qty = Math.min(subsetQty, remaining);
+        const dist = gridSpace * (i + 1);
+        buyLevels.push({
+            index: i,
+            entry: Math.round((anchor - dist) * 100) / 100,
+            target: Math.round((anchor - dist + target) * 100) / 100,
+            qty: qty,
+        });
+        sellLevels.push({
+            index: i,
+            entry: Math.round((anchor + dist) * 100) / 100,
+            target: Math.round((anchor + dist - target) * 100) / 100,
+            qty: qty,
+        });
+        remaining -= qty;
+        i++;
+    }
+    return { buy: buyLevels, sell: sellLevels };
+}
+
+// --- Render per-bot panel ---
+function renderBotPanel(sym, data) {
+    const s = data.summary || {};
+    const state = data.state || {};
+    const running = data.running;
+    const cfg = data.config || {};
+    const anchor = s.anchor_price || state.anchor_price || 0;
+
+    // KPIs
+    const statusEl = document.getElementById(sym + '-status');
+    if (statusEl) {
+        statusEl.innerHTML = running
+            ? '<span class="status-badge badge-running" style="font-size:13px;">Running</span>'
+            : '<span class="status-badge badge-stopped" style="font-size:13px;">Stopped</span>';
+    }
+    const anchorEl = document.getElementById(sym + '-anchor');
+    if (anchorEl) anchorEl.textContent = anchor > 0 ? anchor.toFixed(2) : '—';
+    const combEl = document.getElementById(sym + '-combined');
+    if (combEl) {
+        const comb = s.combined_pnl || 0;
+        combEl.textContent = fmtPnlText(comb);
+        combEl.className = 'text-base font-bold ' + (comb >= 0 ? 'pnl-pos' : 'pnl-neg');
+    }
+    const cycEl = document.getElementById(sym + '-cycles');
+    if (cycEl) cycEl.textContent = s.total_cycles || 0;
+    const owrEl = document.getElementById(sym + '-open-wr');
+    if (owrEl) owrEl.textContent = (s.open_groups || 0) + ' / ' + (s.win_rate || 0).toFixed(1) + '%';
+
+    // Grid levels
+    const gridSpace = cfg.grid_space || 0.01;
+    const targetOff = cfg.target || 0.03;
+    const totalQty = cfg.total_qty || 10;
+    const subsetQty = cfg.subset_qty || 1;
+    const grid = computeGridLevels(anchor, gridSpace, targetOff, totalQty, subsetQty);
+
+    // Build index→status map from open groups
+    const og = state.open_groups || {};
+    const groupByLevel = {};
+    Object.values(og).forEach(g => {
+        const key = g.bot + ':' + g.subset_index;
+        groupByLevel[key] = g;
+    });
+
+    // Buy grid
+    const buyGridEl = document.getElementById(sym + '-buy-grid');
+    if (buyGridEl) {
+        buyGridEl.innerHTML = grid.buy.map(lv => {
+            const g = groupByLevel['A:' + lv.index];
+            let statusHTML = '<span style="color:var(--dim);">Free</span>';
+            let rowClass = '';
+            if (g) {
+                if (g.status === 'ENTRY_PENDING') {
+                    statusHTML = '<span class="status-badge badge-entry">ENTRY PENDING</span>';
+                    rowClass = 'grid-row-active';
+                } else if (g.status === 'TARGET_PENDING') {
+                    statusHTML = '<span class="status-badge badge-target">FILLED → TARGET</span>';
+                    rowClass = 'grid-row-filled';
+                }
+            }
+            return '<tr class="' + rowClass + '">' +
+                '<td>L' + lv.index + '</td>' +
+                '<td>' + lv.entry.toFixed(2) + '</td>' +
+                '<td>' + lv.target.toFixed(2) + '</td>' +
+                '<td>' + lv.qty + '</td>' +
+                '<td>' + statusHTML + '</td></tr>';
+        }).join('');
+    }
+
+    // Sell grid
+    const sellGridEl = document.getElementById(sym + '-sell-grid');
+    if (sellGridEl) {
+        sellGridEl.innerHTML = grid.sell.map(lv => {
+            const g = groupByLevel['B:' + lv.index];
+            let statusHTML = '<span style="color:var(--dim);">Free</span>';
+            let rowClass = '';
+            if (g) {
+                if (g.status === 'ENTRY_PENDING') {
+                    statusHTML = '<span class="status-badge badge-entry">ENTRY PENDING</span>';
+                    rowClass = 'grid-row-active';
+                } else if (g.status === 'TARGET_PENDING') {
+                    statusHTML = '<span class="status-badge badge-target">FILLED → TARGET</span>';
+                    rowClass = 'grid-row-filled';
+                }
+            }
+            return '<tr class="' + rowClass + '">' +
+                '<td>L' + lv.index + '</td>' +
+                '<td>' + lv.entry.toFixed(2) + '</td>' +
+                '<td>' + lv.target.toFixed(2) + '</td>' +
+                '<td>' + lv.qty + '</td>' +
+                '<td>' + statusHTML + '</td></tr>';
+        }).join('');
+    }
+
+    // Open positions
+    const openTbody = document.getElementById(sym + '-open-tbody');
+    const openEmpty = document.getElementById(sym + '-open-empty');
+    const openGroups = Object.values(og).sort((a,b) => a.subset_index - b.subset_index);
+    if (openTbody) {
+        if (openGroups.length === 0) {
+            openTbody.innerHTML = '';
+            if (openEmpty) openEmpty.style.display = 'block';
+        } else {
+            if (openEmpty) openEmpty.style.display = 'none';
+            openTbody.innerHTML = openGroups.map(g => {
+                const statusCls = g.status === 'ENTRY_PENDING' ? 'badge-entry' : 'badge-target';
+                return '<tr>' +
+                    '<td>' + g.group_id + '</td>' +
+                    '<td>' + (g.bot === 'A' ? '<span class="status-badge badge-buy">A (Buy)</span>' : '<span class="status-badge badge-sell">B (Sell)</span>') + '</td>' +
+                    '<td>L' + g.subset_index + '</td>' +
+                    '<td>' + g.entry_side + '</td>' +
+                    '<td>' + g.entry_price.toFixed(2) + '</td>' +
+                    '<td>' + (g.entry_fill_price ? g.entry_fill_price.toFixed(2) : '—') + '</td>' +
+                    '<td>' + g.target_price.toFixed(2) + '</td>' +
+                    '<td>' + g.qty + '</td>' +
+                    '<td>' + (g.pair_hedged_qty || 0) + '</td>' +
+                    '<td><span class="status-badge ' + statusCls + '">' + g.status.replace('_',' ') + '</span></td></tr>';
+            }).join('');
+        }
+    }
+
+    // Closed trades
+    const closedTbody = document.getElementById(sym + '-closed-tbody');
+    const closedEmpty = document.getElementById(sym + '-closed-empty');
+    let closed = (state.closed_groups || []).slice().sort((a,b) => (b.closed_at || '').localeCompare(a.closed_at || '')).slice(0, 30);
+    if (closedTbody) {
+        if (closed.length === 0) {
+            closedTbody.innerHTML = '';
+            if (closedEmpty) closedEmpty.style.display = 'block';
+        } else {
+            if (closedEmpty) closedEmpty.style.display = 'none';
+            const rows = [];
+            closed.forEach(g => {
+                const botLabel = g.bot === 'A' ? 'A' : 'B';
+                const isBuy = g.entry_side === 'BUY';
+                const buyP = isBuy ? (g.entry_fill_price || g.entry_price) : (g.target_fill_price || g.target_price);
+                const sellP = isBuy ? (g.target_fill_price || g.target_price) : (g.entry_fill_price || g.entry_price);
+                const status = g.status || 'CLOSED';
+                const typeLabel = status === 'CANCELLED'
+                    ? '<span class="status-badge badge-entry">CANCELLED</span>'
+                    : '<span class="status-badge badge-closed">CYCLE</span>';
+                rows.push('<tr>' +
+                    '<td>' + g.group_id + '</td>' +
+                    '<td>' + botLabel + '</td>' +
+                    '<td>L' + g.subset_index + '</td>' +
+                    '<td>' + typeLabel + '</td>' +
+                    '<td>' + (buyP ? buyP.toFixed(2) : '—') + '</td>' +
+                    '<td>' + (sellP ? sellP.toFixed(2) : '—') + '</td>' +
+                    '<td>' + g.qty + '</td>' +
+                    '<td>' + fmtPnl(g.realized_pnl) + '</td>' +
+                    '<td>' + fmtTime(g.closed_at) + '</td></tr>');
+                // Hedge sub-row
+                const hedgePrice = g.pair_hedge_price || (g.pair_hedged_qty > 0 ? g.pair_hedge_vwap : null);
+                const unwindPrice = g.pair_unwind_price || (g.pair_unwound_qty > 0 ? g.pair_unwind_vwap : null);
+                const hedgeQty = g.pair_hedged_qty || (g.pair_hedge_price ? g.qty : 0);
+                if (hedgePrice) {
+                    const hBuy = isBuy ? unwindPrice : hedgePrice;
+                    const hSell = isBuy ? hedgePrice : unwindPrice;
+                    rows.push('<tr style="background:rgba(179,136,255,0.04);">' +
+                        '<td style="color:var(--purple);padding-left:16px;">&#8627; ' + secondarySymbol + '</td>' +
+                        '<td style="color:var(--dim);">' + botLabel + '</td>' +
+                        '<td style="color:var(--dim);">L' + g.subset_index + '</td>' +
+                        '<td><span class="status-badge" style="background:rgba(179,136,255,0.15);color:var(--purple);">HEDGE</span></td>' +
+                        '<td>' + (hBuy ? hBuy.toFixed(2) : '—') + '</td>' +
+                        '<td>' + (hSell ? hSell.toFixed(2) : '—') + '</td>' +
+                        '<td>' + hedgeQty + '</td>' +
+                        '<td>' + fmtPnl(g.pair_pnl) + '</td>' +
+                        '<td style="color:var(--dim);">' + fmtTime(g.closed_at) + '</td></tr>');
+                }
+            });
+            closedTbody.innerHTML = rows.join('');
+        }
+    }
+}
+
+// --- Config load ---
 function loadConfig() {
     fetch('/api/config')
         .then(r => r.json())
@@ -651,26 +907,17 @@ function loadConfig() {
             currentConfig = cfg;
             secondarySymbol = cfg.secondary_symbol || 'SPCENET';
             document.getElementById('hdr-secondary').textContent = 'Secondary: ' + secondarySymbol;
-        })
-        .catch(e => console.error('Load config error:', e));
-}
-
-// --- Bot control ---
-let botStatuses = {};
-
-function updateProcesses() {
-    fetch('/api/processes')
-        .then(r => r.json())
-        .then(procs => {
-            botStatuses = {};
-            for (const [sym, info] of Object.entries(procs)) {
-                botStatuses[sym] = info.running;
+            const primaries = (cfg.primaries || []).map(p => p.symbol).filter(Boolean);
+            if (JSON.stringify(primaries) !== JSON.stringify(knownPrimaries)) {
+                buildTabs(primaries);
+                // Restore active tab
+                if (primaries.includes(activeTab)) switchTab(activeTab);
             }
-            updateStatusIndicator();
         })
-        .catch(e => {});
+        .catch(e => console.error('Config error:', e));
 }
 
+// --- Status indicator ---
 function updateStatusIndicator() {
     const running = Object.values(botStatuses).some(v => v);
     const pulse = document.getElementById('status-pulse');
@@ -683,43 +930,24 @@ function updateStatusIndicator() {
         pulse.className = 'pulse pulse-red';
         text.textContent = 'All stopped';
     }
-    document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('en-IN',
+        {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 }
 
-// --- Monitor update ---
-function fmtPnl(v) {
-    if (v == null || isNaN(v)) return '<span style="color:var(--dim);">—</span>';
-    const cls = v >= 0 ? 'pnl-pos' : 'pnl-neg';
-    return '<span class="' + cls + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '</span>';
-}
-
-function fmtPnlText(v) {
-    if (v == null || isNaN(v)) return '—';
-    return (v >= 0 ? '+' : '') + v.toFixed(2);
-}
-
-function fmtTime(iso) {
-    if (!iso) return '—';
-    try {
-        const d = new Date(iso);
-        return d.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-    } catch(e) { return iso; }
-}
-
+// --- Main update ---
 function updateMonitor() {
     fetch('/api/state')
         .then(r => r.json())
         .then(allStates => {
+            allStatesCache = allStates;
             let aggPrimary = 0, aggPair = 0, aggCycles = 0, aggOpen = 0;
             const breakdownRows = [];
-            const openRows = [];
             let allClosed = [];
 
             for (const [sym, data] of Object.entries(allStates)) {
                 const s = data.summary || {};
                 const state = data.state || {};
                 const running = data.running;
-
                 botStatuses[sym] = running;
 
                 const primaryPnl = s.total_pnl || 0;
@@ -737,8 +965,7 @@ function updateMonitor() {
                 const statusBadge = running
                     ? '<span class="status-badge badge-running">Running</span>'
                     : '<span class="status-badge badge-stopped">Stopped</span>';
-
-                breakdownRows.push('<tr>' +
+                breakdownRows.push('<tr style="cursor:pointer;" onclick="switchTab(\\'' + sym + '\\')">' +
                     '<td class="font-bold">' + sym + '</td>' +
                     '<td>' + statusBadge + '</td>' +
                     '<td>' + (s.anchor_price || 0).toFixed(2) + '</td>' +
@@ -747,32 +974,12 @@ function updateMonitor() {
                     '<td>' + fmtPnl(combined) + '</td>' +
                     '<td>' + cycles + '</td>' +
                     '<td>' + open + '</td>' +
-                    '<td>' + winRate.toFixed(1) + '%</td>' +
-                    '</tr>');
+                    '<td>' + winRate.toFixed(1) + '%</td></tr>');
 
-                // Open positions
-                const og = state.open_groups || {};
-                Object.values(og).sort((a,b) => a.subset_index - b.subset_index).forEach(g => {
-                    const statusCls = g.status === 'ENTRY_PENDING' ? 'badge-entry' : 'badge-target';
-                    openRows.push('<tr>' +
-                        '<td class="font-bold">' + sym + '</td>' +
-                        '<td>' + g.group_id + '</td>' +
-                        '<td>' + (g.bot === 'A' ? 'A (Buy)' : 'B (Sell)') + '</td>' +
-                        '<td>L' + g.subset_index + '</td>' +
-                        '<td>' + g.entry_side + '</td>' +
-                        '<td>' + (g.entry_fill_price || g.entry_price).toFixed(2) + '</td>' +
-                        '<td>' + g.target_price.toFixed(2) + '</td>' +
-                        '<td>' + g.qty + '</td>' +
-                        '<td>' + (g.pair_hedged_qty || 0) + '</td>' +
-                        '<td><span class="status-badge ' + statusCls + '">' + g.status.replace('_',' ') + '</span></td>' +
-                        '</tr>');
-                });
+                (state.closed_groups || []).forEach(g => { g._primary = sym; allClosed.push(g); });
 
-                // Closed trades
-                (state.closed_groups || []).forEach(g => {
-                    g._primary = sym;
-                    allClosed.push(g);
-                });
+                // Update per-bot panel if visible
+                if (activeTab === sym) renderBotPanel(sym, data);
             }
 
             // Aggregate KPIs
@@ -780,114 +987,28 @@ function updateMonitor() {
             const combEl = document.getElementById('agg-combined-pnl');
             combEl.textContent = fmtPnlText(aggCombined);
             combEl.className = 'text-xl font-bold ' + (aggCombined >= 0 ? 'pnl-pos' : 'pnl-neg');
-
             const primEl = document.getElementById('agg-primary-pnl');
             primEl.textContent = fmtPnlText(aggPrimary);
             primEl.className = 'text-xl font-bold ' + (aggPrimary >= 0 ? 'pnl-pos' : 'pnl-neg');
-
             const pairEl = document.getElementById('agg-pair-pnl');
             pairEl.textContent = fmtPnlText(aggPair);
             pairEl.className = 'text-xl font-bold ' + (aggPair >= 0 ? 'pnl-pos' : 'pnl-neg');
-
             document.getElementById('agg-cycles').textContent = aggCycles;
             document.getElementById('agg-open').textContent = aggOpen;
 
-            // Totals row
             breakdownRows.push('<tr style="border-top:2px solid var(--border);font-weight:bold;">' +
                 '<td>TOTAL</td><td></td><td></td>' +
-                '<td>' + fmtPnl(aggPrimary) + '</td>' +
-                '<td>' + fmtPnl(aggPair) + '</td>' +
-                '<td>' + fmtPnl(aggCombined) + '</td>' +
-                '<td>' + aggCycles + '</td>' +
-                '<td>' + aggOpen + '</td>' +
-                '<td></td></tr>');
-
+                '<td>' + fmtPnl(aggPrimary) + '</td><td>' + fmtPnl(aggPair) + '</td>' +
+                '<td>' + fmtPnl(aggCombined) + '</td><td>' + aggCycles + '</td>' +
+                '<td>' + aggOpen + '</td><td></td></tr>');
             document.getElementById('breakdown-tbody').innerHTML = breakdownRows.join('');
 
-            // Open positions
-            const openTbody = document.getElementById('open-tbody');
-            const openEmpty = document.getElementById('open-empty');
-            if (openRows.length === 0) {
-                openTbody.innerHTML = '';
-                openEmpty.style.display = 'block';
-            } else {
-                openEmpty.style.display = 'none';
-                openTbody.innerHTML = openRows.join('');
-            }
-
-            // Closed trades (last 50, sorted by close time)
-            // Build transaction rows: primary cycle + secondary hedge/unwind for each group
-            allClosed.sort((a,b) => (b.closed_at || '').localeCompare(a.closed_at || ''));
-            allClosed = allClosed.slice(0, 50);
-            const closedTbody = document.getElementById('closed-tbody');
-            const closedEmpty = document.getElementById('closed-empty');
-            if (allClosed.length === 0) {
-                closedTbody.innerHTML = '';
-                closedEmpty.style.display = 'block';
-            } else {
-                closedEmpty.style.display = 'none';
-                const rows = [];
-                allClosed.forEach(g => {
-                    const sym = g._primary || '';
-                    const botLabel = g.bot === 'A' ? 'A' : 'B';
-                    const level = 'L' + g.subset_index;
-                    const isBuy = g.entry_side === 'BUY';
-
-                    // Primary cycle row
-                    const buyP = isBuy ? (g.entry_fill_price || g.entry_price) : (g.target_fill_price || g.target_price);
-                    const sellP = isBuy ? (g.target_fill_price || g.target_price) : (g.entry_fill_price || g.entry_price);
-                    const status = g.status || 'CLOSED';
-                    const typeLabel = status === 'CANCELLED' ? '<span class="status-badge badge-entry">CANCELLED</span>' : '<span class="status-badge badge-closed">CYCLE</span>';
-
-                    rows.push('<tr>' +
-                        '<td class="font-bold">' + sym + '</td>' +
-                        '<td>' + g.group_id + '</td>' +
-                        '<td>' + botLabel + '</td>' +
-                        '<td>' + level + '</td>' +
-                        '<td>' + typeLabel + '</td>' +
-                        '<td>' + (buyP ? buyP.toFixed(2) : '—') + '</td>' +
-                        '<td>' + (sellP ? sellP.toFixed(2) : '—') + '</td>' +
-                        '<td>' + g.qty + '</td>' +
-                        '<td>' + fmtPnl(g.realized_pnl) + '</td>' +
-                        '<td>' + fmtTime(g.closed_at) + '</td>' +
-                        '</tr>');
-
-                    // Secondary hedge row (if pair data exists)
-                    // Support both old format (pair_hedge_price) and new format (pair_hedged_qty/pair_hedge_total)
-                    const hedgePrice = g.pair_hedge_price || (g.pair_hedged_qty > 0 ? g.pair_hedge_vwap : null);
-                    const unwindPrice = g.pair_unwind_price || (g.pair_unwound_qty > 0 ? g.pair_unwind_vwap : null);
-                    const hedgeQty = g.pair_hedged_qty || (g.pair_hedge_price ? g.qty : 0);
-                    if (hedgePrice) {
-                        // BuyBot hedge = SELL secondary, unwind = BUY secondary
-                        // SellBot hedge = BUY secondary, unwind = SELL secondary
-                        const hBuy = isBuy ? unwindPrice : hedgePrice;
-                        const hSell = isBuy ? hedgePrice : unwindPrice;
-                        rows.push('<tr style="background:rgba(179,136,255,0.04);">' +
-                            '<td style="color:var(--purple);padding-left:20px;">&#8627; ' + secondarySymbol + '</td>' +
-                            '<td style="color:var(--dim);">' + g.group_id + '</td>' +
-                            '<td style="color:var(--dim);">' + botLabel + '</td>' +
-                            '<td style="color:var(--dim);">' + level + '</td>' +
-                            '<td><span class="status-badge" style="background:rgba(179,136,255,0.15);color:var(--purple);">HEDGE</span></td>' +
-                            '<td>' + (hBuy ? hBuy.toFixed(2) : '—') + '</td>' +
-                            '<td>' + (hSell ? hSell.toFixed(2) : '—') + '</td>' +
-                            '<td>' + hedgeQty + '</td>' +
-                            '<td>' + fmtPnl(g.pair_pnl) + '</td>' +
-                            '<td style="color:var(--dim);">' + fmtTime(g.closed_at) + '</td>' +
-                            '</tr>');
-                    }
-                });
-                closedTbody.innerHTML = rows.join('');
-            }
-
             // PnL chart
+            allClosed.sort((a,b) => (a.closed_at || '').localeCompare(b.closed_at || ''));
             if (allClosed.length > 0) {
-                // Reverse so earliest first
-                const chronological = [...allClosed].reverse();
                 let cumPrimary = 0, cumCombined = 0;
-                const labels = [];
-                const primaryData = [];
-                const combinedData = [];
-                chronological.forEach((g, i) => {
+                const labels = [], primaryData = [], combinedData = [];
+                allClosed.forEach((g, i) => {
                     cumPrimary += g.realized_pnl || 0;
                     cumCombined += (g.realized_pnl || 0) + (g.pair_pnl || 0);
                     labels.push(i + 1);
@@ -899,61 +1020,40 @@ function updateMonitor() {
                 pnlChart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: labels,
+                        labels,
                         datasets: [{
-                            label: 'Primary PnL',
-                            data: primaryData,
-                            borderColor: '#448aff',
-                            fill: false,
-                            tension: 0.3,
-                            pointRadius: 0,
-                            borderWidth: 2,
+                            label: 'Primary PnL', data: primaryData,
+                            borderColor: '#448aff', fill: false, tension: 0.3,
+                            pointRadius: 0, borderWidth: 2,
                         }, {
-                            label: 'Combined PnL',
-                            data: combinedData,
+                            label: 'Combined PnL', data: combinedData,
                             borderColor: combinedData[combinedData.length-1] >= 0 ? '#00c853' : '#ff1744',
                             backgroundColor: (combinedData[combinedData.length-1] >= 0 ? 'rgba(0,200,83,' : 'rgba(255,23,68,') + '0.1)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 0,
-                            borderWidth: 2,
+                            fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
                         }]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: true, labels: { color: '#aaa' } },
-                        },
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: true, labels: { color: '#aaa' } } },
                         scales: {
-                            x: {
-                                display: true,
-                                title: { display: true, text: 'Trade #', color: '#888' },
-                                ticks: { color: '#888', maxTicksLimit: 15 },
-                                grid: { color: 'rgba(42,45,58,0.5)' },
-                            },
-                            y: {
-                                display: true,
-                                title: { display: true, text: 'PnL', color: '#888' },
-                                ticks: { color: '#888' },
-                                grid: { color: 'rgba(42,45,58,0.5)' },
-                            }
+                            x: { display: true, title: { display: true, text: 'Trade #', color: '#888' },
+                                 ticks: { color: '#888', maxTicksLimit: 15 }, grid: { color: 'rgba(42,45,58,0.5)' } },
+                            y: { display: true, title: { display: true, text: 'PnL', color: '#888' },
+                                 ticks: { color: '#888' }, grid: { color: 'rgba(42,45,58,0.5)' } }
                         }
                     }
                 });
             }
 
-            // Update status indicator
             updateStatusIndicator();
         })
-        .catch(e => console.error('Monitor update error:', e));
+        .catch(e => console.error('Monitor error:', e));
 }
 
 // --- Init ---
 loadConfig();
-updateProcesses();
+setInterval(loadConfig, 30000);
 setInterval(updateMonitor, 3000);
-setInterval(updateProcesses, 10000);
 setTimeout(updateMonitor, 500);
 </script>
 </body>

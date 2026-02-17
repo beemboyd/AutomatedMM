@@ -203,20 +203,23 @@ class GridConfig:
 def generate_order_id(primary: str, secondary: str, subset_index: int,
                       role: str, bot: str, group_id: str, seq: int = 0) -> str:
     """
-    Generate a human-readable order identifier for XTS orderUniqueIdentifier.
+    Generate compact order identifier for XTS orderUniqueIdentifier (max 20 chars).
 
-    Format: {PRIMARY}-{SECONDARY}-L{LEVEL}-{ROLE}[{SEQ}]-{BOT}-{GROUP_ID}
+    Format: {ROLE}[{SEQ}]-{BOT}-L{LEVEL}-{GROUP_ID}
+
+    Symbol names are omitted — XTS order record already has the symbol.
+    The group_id (8-char UUID) ensures global uniqueness across all bots.
 
     For PH/PU roles, seq is appended (1-indexed).
     EN/TP roles don't need seq.
 
     Examples:
-      TATSILV-SPCENET-L0-EN-A-abc12345
-      TATSILV-SPCENET-L0-PH1-A-abc12345
-      TATSILV-SPCENET-L0-TP-A-abc12345
-      TATSILV-SPCENET-L0-PU1-A-abc12345
+      EN-A-L0-abc12345     (16 chars)
+      TP-B-L5-abc12345     (16 chars)
+      PH1-A-L0-abc12345    (17 chars)
+      PU1-B-L99-abc12345   (19 chars, extreme)
     """
-    base = f"{primary}-{secondary}-L{subset_index}-{role}"
+    tag = role
     if seq > 0:
-        base += str(seq)
-    return f"{base}-{bot}-{group_id}"
+        tag += str(seq)
+    return f"{tag}-{bot}-L{subset_index}-{group_id}"
