@@ -27,19 +27,26 @@ class SubsetConfig:
     """
     Configuration for a single grid subset/band.
 
-    Each successive subset doubles the grid spacing and target,
-    creating a geometric grid that reduces adverse selection at deeper levels.
+    Each successive subset has a linearly increasing gap and target,
+    creating a triangular grid that covers wider price range at deeper levels.
 
-    Example with base_grid_space=0.01, base_target=0.02:
-      Subset 0: space=0.01, target=0.02, distance=0.01, qty=300
-      Subset 1: space=0.02, target=0.04, distance=0.03, qty=300
-      Subset 2: space=0.04, target=0.08, distance=0.07, qty=300
-      Subset 3: space=0.08, target=0.16, distance=0.15, qty=100
+    Level i (0-indexed):
+      gap       = base_grid_space * (i + 1)
+      distance  = base_grid_space * (i+1)(i+2)/2   (triangular sum)
+      target    = base_target * (i + 1)
+
+    Example with base_grid_space=0.01, base_target=0.03:
+      Subset 0:  space=0.01, target=0.03, distance=0.01,  qty=100
+      Subset 1:  space=0.02, target=0.06, distance=0.03,  qty=100
+      Subset 2:  space=0.03, target=0.09, distance=0.06,  qty=100
+      Subset 3:  space=0.04, target=0.12, distance=0.10,  qty=100
+      ...
+      Subset 19: space=0.20, target=0.60, distance=2.10,  qty=100
     """
     index: int
     qty: int
-    grid_space: float       # spacing for this subset (doubles each level)
-    target: float           # target offset for this subset (doubles each level)
+    grid_space: float       # spacing for this subset (increases linearly)
+    target: float           # target offset for this subset (increases linearly)
     distance_from_anchor: float  # cumulative distance from anchor price
 
 
@@ -52,10 +59,10 @@ class GridConfig:
     - Anchor price P0 is the center of the grid
     - Buy levels are placed below P0, sell levels above
     - Total position is split into subsets of subset_qty shares
-    - Each successive subset doubles grid_space and target
-    - All buy targets converge to P0 + base_grid_space
-    - All sell targets converge to P0 - base_grid_space
-    - Effective spread = 2 * base_grid_space
+    - Each successive subset has linearly increasing gap and target
+    - Level i: gap = base_grid_space*(i+1), target = base_target*(i+1)
+    - Distance from anchor = base_grid_space * (i+1)(i+2)/2 (triangular sum)
+    - Grid covers much wider range than uniform spacing
     """
     symbol: str
     anchor_price: float
@@ -101,10 +108,12 @@ class GridConfig:
 
     def compute_subsets(self) -> List[SubsetConfig]:
         """
-        Compute uniform grid subsets.
+        Compute grid subsets with increasing gaps.
 
-        All levels use the same grid_space and target offset.
-        Subset i is placed at anchor ± (i+1) * base_grid_space.
+        Level i (0-indexed) has:
+        - gap      = base_grid_space * (i + 1)
+        - distance = base_grid_space * (i+1)(i+2)/2  (triangular sum)
+        - target   = base_target * (i + 1)
 
         Returns list of SubsetConfig, one per grid level.
         Qty allocation: subset_qty per level, remainder in final level.
@@ -114,12 +123,14 @@ class GridConfig:
         i = 0
         while remaining > 0:
             qty = min(self.subset_qty, remaining)
-            distance = round(self.base_grid_space * (i + 1), 10)
+            gap = self.base_grid_space * (i + 1)
+            distance = round(self.base_grid_space * (i + 1) * (i + 2) / 2, 10)
+            target = round(self.base_target * (i + 1), 10)
             subsets.append(SubsetConfig(
                 index=i,
                 qty=qty,
-                grid_space=self.base_grid_space,
-                target=self.base_target,
+                grid_space=gap,
+                target=target,
                 distance_from_anchor=distance,
             ))
             remaining -= qty

@@ -1,5 +1,27 @@
 # Activity Log
 
+## 2026-02-17 17:30 IST - Claude
+**TG — Increasing-gap grid sets (replace uniform spacing)**
+
+### Changes
+1. **`TG/config.py`** — Rewrote `compute_subsets()` to use increasing gaps instead of uniform spacing:
+   - Level i: gap = `base_grid_space * (i+1)`, distance = triangular sum `base_grid_space * (i+1)(i+2)/2`, target = `base_target * (i+1)`
+   - L0: gap=0.01, target=0.03, dist=0.01 → L19: gap=0.20, target=0.60, dist=2.10
+   - Updated `SubsetConfig` and `GridConfig` docstrings to reflect new math
+2. **`TG/state/tg_config.json`** — Updated all 3 primaries (TATSILV, TATAGOLD, IDEA):
+   - `total_qty`: 10 → 2000
+   - `subset_qty`: 1 → 100
+   - `holdings_override`: 1000 → 2000
+
+### Impact
+- Grid now covers 2.10 INR (210 paisa) per side vs old 0.10 INR (10 paisa) — 21x wider coverage
+- 20 levels × 100 shares = 2000 total qty per side
+- Deeper levels have proportionally wider targets, compensating for larger adverse moves
+- Reanchor triggers far less frequently since price must move >2 INR to exhaust all levels
+- No changes needed to grid.py, engine.py, bot_buy.py, bot_sell.py — they consume SubsetConfig unchanged
+
+---
+
 ## 2026-02-17 15:30 IST - Claude
 **TG — Auto re-anchor on grid exhaustion**
 
