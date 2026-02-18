@@ -162,9 +162,22 @@ def main():
         _cancel_all_orders(config)
         return
 
+    # Initialize PnL tracker (fail-safe — None if DB unavailable)
+    pnl_tracker = None
+    try:
+        from TG.pnl.tracker import PnLTracker
+        pnl_tracker = PnLTracker()
+        if pnl_tracker.available:
+            logger.info("PnL tracker initialized")
+        else:
+            pnl_tracker = None
+            logger.warning("PnL tracker unavailable — trading continues without tracking")
+    except Exception as e:
+        logger.warning("PnL tracker init failed (non-fatal): %s", e)
+
     # Start engine
     from .engine import TollGateEngine
-    engine = TollGateEngine(config)
+    engine = TollGateEngine(config, pnl_tracker=pnl_tracker)
     engine.start()
 
 

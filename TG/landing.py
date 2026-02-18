@@ -38,6 +38,13 @@ DASHBOARDS = {
         'icon': 'toll',
         'color': '#ff9100',
     },
+    'pnl-tracker': {
+        'port': 9000,
+        'name': 'PnL Tracker',
+        'desc': 'Multi-day PnL analytics — sessions, pairs, cycles, inventory',
+        'icon': 'chart-bar',
+        'color': '#b388ff',
+    },
 }
 
 

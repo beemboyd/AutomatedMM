@@ -1,5 +1,40 @@
 # Activity Log
 
+## 2026-02-18 - Claude
+**TG PnL & Inventory Tracking System — PostgreSQL-based multi-day analytics**
+
+### New Files Created
+1. **`TG/pnl/__init__.py`** — Package marker
+2. **`TG/pnl/schema.sql`** — PostgreSQL schema: 5 tables (tg_sessions, tg_pairs, tg_cycles, tg_transactions, tg_inventory) with indexes
+3. **`TG/pnl/db_manager.py`** — PnLDBManager class: ThreadedConnectionPool (min=2, max=5), all CRUD and dashboard query methods
+4. **`TG/pnl/tracker.py`** — PnLTracker: fail-safe wrapper that catches all DB exceptions so trading never crashes
+5. **`TG/pnl/dashboard.py`** — Flask dashboard on port 9000 with 5 tabs (Overview, Sessions, Transactions, Inventory, Analytics), Chart.js charts, dark theme
+6. **`TG/pnl/__main__.py`** — Enables `python -m TG.pnl` to launch dashboard
+
+### Files Modified
+1. **`TG/TollGate/engine.py`** — Added pnl_tracker param, session/pair/cycle/transaction recording at all fill events, cycle close on completion
+2. **`TG/TollGate/run.py`** — Instantiates PnLTracker before engine start (fail-safe)
+3. **`TG/engine.py`** — Added pnl_tracker param, session/pair init, passes tracker to bots via config, end_session on shutdown
+4. **`TG/bot_buy.py`** — Records ENTRY, TARGET, PAIR_HEDGE, PAIR_UNWIND transactions, opens/closes cycles
+5. **`TG/bot_sell.py`** — Same as bot_buy (mirrored for sell side)
+6. **`TG/run.py`** — Instantiates PnLTracker before engine start (fail-safe)
+7. **`TG/landing.py`** — Added PnL Tracker card (port 9000, purple accent)
+
+### Architecture
+- Data hierarchy: Session → Pair → Cycle → Transaction (full drill-down)
+- JSON state remains authoritative — PostgreSQL is append-only audit log
+- All DB calls are fail-safe: exceptions logged, trading continues
+- Uses shared tick_data database with tg_ table prefix
+- Dashboard API: /api/overview, /api/sessions, /api/transactions, /api/inventory, /api/analytics/*
+
+### Impact
+- Multi-day PnL tracking survives restarts, resets, and crashes
+- Session restoration marks previous crashed sessions
+- Dashboard provides drill-down analytics from session to individual fills
+- Landing page at :7800 now shows 3 dashboards (TG Monitor, TollGate Monitor, PnL Tracker)
+
+---
+
 ## 2026-02-18 10:40 IST - Claude
 **TG/TollGate — Product type fix (CNC) + dashboard partial fill visibility**
 

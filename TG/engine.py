@@ -39,9 +39,14 @@ class GridEngine:
     to the appropriate bot for target placement or group closure.
     """
 
-    def __init__(self, config: GridConfig):
+    def __init__(self, config: GridConfig, pnl_tracker=None):
         self.config = config
         self.running = False
+
+        # PnL tracking (fail-safe — None if DB unavailable)
+        self.pnl = pnl_tracker
+        self._pnl_session_id = None
+        self._pnl_pair_id = None
 
         # Initialize components
         self.client = HybridClient(
@@ -61,7 +66,12 @@ class GridEngine:
         self.buy_levels = self.grid.compute_buy_levels(grid_space=self.current_buy_spacing)
         self.sell_levels = self.grid.compute_sell_levels(grid_space=self.current_sell_spacing)
 
-        # Initialize bots
+        # Initialize bots (pnl refs attached via config to avoid changing signatures)
+        config._pnl = pnl_tracker
+        config._pnl_session_id = None
+        config._pnl_pair_id = None
+        config._pnl_cycle_ids = {}  # group_id -> cycle_id
+
         self.buy_bot = BuyBot(self.buy_levels, self.client, self.state, config)
         self.sell_bot = SellBot(self.sell_levels, self.client, self.state, config)
 
@@ -130,6 +140,31 @@ class GridEngine:
 
         # Print initial state
         self.state.print_summary()
+
+        # Initialize PnL tracking session
+        if self.pnl:
+            config_snap = {
+                'symbol': self.config.symbol, 'pair': self.config.pair_symbol,
+                'anchor': self.config.anchor_price,
+                'grid_space': self.current_buy_spacing,
+                'levels': self.config.levels_per_side,
+                'qty': self.config.qty_per_level, 'product': self.config.product,
+            }
+            self._pnl_session_id = self.pnl.start_session('tg_grid', config_snap)
+            if self._pnl_session_id:
+                self._pnl_pair_id = self.pnl.register_pair(
+                    self._pnl_session_id,
+                    primary=self.config.symbol,
+                    secondary=self.config.pair_symbol or None,
+                    pair_type='hedged' if self.config.has_pair else 'direct',
+                    anchor=self.config.anchor_price,
+                    spacing=self.current_buy_spacing,
+                    levels=self.config.levels_per_side,
+                    qty=self.config.qty_per_level,
+                    product=self.config.product)
+                # Share IDs with bots via config
+                self.config._pnl_session_id = self._pnl_session_id
+                self.config._pnl_pair_id = self._pnl_pair_id
 
         # Setup graceful shutdown
         signal.signal(signal.SIGINT, self._shutdown_handler)
@@ -609,6 +644,14 @@ class GridEngine:
         logger.info("Shutting down grid engine...")
         self.state.save()
         self.state.print_summary()
+
+        # PnL: end session
+        if self.pnl and self._pnl_session_id:
+            self.pnl.end_session(
+                self._pnl_session_id,
+                total_pnl=self.state.total_pnl,
+                total_cycles=self.state.total_cycles)
+
         logger.info("State saved. Orders remain active (CNC). "
                      "Run with --cancel-all to cancel open orders.")
         logger.info("Total PnL: %.2f | Cycles: %d",

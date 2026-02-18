@@ -33,9 +33,16 @@ class TollGateEngine:
     Polls XTS order book for fills and routes to appropriate handlers.
     """
 
-    def __init__(self, config: TollGateConfig):
+    def __init__(self, config: TollGateConfig, pnl_tracker=None):
         self.config = config
         self.running = False
+
+        # PnL tracking (fail-safe — None if DB unavailable)
+        self.pnl = pnl_tracker
+        self._pnl_session_id = None
+        self._pnl_pair_id = None
+        # group_id -> cycle_id mapping for PnL tracking
+        self._pnl_cycle_ids: Dict[str, int] = {}
 
         # Client initialized in start() to allow session isolation
         self.client = None
@@ -128,6 +135,26 @@ class TollGateEngine:
         self._place_entries()
         self.state.save()
         self.state.print_summary()
+
+        # Initialize PnL tracking session
+        if self.pnl:
+            config_snap = {
+                'symbol': self.config.symbol, 'anchor': self.config.anchor_price,
+                'spacing': self.state.current_spacing, 'levels': self.config.levels_per_side,
+                'qty': self.config.qty_per_level, 'product': self.config.product,
+            }
+            self._pnl_session_id = self.pnl.start_session('tollgate', config_snap)
+            if self._pnl_session_id:
+                self._pnl_pair_id = self.pnl.register_pair(
+                    self._pnl_session_id,
+                    primary=self.config.symbol,
+                    secondary='CASH',
+                    pair_type='direct',
+                    anchor=self.config.anchor_price,
+                    spacing=self.state.current_spacing,
+                    levels=self.config.levels_per_side,
+                    qty=self.config.qty_per_level,
+                    product=self.config.product)
 
         # Setup graceful shutdown
         signal.signal(signal.SIGINT, self._shutdown_handler)
@@ -247,6 +274,15 @@ class TollGateEngine:
             logger.info("Entry placed: %s L%d C%d @ %.2f -> order=%s (group=%s)",
                         level.side, level.index, cycle, level.entry_price,
                         order_id, group.group_id)
+
+            # PnL: open cycle
+            if self.pnl and self._pnl_pair_id:
+                cid = self.pnl.open_cycle(
+                    self._pnl_pair_id, self._pnl_session_id,
+                    group.group_id, bot, level.index, cycle,
+                    level.side, level.entry_price, level.target_price, level.qty)
+                if cid:
+                    self._pnl_cycle_ids[group.group_id] = cid
         else:
             logger.error("Entry FAILED: %s L%d @ %.2f",
                          level.side, level.index, level.entry_price)
@@ -339,6 +375,23 @@ class TollGateEngine:
         else:
             self.state.net_inventory -= increment
 
+        # PnL: record entry fill
+        if self.pnl and self._pnl_pair_id:
+            self.pnl.record_fill(
+                cycle_id=self._pnl_cycle_ids.get(group.group_id),
+                pair_id=self._pnl_pair_id,
+                session_id=self._pnl_session_id,
+                ticker=self.config.symbol,
+                side=group.entry_side,
+                qty=increment,
+                price=fill_price,
+                txn_type='ENTRY',
+                is_partial=not is_complete,
+                order_id=order_id,
+                group_id=group.group_id,
+                running_pnl=self.state.total_pnl,
+                net_inventory=self.state.net_inventory)
+
         # Place target for this increment
         group.target_seq += 1
         target_uid = generate_order_id(
@@ -417,6 +470,24 @@ class TollGateEngine:
 
         group.realized_pnl = round(group.realized_pnl + pnl_increment, 2)
 
+        # PnL: record target fill
+        if self.pnl and self._pnl_pair_id:
+            self.pnl.record_fill(
+                cycle_id=self._pnl_cycle_ids.get(group.group_id),
+                pair_id=self._pnl_pair_id,
+                session_id=self._pnl_session_id,
+                ticker=self.config.symbol,
+                side=group.target_side,
+                qty=increment,
+                price=fill_price,
+                txn_type='TARGET',
+                is_partial=not is_complete,
+                order_id=order_id,
+                group_id=group.group_id,
+                pnl_increment=pnl_increment,
+                running_pnl=self.state.total_pnl + group.realized_pnl,
+                net_inventory=self.state.net_inventory)
+
         logger.info("Target fill: %s L%d C%d.T%s, %d @ %.2f, PnL incr=%.2f (group=%s)",
                     group.target_side, group.subset_index, group.cycle_number,
                     order_id[-8:], increment, fill_price, pnl_increment, group.group_id)
@@ -429,6 +500,15 @@ class TollGateEngine:
             logger.info("CYCLE COMPLETE: %s L%d C%d, PnL=%.2f (group=%s)",
                         group.entry_side, group.subset_index, group.cycle_number,
                         group.realized_pnl, group.group_id)
+
+            # PnL: close cycle
+            if self.pnl:
+                cid = self._pnl_cycle_ids.pop(group.group_id, None)
+                self.pnl.close_cycle(
+                    cid,
+                    entry_fill_price=group.entry_fill_price,
+                    target_fill_price=fill_price,
+                    primary_pnl=group.realized_pnl)
 
             # Free the level
             level_key = f"{group.bot}:{group.subset_index}"
@@ -557,6 +637,16 @@ class TollGateEngine:
                 logger.info("CYCLE COMPLETE (after cancel-recheck): %s L%d C%d, PnL=%.2f (group=%s)",
                             group.entry_side, group.subset_index, group.cycle_number,
                             group.realized_pnl, group.group_id)
+
+                # PnL: close cycle
+                if self.pnl:
+                    cid = self._pnl_cycle_ids.pop(group.group_id, None)
+                    self.pnl.close_cycle(
+                        cid,
+                        entry_fill_price=group.entry_fill_price,
+                        target_fill_price=fill_price,
+                        primary_pnl=group.realized_pnl)
+
                 level_key = f"{group.bot}:{group.subset_index}"
                 self.level_groups.pop(level_key, None)
                 self.state.close_group(group.group_id)
@@ -864,6 +954,14 @@ class TollGateEngine:
         logger.info("Shutting down TollGate engine...")
         self.state.save()
         self.state.print_summary()
+
+        # PnL: end session
+        if self.pnl and self._pnl_session_id:
+            self.pnl.end_session(
+                self._pnl_session_id,
+                total_pnl=self.state.total_pnl,
+                total_cycles=self.state.total_cycles)
+
         logger.info("State saved. Orders remain active. "
                      "Run with --cancel-all to cancel open orders.")
         logger.info("Total PnL: %.2f | Cycles: %d | Inventory: %d",

@@ -214,10 +214,23 @@ def main():
         engine.cancel_all()
         return
 
+    # Initialize PnL tracker (fail-safe — None if DB unavailable)
+    pnl_tracker = None
+    try:
+        from TG.pnl.tracker import PnLTracker
+        pnl_tracker = PnLTracker()
+        if pnl_tracker.available:
+            logger.info("PnL tracker initialized")
+        else:
+            pnl_tracker = None
+            logger.warning("PnL tracker unavailable — trading continues without tracking")
+    except Exception as e:
+        logger.warning("PnL tracker init failed (non-fatal): %s", e)
+
     # Start the engine
     logger.info("Starting Grid Engine for %s @ %.2f (XTS + Zerodha/%s)",
                  args.symbol, anchor_price, args.user)
-    engine = GridEngine(config)
+    engine = GridEngine(config, pnl_tracker=pnl_tracker)
     engine.start()
 
 

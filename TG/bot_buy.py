@@ -95,6 +95,17 @@ class BuyBot:
             logger.info("BuyBot ENTRY: subset=%d, BUY %d @ %.2f, group=%s, order=%s [%s]",
                         level.subset_index, level.qty, level.entry_price,
                         group.group_id, order_id, entry_oid)
+
+            # PnL: open cycle
+            pnl = getattr(self.config, '_pnl', None)
+            if pnl and getattr(self.config, '_pnl_pair_id', None):
+                cid = pnl.open_cycle(
+                    self.config._pnl_pair_id, self.config._pnl_session_id,
+                    group.group_id, 'A', level.subset_index, 1,
+                    'BUY', level.entry_price, level.target_price, level.qty)
+                if cid:
+                    self.config._pnl_cycle_ids[group.group_id] = cid
+
             return True
         else:
             logger.error("BuyBot ENTRY FAILED: subset=%d, BUY %d @ %.2f",
@@ -115,6 +126,19 @@ class BuyBot:
 
         logger.info("BuyBot ENTRY FILLED: group=%s, BUY %d @ %.2f (level=%.2f)",
                      group.group_id, fill_qty, fill_price, group.entry_price)
+
+        # PnL: record entry fill
+        pnl = getattr(self.config, '_pnl', None)
+        if pnl and getattr(self.config, '_pnl_pair_id', None):
+            pnl.record_fill(
+                cycle_id=self.config._pnl_cycle_ids.get(group.group_id),
+                pair_id=self.config._pnl_pair_id,
+                session_id=self.config._pnl_session_id,
+                ticker=self.config.symbol,
+                side='BUY', qty=fill_qty, price=fill_price,
+                txn_type='ENTRY', order_id=group.entry_order_id,
+                group_id=group.group_id,
+                running_pnl=self.state.total_pnl)
 
         # Place sell target at the theoretical target price
         target_oid = generate_order_id(
@@ -156,6 +180,27 @@ class BuyBot:
 
         logger.info("BuyBot TARGET FILLED: group=%s, SELL %d @ %.2f, PnL=%.2f",
                      group.group_id, fill_qty, fill_price, group.realized_pnl)
+
+        # PnL: record target fill + close cycle
+        pnl = getattr(self.config, '_pnl', None)
+        if pnl and getattr(self.config, '_pnl_pair_id', None):
+            pnl.record_fill(
+                cycle_id=self.config._pnl_cycle_ids.get(group.group_id),
+                pair_id=self.config._pnl_pair_id,
+                session_id=self.config._pnl_session_id,
+                ticker=self.config.symbol,
+                side='SELL', qty=fill_qty, price=fill_price,
+                txn_type='TARGET', order_id=group.target_order_id,
+                group_id=group.group_id,
+                pnl_increment=group.realized_pnl,
+                running_pnl=self.state.total_pnl + group.realized_pnl)
+            cid = self.config._pnl_cycle_ids.pop(group.group_id, None)
+            pnl.close_cycle(
+                cid,
+                entry_fill_price=buy_price,
+                target_fill_price=fill_price,
+                primary_pnl=group.realized_pnl,
+                pair_pnl=group.pair_pnl)
 
         # Free the level
         if group.subset_index in self.level_groups:
@@ -199,6 +244,18 @@ class BuyBot:
                         group.group_id, self.config.pair_symbol,
                         pair_qty, pair_price, group.pair_hedged_qty,
                         group.pair_hedge_vwap, pair_id, pair_oid)
+
+            # PnL: record pair hedge
+            pnl = getattr(self.config, '_pnl', None)
+            if pnl and getattr(self.config, '_pnl_pair_id', None):
+                pnl.record_fill(
+                    cycle_id=self.config._pnl_cycle_ids.get(group.group_id),
+                    pair_id=self.config._pnl_pair_id,
+                    session_id=self.config._pnl_session_id,
+                    ticker=self.config.pair_symbol,
+                    side='SELL', qty=pair_qty, price=pair_price,
+                    txn_type='PAIR_HEDGE', order_id=pair_id,
+                    group_id=group.group_id)
         else:
             logger.error("BuyBot PAIR HEDGE FAILED: group=%s, SELL %s %d",
                          group.group_id, self.config.pair_symbol, pair_qty)
@@ -233,6 +290,19 @@ class BuyBot:
                         group.group_id, self.config.pair_symbol,
                         pair_qty, pair_price, group.pair_unwound_qty,
                         group.pair_pnl, pair_id, pair_oid)
+
+            # PnL: record pair unwind
+            pnl = getattr(self.config, '_pnl', None)
+            if pnl and getattr(self.config, '_pnl_pair_id', None):
+                pnl.record_fill(
+                    cycle_id=self.config._pnl_cycle_ids.get(group.group_id),
+                    pair_id=self.config._pnl_pair_id,
+                    session_id=self.config._pnl_session_id,
+                    ticker=self.config.pair_symbol,
+                    side='BUY', qty=pair_qty, price=pair_price,
+                    txn_type='PAIR_UNWIND', order_id=pair_id,
+                    group_id=group.group_id,
+                    pnl_increment=group.pair_pnl)
         else:
             logger.error("BuyBot PAIR UNWIND FAILED: group=%s, BUY %s %d",
                          group.group_id, self.config.pair_symbol, pair_qty)
