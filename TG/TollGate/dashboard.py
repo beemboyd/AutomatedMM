@@ -216,6 +216,40 @@ def _compute_summary(state: dict) -> dict:
     wins = sum(1 for g in closed_groups if g.get('realized_pnl', 0) > 0)
     win_rate = (wins / len(closed_groups) * 100) if closed_groups else 0.0
 
+    # Compute Buy VWAP and Sell VWAP across all groups (open + closed)
+    # Buy VWAP = VWAP of all shares we BOUGHT (buy entries + sell targets)
+    # Sell VWAP = VWAP of all shares we SOLD (sell entries + buy targets)
+    buy_cost, buy_qty = 0.0, 0
+    sell_cost, sell_qty = 0.0, 0
+
+    all_groups = list(open_groups.values()) + closed_groups
+    for g in all_groups:
+        entry_side = g.get('entry_side', '')
+        efp = g.get('entry_fill_price', 0) or 0
+        efsf = g.get('entry_filled_so_far', 0) or 0
+
+        if entry_side == 'BUY' and efsf > 0 and efp > 0:
+            buy_cost += efp * efsf
+            buy_qty += efsf
+        elif entry_side == 'SELL' and efsf > 0 and efp > 0:
+            sell_cost += efp * efsf
+            sell_qty += efsf
+
+        for t in g.get('target_orders', []):
+            tfq = t.get('filled_qty', 0) or 0
+            tfp = t.get('fill_price', 0) or 0
+            if tfq > 0 and tfp > 0:
+                if entry_side == 'BUY':
+                    sell_cost += tfp * tfq
+                    sell_qty += tfq
+                elif entry_side == 'SELL':
+                    buy_cost += tfp * tfq
+                    buy_qty += tfq
+
+    buy_vwap = round(buy_cost / buy_qty, 4) if buy_qty > 0 else None
+    sell_vwap = round(sell_cost / sell_qty, 4) if sell_qty > 0 else None
+    spread = round(sell_vwap - buy_vwap, 4) if (buy_vwap and sell_vwap) else None
+
     return {
         'symbol': state.get('symbol', 'SPCENET'),
         'anchor_price': state.get('anchor_price', 0),
@@ -230,6 +264,11 @@ def _compute_summary(state: dict) -> dict:
         'win_rate': round(win_rate, 1),
         'bot_a': {'entry_pending': bot_a_ep, 'partial': bot_a_pa, 'target_pending': bot_a_tp},
         'bot_b': {'entry_pending': bot_b_ep, 'partial': bot_b_pa, 'target_pending': bot_b_tp},
+        'buy_vwap': buy_vwap,
+        'sell_vwap': sell_vwap,
+        'spread': spread,
+        'buy_fill_qty': buy_qty,
+        'sell_fill_qty': sell_qty,
         'last_updated': state.get('last_updated', ''),
     }
 
@@ -375,8 +414,8 @@ def _build_monitor_html() -> str:
     </div>
 </div>
 
-<!-- KPI CARDS -->
-<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+<!-- KPI CARDS ROW 1 -->
+<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
     <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
         <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">PnL</div>
         <div class="text-xl font-bold" id="kpi-pnl">—</div>
@@ -400,6 +439,24 @@ def _build_monitor_html() -> str:
     <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
         <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Reanchors</div>
         <div class="text-xl font-bold" style="color:var(--purple);" id="kpi-reanchors">—</div>
+    </div>
+</div>
+<!-- KPI CARDS ROW 2: VWAP -->
+<div class="grid grid-cols-3 gap-3 mb-4">
+    <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Buy VWAP</div>
+        <div class="text-lg font-bold" style="color:var(--green);" id="kpi-buy-vwap">—</div>
+        <div class="text-xs mt-1" style="color:var(--dim);" id="kpi-buy-qty"></div>
+    </div>
+    <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Sell VWAP</div>
+        <div class="text-lg font-bold" style="color:var(--red);" id="kpi-sell-vwap">—</div>
+        <div class="text-xs mt-1" style="color:var(--dim);" id="kpi-sell-qty"></div>
+    </div>
+    <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
+        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Spread</div>
+        <div class="text-lg font-bold" id="kpi-spread">—</div>
+        <div class="text-xs mt-1" style="color:var(--dim);" id="kpi-spread-hint">sell - buy</div>
     </div>
 </div>
 
@@ -564,6 +621,32 @@ function updateMonitor() {
             invEl.className = 'text-xl font-bold ' + (inv === 0 ? '' : inv > 0 ? 'pnl-pos' : 'pnl-neg');
             document.getElementById('kpi-reanchors').textContent =
                 (s.total_reanchors || 0) + ' (B:' + (s.buy_reanchor_count || 0) + ' S:' + (s.sell_reanchor_count || 0) + ')';
+
+            // VWAP KPIs
+            const bvEl = document.getElementById('kpi-buy-vwap');
+            const svEl = document.getElementById('kpi-sell-vwap');
+            const spEl = document.getElementById('kpi-spread');
+            if (s.buy_vwap != null) {
+                bvEl.textContent = s.buy_vwap.toFixed(2);
+                document.getElementById('kpi-buy-qty').textContent = s.buy_fill_qty.toLocaleString() + ' shares';
+            } else {
+                bvEl.textContent = '\u2014';
+                document.getElementById('kpi-buy-qty').textContent = 'no fills';
+            }
+            if (s.sell_vwap != null) {
+                svEl.textContent = s.sell_vwap.toFixed(2);
+                document.getElementById('kpi-sell-qty').textContent = s.sell_fill_qty.toLocaleString() + ' shares';
+            } else {
+                svEl.textContent = '\u2014';
+                document.getElementById('kpi-sell-qty').textContent = 'no fills';
+            }
+            if (s.spread != null) {
+                spEl.textContent = (s.spread >= 0 ? '+' : '') + s.spread.toFixed(4);
+                spEl.className = 'text-lg font-bold ' + (s.spread >= 0 ? 'pnl-pos' : 'pnl-neg');
+            } else {
+                spEl.textContent = '\u2014';
+                spEl.className = 'text-lg font-bold';
+            }
 
             // Grid levels
             const anchor = s.anchor_price || 0;
