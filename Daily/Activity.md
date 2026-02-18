@@ -1,6 +1,27 @@
 # Activity Log
 
-## 2026-02-18 IST - Claude
+## 2026-02-18 10:40 IST - Claude
+**TG/TollGate — Product type fix (CNC) + dashboard partial fill visibility**
+
+### Changes
+1. **`TG/hybrid_client.py`** — Fixed `_PRODUCT_MAP`: CNC now passes through as CNC instead of being mapped to NRML. This was causing SELL order rejections on the Interactive Order Data XTS account (RMS blocks SELL NRML on this account).
+2. **`TG/TollGate/config.py`** — Changed default product from "NRML" to "CNC".
+3. **`TG/TollGate/run.py`** — Added 'CNC' to argparse `--product` choices (was only NRML/MIS).
+4. **`TG/TollGate/dashboard.py`** — Enhanced monitor dashboard grid tables:
+   - Added **Order ID** column showing XTS AppOrderID per entry level (in cyan)
+   - Added **target sub-rows** below each grid level: when partial fills occur, each target order appears as an indented row showing target number (T1/T2/T3...), order ID, fill progress (filled_qty/qty), fill price, and status badge (OPEN/PARTIAL/FILLED)
+   - Entry fill column now shows **VWAP** (e.g., "60/4000 @ 5.38")
+   - Added CNC option to config dashboard product dropdown
+
+### Impact
+- SELL orders now accepted by XTS RMS using CNC product type
+- All 20 grid orders (10 BUY + 10 SELL) place successfully
+- Partial fill details with order IDs visible in real-time on monitor dashboard
+- Config dashboard correctly offers CNC as a product option
+
+---
+
+## 2026-02-18 09:30 IST - Claude
 **TG/TollGate — New single-ticker SPCENET market-making bot**
 
 ### Changes
