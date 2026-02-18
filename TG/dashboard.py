@@ -543,11 +543,16 @@ def _build_html() -> str:
 
     <!-- Round Trips (all primaries combined) -->
     <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
-        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Round Trips</h2>
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-sm font-semibold" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Round Trips</h2>
+            <select id="rt-filter" onchange="renderRoundTrips()" style="background:#0f1117;border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;width:auto;">
+                <option value="ALL">All Primaries</option>
+            </select>
+        </div>
         <div style="overflow-x:auto;">
             <table>
                 <thead><tr>
-                    <th>Primary</th><th>Bot</th><th>Level</th><th>Side</th>
+                    <th>Cycle ID</th><th>Primary</th><th>Bot</th><th>Level</th><th>Side</th>
                     <th>Entry @</th><th>Exit @</th><th>Qty</th>
                     <th>1&deg; PnL</th><th>2&deg; PnL</th><th>Combined</th><th>Time</th>
                 </tr></thead>
@@ -574,6 +579,7 @@ let botStatuses = {};
 let allStatesCache = {};
 let activeTab = 'monitor';
 let knownPrimaries = [];
+let allCyclesCache = [];
 
 // --- Helpers ---
 function fmtPnl(v) {
@@ -1087,6 +1093,61 @@ function renderBotPanel(sym, data) {
     }
 }
 
+// --- Round trips filter & render ---
+function updateRtFilterOptions() {
+    const sel = document.getElementById('rt-filter');
+    const current = sel.value;
+    const syms = [...new Set(allCyclesCache.map(g => g._primary).filter(Boolean))].sort();
+    // Rebuild options only if primaries changed
+    const existing = Array.from(sel.options).map(o => o.value).filter(v => v !== 'ALL');
+    if (JSON.stringify(syms) !== JSON.stringify(existing)) {
+        sel.innerHTML = '<option value="ALL">All Primaries</option>';
+        syms.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s; opt.textContent = s;
+            sel.appendChild(opt);
+        });
+        sel.value = syms.includes(current) ? current : 'ALL';
+    }
+}
+
+function renderRoundTrips() {
+    const filter = document.getElementById('rt-filter').value;
+    const filtered = filter === 'ALL' ? allCyclesCache : allCyclesCache.filter(g => g._primary === filter);
+    const rtTbody = document.getElementById('roundtrips-tbody');
+    const rtEmpty = document.getElementById('roundtrips-empty');
+    if (filtered.length === 0) {
+        rtTbody.innerHTML = '';
+        rtEmpty.style.display = 'block';
+    } else {
+        rtEmpty.style.display = 'none';
+        rtTbody.innerHTML = filtered.slice(0, 50).map(g => {
+            const isBuy = g.entry_side === 'BUY';
+            const entryP = g.entry_fill_price || g.entry_price;
+            const exitP = g.target_fill_price || g.target_price;
+            const primaryPnl = g.realized_pnl || 0;
+            const pairPnl = g.pair_pnl || 0;
+            const combinedPnl = primaryPnl + pairPnl;
+            const sideBadge = isBuy
+                ? '<span class="status-badge badge-buy">BUY</span>'
+                : '<span class="status-badge badge-sell">SELL</span>';
+            return '<tr>' +
+                '<td style="font-family:monospace;font-size:11px;color:var(--cyan);">' + (g.group_id || '\\u2014') + '</td>' +
+                '<td class="font-bold">' + (g._primary || '') + '</td>' +
+                '<td>' + (g.bot === 'A' ? 'A' : 'B') + '</td>' +
+                '<td>L' + g.subset_index + '</td>' +
+                '<td>' + sideBadge + '</td>' +
+                '<td>' + (entryP ? entryP.toFixed(2) : '\\u2014') + '</td>' +
+                '<td>' + (exitP ? exitP.toFixed(2) : '\\u2014') + '</td>' +
+                '<td>' + g.qty + '</td>' +
+                '<td>' + fmtPnl(primaryPnl) + '</td>' +
+                '<td>' + fmtPnl(pairPnl) + '</td>' +
+                '<td>' + fmtPnl(combinedPnl) + '</td>' +
+                '<td style="white-space:nowrap;">' + fmtTime(g.closed_at) + '</td></tr>';
+        }).join('');
+    }
+}
+
 // --- Config load ---
 function loadConfig() {
     fetch('/api/config')
@@ -1194,41 +1255,11 @@ function updateMonitor() {
                 '<td>' + aggOpen + '</td><td></td></tr>');
             document.getElementById('breakdown-tbody').innerHTML = breakdownRows.join('');
 
-            // Round trips table
-            const rtTbody = document.getElementById('roundtrips-tbody');
-            const rtEmpty = document.getElementById('roundtrips-empty');
-            // Filter to actual cycles (not cancelled), sort newest first
-            const cycles = allClosed.filter(g => g.status !== 'CANCELLED')
+            // Round trips — cache cycles and update dropdown options
+            allCyclesCache = allClosed.filter(g => g.status !== 'CANCELLED')
                 .sort((a,b) => (b.closed_at || '').localeCompare(a.closed_at || ''));
-            if (cycles.length === 0) {
-                rtTbody.innerHTML = '';
-                rtEmpty.style.display = 'block';
-            } else {
-                rtEmpty.style.display = 'none';
-                rtTbody.innerHTML = cycles.slice(0, 50).map(g => {
-                    const isBuy = g.entry_side === 'BUY';
-                    const entryP = g.entry_fill_price || g.entry_price;
-                    const exitP = g.target_fill_price || g.target_price;
-                    const primaryPnl = g.realized_pnl || 0;
-                    const pairPnl = g.pair_pnl || 0;
-                    const combinedPnl = primaryPnl + pairPnl;
-                    const sideBadge = isBuy
-                        ? '<span class="status-badge badge-buy">BUY</span>'
-                        : '<span class="status-badge badge-sell">SELL</span>';
-                    return '<tr>' +
-                        '<td class="font-bold">' + (g._primary || '') + '</td>' +
-                        '<td>' + (g.bot === 'A' ? 'A' : 'B') + '</td>' +
-                        '<td>L' + g.subset_index + '</td>' +
-                        '<td>' + sideBadge + '</td>' +
-                        '<td>' + (entryP ? entryP.toFixed(2) : '\\u2014') + '</td>' +
-                        '<td>' + (exitP ? exitP.toFixed(2) : '\\u2014') + '</td>' +
-                        '<td>' + g.qty + '</td>' +
-                        '<td>' + fmtPnl(primaryPnl) + '</td>' +
-                        '<td>' + fmtPnl(pairPnl) + '</td>' +
-                        '<td>' + fmtPnl(combinedPnl) + '</td>' +
-                        '<td style="white-space:nowrap;">' + fmtTime(g.closed_at) + '</td></tr>';
-                }).join('');
-            }
+            updateRtFilterOptions();
+            renderRoundTrips();
 
             // PnL chart
             allClosed.sort((a,b) => (a.closed_at || '').localeCompare(b.closed_at || ''));
