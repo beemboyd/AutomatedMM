@@ -227,8 +227,13 @@ def cancel_stale_orders(client, dry_run: bool = False) -> int:
 
 def reset_state(dry_run: bool = False) -> bool:
     """
-    Reset TollGate state: move open_groups -> closed as CANCELLED,
-    clear order_to_group, preserve PnL/history.
+    Reset TollGate state for a fresh trading day.
+
+    - Move open_groups -> closed as CANCELLED
+    - Clear order_to_group
+    - Clear anchor_price and current_spacing so engine uses fresh auto-anchor
+    - Reset reanchor counters (fresh day = fresh grid)
+    - Preserve PnL/history/inventory
     """
     if not os.path.exists(STATE_FILE):
         logger.info("No state file found, nothing to reset")
@@ -240,14 +245,13 @@ def reset_state(dry_run: bool = False) -> bool:
 
         open_count = len(state.get('open_groups', {}))
         order_count = len(state.get('order_to_group', {}))
-
-        if open_count == 0 and order_count == 0:
-            logger.info("State already clean: 0 open groups, 0 order mappings")
-            return True
+        old_anchor = state.get('anchor_price', 0)
+        old_spacing = state.get('current_spacing', 0)
 
         if dry_run:
-            logger.info("[DRY RUN] Would reset state: clear %d open_groups, %d order mappings",
-                        open_count, order_count)
+            logger.info("[DRY RUN] Would reset state: clear %d open_groups, %d order mappings, "
+                        "anchor %.2f -> 0, spacing %.4f -> 0",
+                        open_count, order_count, old_anchor, old_spacing)
             return True
 
         # Move remaining open groups to closed with CANCELLED status
@@ -258,10 +262,19 @@ def reset_state(dry_run: bool = False) -> bool:
             group['closed_at'] = time.strftime('%Y-%m-%dT%H:%M:%S')
             closed_groups.append(group)
 
-        # Reset open state, preserve history
+        # Reset open state, preserve PnL history
         state['open_groups'] = {}
         state['order_to_group'] = {}
         state['closed_groups'] = closed_groups
+
+        # Clear anchor and spacing so engine starts fresh with auto-anchor
+        state['anchor_price'] = 0.0
+        state['current_spacing'] = 0.0
+
+        # Reset reanchor counters for the new day
+        state['buy_reanchor_count'] = 0
+        state['sell_reanchor_count'] = 0
+        state['total_reanchors'] = 0
 
         # Atomic write
         tmp = STATE_FILE + '.tmp'
@@ -270,8 +283,8 @@ def reset_state(dry_run: bool = False) -> bool:
         os.replace(tmp, STATE_FILE)
 
         logger.info("Reset state: moved %d open groups to cancelled, "
-                     "cleared %d order mappings, preserved %d closed groups",
-                     open_count, order_count, len(closed_groups))
+                     "cleared %d order mappings, anchor %.2f -> 0, spacing %.4f -> 0",
+                     open_count, order_count, old_anchor, old_spacing)
         return True
 
     except Exception as e:
