@@ -1,5 +1,22 @@
 # Activity Log
 
+## 2026-02-18 (Evening) - Claude
+**Fix auto-anchor bug: use bid/ask mid-point instead of stale LTP**
+
+Root cause: When TollGate/TG bots restart with `--auto-anchor`, they used LTP which can be stale for illiquid instruments. This caused the 36K SPCENET instant-fill incident (LTP=5.40 vs market=5.34-5.35, 9 buy levels filled immediately).
+
+### Files Modified
+1. **`TG/hybrid_client.py`** — Added `get_quote()` method returning `{ltp, best_bid, best_ask}` via Zerodha's `kite.quote()` API
+2. **`TG/TollGate/run.py`** — `_resolve_auto_anchor()` now uses bid/ask mid-point as anchor; warns if LTP is stale; falls back to LTP only if no market depth
+3. **`TG/run.py`** — Same bid/ask mid-point logic for main TG bots' auto-anchor
+
+### Impact
+- Prevents grid placement at stale prices on bot restart
+- Both TollGate and main TG bots now anchor to actual tradeable price
+- Logs LTP vs bid/ask comparison for operator visibility
+
+---
+
 ## 2026-02-18 - Claude
 **TG PnL & Inventory Tracking System — PostgreSQL-based multi-day analytics**
 

@@ -146,23 +146,42 @@ def main():
     setup_logging(args.log_level)
     logger = logging.getLogger('TG')
 
-    # Resolve anchor price
+    # Resolve anchor price using bid/ask mid-point for accuracy
     anchor_price = args.anchor
     if args.auto_anchor:
-        logger.info("Fetching LTP for %s from Zerodha (user=%s)...",
+        logger.info("Fetching quote for %s from Zerodha (user=%s)...",
                      args.symbol, args.user)
         try:
             creds = _load_zerodha_credentials(args.user)
             kite = KiteConnect(api_key=creds['api_key'])
             kite.set_access_token(creds['access_token'])
             key = f"{args.exchange}:{args.symbol}"
-            data = kite.ltp([key])
-            ltp = data[key]['last_price']
-            if ltp is None:
-                logger.error("Could not fetch LTP for %s. Cannot auto-anchor.", args.symbol)
+            data = kite.quote([key])
+            q = data[key]
+            ltp = q.get('last_price', 0.0)
+            depth = q.get('depth', {})
+            buy_depth = depth.get('buy', [])
+            sell_depth = depth.get('sell', [])
+            best_bid = buy_depth[0]['price'] if buy_depth and buy_depth[0].get('price') else 0.0
+            best_ask = sell_depth[0]['price'] if sell_depth and sell_depth[0].get('price') else 0.0
+
+            logger.info("Auto-anchor quote: %s LTP=%.2f, Bid=%.2f, Ask=%.2f",
+                         args.symbol, ltp, best_bid, best_ask)
+
+            if best_bid > 0 and best_ask > 0:
+                mid = round((best_bid + best_ask) / 2, 2)
+                spread = best_ask - best_bid
+                logger.info("Auto-anchor: using bid/ask mid=%.2f (spread=%.2f)", mid, spread)
+                if ltp > 0 and abs(ltp - mid) > spread * 2:
+                    logger.warning("LTP %.2f is far from bid/ask mid %.2f — "
+                                   "LTP appears stale, using mid-point", ltp, mid)
+                anchor_price = mid
+            elif ltp and ltp > 0:
+                anchor_price = ltp
+                logger.info("Auto-anchor (no bid/ask): %s LTP=%.2f", args.symbol, ltp)
+            else:
+                logger.error("Could not fetch price for %s. Cannot auto-anchor.", args.symbol)
                 sys.exit(1)
-            anchor_price = ltp
-            logger.info("Auto-anchor: %s LTP = %.2f", args.symbol, anchor_price)
         except Exception as e:
             logger.error("Auto-anchor failed: %s", e)
             sys.exit(1)

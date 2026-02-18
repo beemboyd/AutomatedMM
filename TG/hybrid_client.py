@@ -443,6 +443,27 @@ class HybridClient:
             logger.error("LTP failed for %s: %s", symbol, e)
             return None
 
+    def get_quote(self, symbol: str, exchange: str = "NSE") -> Optional[Dict[str, Any]]:
+        """
+        Get full quote from Zerodha including bid/ask/LTP.
+
+        Returns dict with keys: ltp, best_bid, best_ask, or None on failure.
+        """
+        try:
+            key = f"{exchange}:{symbol}"
+            data = self.kite.quote([key])
+            q = data[key]
+            ltp = q.get('last_price', 0.0)
+            depth = q.get('depth', {})
+            buy_depth = depth.get('buy', [])
+            sell_depth = depth.get('sell', [])
+            best_bid = buy_depth[0]['price'] if buy_depth and buy_depth[0].get('price') else 0.0
+            best_ask = sell_depth[0]['price'] if sell_depth and sell_depth[0].get('price') else 0.0
+            return {'ltp': ltp, 'best_bid': best_bid, 'best_ask': best_ask}
+        except Exception as e:
+            logger.error("Quote failed for %s: %s", symbol, e)
+            return None
+
     # ----- Holdings/positions (XTS Interactive) -----
 
     def get_holdings(self) -> List[Dict[str, Any]]:

@@ -182,11 +182,19 @@ def main():
 
 
 def _resolve_auto_anchor(config) -> float:
-    """Connect temporarily to get LTP for auto-anchoring."""
+    """
+    Connect temporarily to get current market price for auto-anchoring.
+
+    Uses full quote (bid/ask) to determine the true tradeable price,
+    not just LTP which can be stale for illiquid instruments.
+    If market has active bid/ask, the anchor is set to the mid-point.
+    Falls back to LTP only if bid/ask is unavailable (e.g., pre-market).
+    """
     import TG.hybrid_client as hc_module
     original_session_file = hc_module._SESSION_FILE
     tollgate_session = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
     hc_module._SESSION_FILE = tollgate_session
+    _logger = logging.getLogger(__name__)
 
     try:
         from TG.hybrid_client import HybridClient
@@ -198,12 +206,41 @@ def _resolve_auto_anchor(config) -> float:
         )
         if not client.connect():
             return 0.0
-        ltp = client.get_ltp(config.symbol, config.exchange)
+
+        quote = client.get_quote(config.symbol, config.exchange)
+        if not quote:
+            _logger.warning("Quote unavailable, falling back to LTP")
+            ltp = client.get_ltp(config.symbol, config.exchange)
+            if ltp and ltp > 0:
+                anchor = round(ltp, 2)
+                _logger.info("Auto-anchor (LTP fallback): %.2f", anchor)
+                return anchor
+            return 0.0
+
+        ltp = quote['ltp']
+        best_bid = quote['best_bid']
+        best_ask = quote['best_ask']
+        _logger.info("Auto-anchor quote: LTP=%.2f, Bid=%.2f, Ask=%.2f",
+                      ltp, best_bid, best_ask)
+
+        # Use bid/ask mid-point if both are available and valid
+        if best_bid > 0 and best_ask > 0:
+            mid = round((best_bid + best_ask) / 2, 2)
+            spread = best_ask - best_bid
+            _logger.info("Auto-anchor: using bid/ask mid=%.2f (spread=%.2f)", mid, spread)
+
+            # Warn if LTP was far from current market
+            if ltp > 0 and abs(ltp - mid) > spread * 2:
+                _logger.warning("LTP %.2f is far from bid/ask mid %.2f — "
+                                "LTP appears stale, using mid-point instead", ltp, mid)
+            return mid
+
+        # Bid/ask not available (pre-market or no depth) — fall back to LTP
         if ltp and ltp > 0:
             anchor = round(ltp, 2)
-            logging.getLogger(__name__).info("Auto-anchor: LTP=%.2f -> anchor=%.2f",
-                                             ltp, anchor)
+            _logger.info("Auto-anchor (no bid/ask): LTP=%.2f", anchor)
             return anchor
+
         return 0.0
     finally:
         hc_module._SESSION_FILE = original_session_file
