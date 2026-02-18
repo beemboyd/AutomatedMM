@@ -2,7 +2,7 @@
 """
 TG EOD Flatten — Cancel all orders, flatten SPCENET pair positions, stop the bot.
 
-Designed to run at 3:12 PM IST via cron/launchd before market close.
+Designed to run at 3:25 PM IST via cron/launchd before market close.
 
 Steps:
 1. Connect to XTS
