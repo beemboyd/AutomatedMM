@@ -212,6 +212,21 @@ class HybridClient:
             logger.debug("Session reuse failed: %s", e)
             return False
 
+    def refresh_session(self) -> bool:
+        """Force a fresh XTS login and save the new session token."""
+        try:
+            resp = self.xt.interactive_login()
+            if isinstance(resp, str) or resp.get('type') == 'error':
+                logger.error("XTS session refresh failed: %s", resp)
+                return False
+            self.client_id = resp['result']['userID']
+            self._save_session(resp['result']['token'], self.client_id)
+            logger.info("XTS session refreshed: userID=%s", self.client_id)
+            return True
+        except Exception as e:
+            logger.error("XTS session refresh error: %s", e)
+            return False
+
     def _save_session(self, token: str, user_id: str):
         """Save XTS session token to shared file for other processes."""
         try:
@@ -383,7 +398,7 @@ class HybridClient:
             resp = self.xt.get_order_book()
             if isinstance(resp, str) or resp.get('type') == 'error':
                 logger.error("Order book fetch failed: %s", resp)
-                return []
+                return None  # None signals error (vs [] for empty order book)
 
             raw_orders = resp.get('result', [])
             if not isinstance(raw_orders, list):

@@ -55,6 +55,12 @@ class TollGateEngine:
         self._last_reanchor_time: Optional[datetime] = None
         self._reanchor_cooldown = timedelta(seconds=60)
 
+        # Session refresh: proactive every 30 min + reactive on consecutive errors
+        self._session_refresh_interval = timedelta(minutes=30)
+        self._last_session_refresh: Optional[datetime] = None
+        self._consecutive_poll_errors: int = 0
+        self._max_poll_errors_before_refresh: int = 5
+
     def start(self):
         """
         Start the TollGate engine.
@@ -69,8 +75,8 @@ class TollGateEngine:
         # Session isolation: override session file before connecting
         import TG.hybrid_client as hc_module
         original_session_file = hc_module._SESSION_FILE
-        tollgate_session = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
-        hc_module._SESSION_FILE = tollgate_session
+        self._tollgate_session_file = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
+        hc_module._SESSION_FILE = self._tollgate_session_file
 
         try:
             from TG.hybrid_client import HybridClient
@@ -86,6 +92,8 @@ class TollGateEngine:
         finally:
             # Restore original session file path
             hc_module._SESSION_FILE = original_session_file
+
+        self._last_session_refresh = datetime.now()
 
         # Load state or start fresh
         if self.state.load():
@@ -131,7 +139,27 @@ class TollGateEngine:
         poll_count = 0
         while self.running:
             try:
+                # Proactive session refresh every 30 min
+                if self._last_session_refresh:
+                    elapsed = datetime.now() - self._last_session_refresh
+                    if elapsed >= self._session_refresh_interval:
+                        logger.info("Proactive session refresh (%.0f min since last)",
+                                    elapsed.total_seconds() / 60)
+                        self._refresh_xts_session()
+
                 fills_processed = self._poll_orders()
+                if fills_processed is None:
+                    # Poll returned None -> order fetch failed (session error)
+                    self._consecutive_poll_errors += 1
+                    if self._consecutive_poll_errors >= self._max_poll_errors_before_refresh:
+                        logger.warning("Reactive session refresh after %d consecutive poll errors",
+                                       self._consecutive_poll_errors)
+                        self._refresh_xts_session()
+                        self._consecutive_poll_errors = 0
+                    time.sleep(self.config.poll_interval)
+                    continue
+
+                self._consecutive_poll_errors = 0
                 if fills_processed > 0:
                     self.state.save()
                     self.state.print_summary()
@@ -157,6 +185,20 @@ class TollGateEngine:
                 time.sleep(self.config.poll_interval * 2)
 
         self._shutdown()
+
+    def _refresh_xts_session(self):
+        """Refresh XTS session with session file isolation."""
+        import TG.hybrid_client as hc_module
+        original = hc_module._SESSION_FILE
+        hc_module._SESSION_FILE = self._tollgate_session_file
+        try:
+            if self.client.refresh_session():
+                self._last_session_refresh = datetime.now()
+                logger.info("Session refresh successful")
+            else:
+                logger.error("Session refresh failed, will retry next cycle")
+        finally:
+            hc_module._SESSION_FILE = original
 
     def _place_entries(self):
         """Place entry orders for all free levels on both sides."""
@@ -205,13 +247,16 @@ class TollGateEngine:
             logger.error("Entry FAILED: %s L%d @ %.2f",
                          level.side, level.index, level.entry_price)
 
-    def _poll_orders(self) -> int:
+    def _poll_orders(self) -> Optional[int]:
         """
         Poll all orders from XTS and process status changes.
 
+        Returns number of fills processed, or None if fetch failed (session error).
         Cache key includes filled_qty to detect incremental partial fills.
         """
         orders = self.client.get_orders()
+        if orders is None:
+            return None  # Session/fetch error
         if not orders:
             return 0
 
