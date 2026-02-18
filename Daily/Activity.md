@@ -1,5 +1,30 @@
 # Activity Log
 
+## 2026-02-18 (Night) - Claude
+**Restructure PnL Dashboard — Account-Based Daily Reports**
+
+Replaced the generic 5-tab PnL dashboard (Overview/Sessions/Transactions/Inventory/Analytics) with a 2-tab account-based daily report layout.
+
+### Files Modified
+1. **`TG/pnl/db_manager.py`** — Added 4 new query methods:
+   - `get_daily_summary_tollgate(days)`: Day-by-day PnL, round trips, SOD/EOD inventory, VWAP for 01MU01
+   - `get_daily_summary_grid(days)`: Per-ticker daily breakdown + hedge summary for 01MU06
+   - `get_day_transactions(bot_type, day, ticker)`: Drill-down transaction list
+   - `get_cumulative_pnl(bot_type, days)`: Cumulative PnL series for charts
+
+2. **`TG/pnl/dashboard.py`** — Complete rewrite:
+   - Removed old endpoints: `/api/overview`, `/api/sessions`, `/api/sessions/<id>`, `/api/pairs/<id>/cycles`, `/api/cycles/<id>/txns`, `/api/transactions`, `/api/inventory`, `/api/analytics/*`
+   - Added: `/api/tollgate/daily`, `/api/grid/daily`, `/api/day-transactions`, `/api/cumulative-pnl`
+   - Kept `/api/state` for landing page compatibility
+   - New 2-tab HTML/JS: 01MU01 (SPCENET TollGate) and 01MU06 (TG Grid)
+   - Day cards with cumulative PnL chart, KPIs, SOD/EOD inventory, VWAP, click-to-expand transactions
+
+### Tab Layout
+- **01MU01**: SPCENET TollGate — cumulative PnL chart, daily PnL/RT/inventory/VWAP cards
+- **01MU06**: TG Grid — per-ticker (TATSILV/TATAGOLD/IDEA) daily breakdown + SPCENET hedge cost
+
+---
+
 ## 2026-02-18 (Evening) - Claude
 **Fix auto-anchor bug: use bid/ask mid-point instead of stale LTP**
 

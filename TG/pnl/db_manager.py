@@ -218,7 +218,212 @@ class PnLDBManager:
                     updated_at = NOW()
             """, (session_id, ticker, qty_delta, price))
 
-    # ── Read Methods (Dashboard) ──
+    # ── Read Methods (Account-Based Daily Reports) ──
+
+    def get_daily_summary_tollgate(self, days: int = 90) -> List[dict]:
+        """Day-by-day summary for 01MU01 (TollGate): PnL, round trips, SOD/EOD inventory, VWAP."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute("""
+                WITH daily_net AS (
+                    SELECT
+                        t.ts::date AS day,
+                        SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END) AS buy_qty,
+                        SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END) AS sell_qty,
+                        CASE WHEN SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END) > 0
+                             THEN SUM(CASE WHEN t.side = 'BUY' THEN t.price * t.qty ELSE 0 END)
+                                  / SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END)
+                             ELSE 0 END AS buy_vwap,
+                        CASE WHEN SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END) > 0
+                             THEN SUM(CASE WHEN t.side = 'SELL' THEN t.price * t.qty ELSE 0 END)
+                                  / SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END)
+                             ELSE 0 END AS sell_vwap,
+                        SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE -t.qty END) AS day_net_qty
+                    FROM tg_transactions t
+                    JOIN tg_sessions s ON t.session_id = s.session_id
+                    WHERE s.bot_type = 'tollgate'
+                    GROUP BY t.ts::date
+                ),
+                daily_inventory AS (
+                    SELECT
+                        day, buy_qty, sell_qty, buy_vwap, sell_vwap, day_net_qty,
+                        COALESCE(SUM(day_net_qty) OVER (ORDER BY day ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS sod_inventory,
+                        SUM(day_net_qty) OVER (ORDER BY day ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS eod_inventory
+                    FROM daily_net
+                ),
+                daily_cycles AS (
+                    SELECT
+                        c.closed_at::date AS day,
+                        COUNT(*) AS round_trips,
+                        COALESCE(SUM(c.combined_pnl), 0) AS pnl
+                    FROM tg_cycles c
+                    JOIN tg_sessions s ON c.session_id = s.session_id
+                    WHERE c.status = 'closed' AND s.bot_type = 'tollgate'
+                    GROUP BY c.closed_at::date
+                )
+                SELECT
+                    di.day, COALESCE(dc.pnl, 0) AS pnl,
+                    COALESCE(dc.round_trips, 0) AS round_trips,
+                    di.sod_inventory, di.eod_inventory,
+                    ROUND(di.buy_vwap::numeric, 4) AS buy_vwap,
+                    ROUND(di.sell_vwap::numeric, 4) AS sell_vwap,
+                    di.buy_qty, di.sell_qty
+                FROM daily_inventory di
+                LEFT JOIN daily_cycles dc ON di.day = dc.day
+                WHERE di.day >= CURRENT_DATE - make_interval(days => %s)
+                ORDER BY di.day DESC
+            """, (days,))
+            return [dict(r) for r in cursor.fetchall()]
+
+    def get_daily_summary_grid(self, days: int = 90) -> dict:
+        """Day-by-day summary for 01MU06 (TG Grid): primaries per ticker + hedge summary."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+            # Primaries: per (day, ticker) with SOD/EOD inventory
+            cursor.execute("""
+                WITH daily_net AS (
+                    SELECT
+                        t.ts::date AS day,
+                        t.ticker,
+                        SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END) AS buy_qty,
+                        SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END) AS sell_qty,
+                        CASE WHEN SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END) > 0
+                             THEN SUM(CASE WHEN t.side = 'BUY' THEN t.price * t.qty ELSE 0 END)
+                                  / SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END)
+                             ELSE 0 END AS buy_vwap,
+                        CASE WHEN SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END) > 0
+                             THEN SUM(CASE WHEN t.side = 'SELL' THEN t.price * t.qty ELSE 0 END)
+                                  / SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END)
+                             ELSE 0 END AS sell_vwap,
+                        SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE -t.qty END) AS day_net_qty
+                    FROM tg_transactions t
+                    JOIN tg_sessions s ON t.session_id = s.session_id
+                    WHERE s.bot_type = 'tg_grid'
+                      AND t.txn_type IN ('ENTRY', 'TARGET')
+                    GROUP BY t.ts::date, t.ticker
+                ),
+                daily_inventory AS (
+                    SELECT
+                        day, ticker, buy_qty, sell_qty, buy_vwap, sell_vwap, day_net_qty,
+                        COALESCE(SUM(day_net_qty) OVER (PARTITION BY ticker ORDER BY day ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS sod_inventory,
+                        SUM(day_net_qty) OVER (PARTITION BY ticker ORDER BY day ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS eod_inventory
+                    FROM daily_net
+                ),
+                daily_cycles AS (
+                    SELECT
+                        c.closed_at::date AS day,
+                        p.primary_ticker AS ticker,
+                        COUNT(*) AS round_trips,
+                        COALESCE(SUM(c.primary_pnl), 0) AS primary_pnl,
+                        COALESCE(SUM(c.pair_pnl), 0) AS pair_pnl,
+                        COALESCE(SUM(c.combined_pnl), 0) AS combined_pnl
+                    FROM tg_cycles c
+                    JOIN tg_sessions s ON c.session_id = s.session_id
+                    JOIN tg_pairs p ON c.pair_id = p.pair_id
+                    WHERE c.status = 'closed' AND s.bot_type = 'tg_grid'
+                    GROUP BY c.closed_at::date, p.primary_ticker
+                )
+                SELECT
+                    di.day, di.ticker,
+                    COALESCE(dc.primary_pnl, 0) AS primary_pnl,
+                    COALESCE(dc.pair_pnl, 0) AS pair_pnl,
+                    COALESCE(dc.combined_pnl, 0) AS combined_pnl,
+                    COALESCE(dc.round_trips, 0) AS round_trips,
+                    di.sod_inventory, di.eod_inventory,
+                    ROUND(di.buy_vwap::numeric, 4) AS buy_vwap,
+                    ROUND(di.sell_vwap::numeric, 4) AS sell_vwap,
+                    di.buy_qty, di.sell_qty
+                FROM daily_inventory di
+                LEFT JOIN daily_cycles dc ON di.day = dc.day AND di.ticker = dc.ticker
+                WHERE di.day >= CURRENT_DATE - make_interval(days => %s)
+                ORDER BY di.day DESC, di.ticker
+            """, (days,))
+            primaries = [dict(r) for r in cursor.fetchall()]
+
+            # Hedges: per day from PAIR_HEDGE/PAIR_UNWIND transactions
+            cursor.execute("""
+                WITH hedge_txns AS (
+                    SELECT
+                        t.ts::date AS day,
+                        SUM(CASE WHEN t.txn_type = 'PAIR_HEDGE' THEN 1 ELSE 0 END) AS hedges_placed,
+                        SUM(CASE WHEN t.txn_type = 'PAIR_UNWIND' THEN 1 ELSE 0 END) AS hedges_unwound,
+                        SUM(CASE WHEN t.txn_type = 'PAIR_HEDGE' THEN t.qty ELSE 0 END) AS hedge_qty,
+                        SUM(CASE WHEN t.txn_type = 'PAIR_UNWIND' THEN t.qty ELSE 0 END) AS unwind_qty
+                    FROM tg_transactions t
+                    JOIN tg_sessions s ON t.session_id = s.session_id
+                    WHERE s.bot_type = 'tg_grid'
+                      AND t.txn_type IN ('PAIR_HEDGE', 'PAIR_UNWIND')
+                    GROUP BY t.ts::date
+                ),
+                hedge_cost AS (
+                    SELECT
+                        c.closed_at::date AS day,
+                        COALESCE(SUM(c.pair_pnl), 0) AS hedge_cost
+                    FROM tg_cycles c
+                    JOIN tg_sessions s ON c.session_id = s.session_id
+                    WHERE c.status = 'closed' AND s.bot_type = 'tg_grid'
+                    GROUP BY c.closed_at::date
+                )
+                SELECT
+                    ht.day,
+                    ht.hedges_placed, ht.hedges_unwound,
+                    ht.hedge_qty, ht.unwind_qty,
+                    COALESCE(hc.hedge_cost, 0) AS hedge_cost
+                FROM hedge_txns ht
+                LEFT JOIN hedge_cost hc ON ht.day = hc.day
+                WHERE ht.day >= CURRENT_DATE - make_interval(days => %s)
+                ORDER BY ht.day DESC
+            """, (days,))
+            hedges = [dict(r) for r in cursor.fetchall()]
+
+            return {'primaries': primaries, 'hedges': hedges}
+
+    def get_day_transactions(self, bot_type: str, day: str,
+                             ticker: Optional[str] = None) -> List[dict]:
+        """Drill-down: all transactions for a specific bot/day/ticker."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            conditions = ["s.bot_type = %s", "t.ts::date = %s::date"]
+            params: list = [bot_type, day]
+            if ticker:
+                conditions.append("t.ticker = %s")
+                params.append(ticker)
+            where = " AND ".join(conditions)
+            cursor.execute(f"""
+                SELECT t.ts, t.ticker, t.side, t.qty, t.price, t.txn_type,
+                       t.pnl_increment, t.order_id, t.net_inventory
+                FROM tg_transactions t
+                JOIN tg_sessions s ON t.session_id = s.session_id
+                WHERE {where}
+                ORDER BY t.ts
+            """, params)
+            return [dict(r) for r in cursor.fetchall()]
+
+    def get_cumulative_pnl(self, bot_type: str, days: int = 90) -> List[dict]:
+        """Cumulative PnL series per day for chart (from closed cycles)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute("""
+                SELECT
+                    day,
+                    daily_pnl,
+                    SUM(daily_pnl) OVER (ORDER BY day) AS cumulative_pnl
+                FROM (
+                    SELECT
+                        c.closed_at::date AS day,
+                        COALESCE(SUM(c.combined_pnl), 0) AS daily_pnl
+                    FROM tg_cycles c
+                    JOIN tg_sessions s ON c.session_id = s.session_id
+                    WHERE c.status = 'closed' AND s.bot_type = %s
+                    GROUP BY c.closed_at::date
+                ) daily
+                WHERE day >= CURRENT_DATE - make_interval(days => %s)
+                ORDER BY day
+            """, (bot_type, days))
+            return [dict(r) for r in cursor.fetchall()]
+
+    # ── Legacy Read Methods (kept for /api/state) ──
 
     def get_overview(self) -> dict:
         """KPI overview: today/week/all-time PnL, active sessions, inventory."""
