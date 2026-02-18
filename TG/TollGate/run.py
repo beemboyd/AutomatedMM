@@ -1,0 +1,232 @@
+"""
+TollGate CLI Entry Point.
+
+Usage:
+    python -m TG.TollGate.run --auto-anchor
+    python -m TG.TollGate.run --anchor 5.42
+    python -m TG.TollGate.run --auto-anchor --dry-run
+    python -m TG.TollGate.run --cancel-all
+    python -m TG.TollGate.run --dashboard --mode monitor --port 7788
+    python -m TG.TollGate.run --dashboard --mode config --port 7786
+"""
+
+import argparse
+import sys
+import os
+import logging
+
+# Ensure project root is on path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='TollGate — SPCENET Market-Making Bot',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    # Anchor
+    anchor_group = parser.add_mutually_exclusive_group()
+    anchor_group.add_argument('--anchor', type=float, help='Grid anchor price')
+    anchor_group.add_argument('--auto-anchor', action='store_true',
+                              help='Auto-detect anchor from LTP')
+
+    # Grid parameters
+    parser.add_argument('--spacing', type=float, help='Base grid spacing (default: 0.01)')
+    parser.add_argument('--profit', type=float, help='Round-trip profit target (default: 0.01)')
+    parser.add_argument('--levels', type=int, help='Levels per side (default: 10)')
+    parser.add_argument('--qty', type=int, help='Qty per level (default: 4000)')
+    parser.add_argument('--product', choices=['NRML', 'MIS'], help='Product type')
+    parser.add_argument('--poll-interval', type=float, help='Poll interval seconds')
+    parser.add_argument('--max-reanchors', type=int, help='Max reanchors before stopping')
+
+    # Credentials
+    parser.add_argument('--interactive-key', type=str, help='XTS Interactive API key')
+    parser.add_argument('--interactive-secret', type=str, help='XTS Interactive secret')
+    parser.add_argument('--user', type=str, help='Zerodha user name (default: Sai)')
+    parser.add_argument('--xts-root', type=str, help='XTS root URL')
+
+    # Actions
+    parser.add_argument('--dry-run', action='store_true',
+                        help='Print grid layout without placing orders')
+    parser.add_argument('--cancel-all', action='store_true',
+                        help='Cancel all open orders and exit')
+
+    # Dashboard
+    parser.add_argument('--dashboard', action='store_true',
+                        help='Start web dashboard instead of trading engine')
+    parser.add_argument('--mode', choices=['monitor', 'config'], default='monitor',
+                        help='Dashboard mode (default: monitor)')
+    parser.add_argument('--port', type=int, help='Dashboard port')
+    parser.add_argument('--host', default='0.0.0.0', help='Dashboard bind host')
+
+    # Logging
+    parser.add_argument('--log-level', default='INFO',
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                        help='Log level')
+
+    args = parser.parse_args()
+
+    # Configure logging
+    log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, 'tollgate_engine.log')
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format='%(asctime)s %(name)s %(levelname)s %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(log_file),
+        ]
+    )
+    logger = logging.getLogger(__name__)
+
+    # Dashboard mode
+    if args.dashboard:
+        from .dashboard import create_app
+        port = args.port or (7788 if args.mode == 'monitor' else 7786)
+        logger.info("Starting TollGate Dashboard (%s) on %s:%d",
+                     args.mode, args.host, port)
+        app = create_app(mode=args.mode)
+        app.run(host=args.host, port=port, debug=False)
+        return
+
+    # Build config
+    from .config import TollGateConfig
+
+    config = TollGateConfig()
+
+    # Apply overrides
+    if args.spacing is not None:
+        config.base_spacing = args.spacing
+    if args.profit is not None:
+        config.round_trip_profit = args.profit
+    if args.levels is not None:
+        config.levels_per_side = args.levels
+    if args.qty is not None:
+        config.qty_per_level = args.qty
+    if args.product:
+        config.product = args.product
+    if args.poll_interval is not None:
+        config.poll_interval = args.poll_interval
+    if args.max_reanchors is not None:
+        config.max_reanchors = args.max_reanchors
+    if args.interactive_key:
+        config.interactive_key = args.interactive_key
+    if args.interactive_secret:
+        config.interactive_secret = args.interactive_secret
+    if args.user:
+        config.zerodha_user = args.user
+    if args.xts_root:
+        config.xts_root = args.xts_root
+
+    # Resolve anchor
+    if args.anchor:
+        config.anchor_price = args.anchor
+    elif args.auto_anchor:
+        # Need to connect to get LTP
+        if args.dry_run:
+            logger.info("Dry run: auto-anchor not available without broker connection")
+            config.anchor_price = 5.42  # Placeholder
+            logger.info("Using placeholder anchor: %.2f", config.anchor_price)
+        else:
+            config.anchor_price = _resolve_auto_anchor(config)
+            if config.anchor_price <= 0:
+                logger.error("Failed to auto-detect anchor price")
+                sys.exit(1)
+    else:
+        # Try to load from existing state
+        from .state import TollGateState
+        state = TollGateState(config.symbol)
+        if state.load() and state.anchor_price > 0:
+            config.anchor_price = state.anchor_price
+            logger.info("Resumed anchor from state: %.2f", config.anchor_price)
+        else:
+            logger.error("No anchor specified. Use --anchor or --auto-anchor")
+            sys.exit(1)
+
+    # Dry run
+    if args.dry_run:
+        config.print_grid_layout()
+        buy_levels, sell_levels = config.compute_levels()
+        print(f"\n  Total exposure per side: {config.levels_per_side * config.qty_per_level} shares")
+        print(f"  Round-trip profit per cycle: {config.round_trip_profit}")
+        print(f"  Dry run complete. No orders placed.\n")
+        return
+
+    # Cancel all
+    if args.cancel_all:
+        _cancel_all_orders(config)
+        return
+
+    # Start engine
+    from .engine import TollGateEngine
+    engine = TollGateEngine(config)
+    engine.start()
+
+
+def _resolve_auto_anchor(config) -> float:
+    """Connect temporarily to get LTP for auto-anchoring."""
+    import TG.hybrid_client as hc_module
+    original_session_file = hc_module._SESSION_FILE
+    tollgate_session = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
+    hc_module._SESSION_FILE = tollgate_session
+
+    try:
+        from TG.hybrid_client import HybridClient
+        client = HybridClient(
+            interactive_key=config.interactive_key,
+            interactive_secret=config.interactive_secret,
+            zerodha_user=config.zerodha_user,
+            root_url=config.xts_root,
+        )
+        if not client.connect():
+            return 0.0
+        ltp = client.get_ltp(config.symbol, config.exchange)
+        if ltp and ltp > 0:
+            anchor = round(ltp, 2)
+            logging.getLogger(__name__).info("Auto-anchor: LTP=%.2f -> anchor=%.2f",
+                                             ltp, anchor)
+            return anchor
+        return 0.0
+    finally:
+        hc_module._SESSION_FILE = original_session_file
+
+
+def _cancel_all_orders(config):
+    """Connect and cancel all open orders."""
+    import TG.hybrid_client as hc_module
+    original_session_file = hc_module._SESSION_FILE
+    tollgate_session = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
+    hc_module._SESSION_FILE = tollgate_session
+
+    try:
+        from TG.hybrid_client import HybridClient
+        from .state import TollGateState
+        from .engine import TollGateEngine
+
+        client = HybridClient(
+            interactive_key=config.interactive_key,
+            interactive_secret=config.interactive_secret,
+            zerodha_user=config.zerodha_user,
+            root_url=config.xts_root,
+        )
+        if not client.connect():
+            logging.getLogger(__name__).error("Cannot connect to cancel orders")
+            return
+
+        engine = TollGateEngine(config)
+        engine.client = client
+        engine.state.load()
+        engine._rebuild_level_groups()
+        engine.cancel_all()
+        logging.getLogger(__name__).info("All orders cancelled")
+    finally:
+        hc_module._SESSION_FILE = original_session_file
+
+
+if __name__ == '__main__':
+    main()

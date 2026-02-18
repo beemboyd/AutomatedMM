@@ -1,5 +1,31 @@
 # Activity Log
 
+## 2026-02-18 IST - Claude
+**TG/TollGate — New single-ticker SPCENET market-making bot**
+
+### Changes
+1. **`TG/TollGate/__init__.py`** — Package init with docstring.
+2. **`TG/TollGate/__main__.py`** — Enables `python -m TG.TollGate` execution.
+3. **`TG/TollGate/config.py`** — `TollGateConfig` dataclass with `compute_levels()`, `GridLevel`, `generate_order_id()`, `print_grid_layout()`. Default params: base_spacing=0.01, round_trip_profit=0.01, levels_per_side=10, qty_per_level=4000, max_reanchors=100. Uses separate XTS account (Interactive Order Data).
+4. **`TG/TollGate/state.py`** — `TollGateGroup` dataclass with partial fill support (`target_orders: List[dict]`, `target_seq`, `entry_filled_so_far`, `cycle_number`). `TollGateState` class with JSON persistence, net_inventory tracking, level_cycle_counters for cycle numbering. Atomic writes (tmp + os.replace).
+5. **`TG/TollGate/engine.py`** — Unified `TollGateEngine` (single class handles both buy/sell sides). Features: immediate partial fill handling (target placed per increment), VWAP entry tracking, 10-step reanchor algorithm with increasing spacing, net inventory tracking, order status cache with filled_qty. Session isolation via monkey-patching `_SESSION_FILE` to prevent XTS session collision.
+6. **`TG/TollGate/run.py`** — CLI entry point with argparse: `--auto-anchor`, `--anchor`, `--dry-run`, `--cancel-all`, `--dashboard`, `--mode`, `--port`, etc. Supports auto-anchor from LTP and state resumption.
+7. **`TG/TollGate/dashboard.py`** — Flask app factory with two modes: Monitor (port 7788) with grid visualization, KPI cards (PnL/Cycles/Anchor/Spacing/Inventory/Reanchors), cumulative PnL chart, recent transactions; Config (port 7786) with settings editor, start/stop control, PID tracking. Same dark theme as TG dashboard (JetBrains Mono, Tailwind, Chart.js).
+
+### Architecture
+- Reuses `HybridClient` from `TG.hybrid_client` — no code duplication
+- Custom `TollGateGroup` model (not `TG.Group`) — partial fills need `target_orders` list
+- Session isolated: TollGate session at `TG/TollGate/state/.xts_session.json`
+- XTS Account: Interactive Order Data (key: 1d17edd135146be7572510)
+
+### Verification
+- `python -m TG.TollGate.run --anchor 5.42 --dry-run` — prints grid, no orders
+- All module imports verified: config, state, engine, dashboard
+- State persistence round-trip tested (save/load with partial fills)
+- Order ID generation verified within 20-char XTS limit
+
+---
+
 ## 2026-02-17 18:30 IST - Claude
 **TG — Epoch-based reanchor grid system (replace increasing-gap grid)**
 
