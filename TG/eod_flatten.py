@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-TG EOD Flatten — Cancel all orders, flatten SPCENET pair positions, stop the bot.
+TG EOD Shutdown — Cancel all open grid orders and stop all bots.
 
 Designed to run at 3:25 PM IST via cron/launchd before market close.
 
+Positions are NOT flattened automatically — inventory decisions are made manually.
+Use --flatten flag to explicitly flatten the pair position if needed.
+
 Steps:
-1. Connect to XTS
-2. Cancel ALL open orders (TATSILV entries, targets, SPCENET hedges)
-3. Flatten net SPCENET position (buy back any short, sell any long)
-4. Kill any running TG bot process
-5. Save final state
+1. Kill any running TG bot processes
+2. Connect to XTS
+3. Cancel ALL open orders (entries, targets, hedges)
+4. (Optional) Flatten net pair position if --flatten is passed
 
 Usage:
     python3 -m TG.eod_flatten --symbol TATSILV --pair-symbol SPCENET
+    python3 -m TG.eod_flatten --symbol TATSILV --pair-symbol SPCENET --flatten
 """
 
 import sys
@@ -153,13 +156,16 @@ def main():
     parser.add_argument('--interactive-secret', default=_DEFAULT_INTERACTIVE_SECRET)
     parser.add_argument('--xts-root', default=_DEFAULT_XTS_ROOT)
     parser.add_argument('--user', default='Sai', help='Zerodha user for market data')
+    parser.add_argument('--flatten', action='store_true',
+                        help='Flatten pair position (default: keep positions, only cancel orders)')
     args = parser.parse_args()
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'logs'), exist_ok=True)
     setup_logging()
 
     logger.info("=" * 60)
-    logger.info("TG EOD FLATTEN — %s + %s", args.symbol, args.pair_symbol)
+    logger.info("TG EOD SHUTDOWN — %s + %s", args.symbol, args.pair_symbol)
+    logger.info("Flatten mode: %s", "ON" if args.flatten else "OFF (positions kept)")
     logger.info("=" * 60)
 
     # Step 1: Kill the bot first so it doesn't place new orders
@@ -175,7 +181,7 @@ def main():
         root_url=args.xts_root,
     )
     if not client.connect():
-        logger.error("XTS connection failed. Cannot flatten.")
+        logger.error("XTS connection failed. Cannot cancel orders.")
         sys.exit(1)
 
     # Step 3: Cancel all open orders
@@ -183,12 +189,15 @@ def main():
     cancelled = cancel_all_open_orders(client)
     logger.info("Cancelled %d orders", cancelled)
 
-    # Step 4: Flatten pair position
-    logger.info("Step 4: Flattening %s position...", args.pair_symbol)
-    flatten_pair_position(client, args.pair_symbol, args.exchange, args.product)
+    # Step 4: Flatten pair position (only if explicitly requested)
+    if args.flatten:
+        logger.info("Step 4: Flattening %s position...", args.pair_symbol)
+        flatten_pair_position(client, args.pair_symbol, args.exchange, args.product)
+    else:
+        logger.info("Step 4: Skipped — positions kept (use --flatten to close)")
 
     logger.info("=" * 60)
-    logger.info("EOD FLATTEN COMPLETE")
+    logger.info("EOD SHUTDOWN COMPLETE")
     logger.info("=" * 60)
 
 
