@@ -31,26 +31,12 @@ DASHBOARDS = {
         'icon': 'chart-line',
         'color': '#00c853',
     },
-    'tg-config': {
-        'port': 7779,
-        'name': 'TG Grid Config',
-        'desc': 'Grid trading configuration, bot start/stop',
-        'icon': 'cog',
-        'color': '#448aff',
-    },
     'tollgate-monitor': {
         'port': 7788,
         'name': 'TollGate Monitor',
         'desc': 'SPCENET market-making — grid levels, partial fills, PnL',
         'icon': 'toll',
         'color': '#ff9100',
-    },
-    'tollgate-config': {
-        'port': 7786,
-        'name': 'TollGate Config',
-        'desc': 'SPCENET market-maker configuration, bot control',
-        'icon': 'sliders',
-        'color': '#b388ff',
     },
 }
 
