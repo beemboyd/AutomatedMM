@@ -52,7 +52,7 @@ class TollGateConfig:
 
     # Broker parameters
     exchange: str = "NSE"
-    product: str = "NRML"
+    product: str = "CNC"
 
     # XTS Interactive credentials (separate account)
     interactive_key: str = "1d17edd135146be7572510"

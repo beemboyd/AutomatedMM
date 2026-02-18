@@ -38,7 +38,7 @@ def main():
     parser.add_argument('--profit', type=float, help='Round-trip profit target (default: 0.01)')
     parser.add_argument('--levels', type=int, help='Levels per side (default: 10)')
     parser.add_argument('--qty', type=int, help='Qty per level (default: 4000)')
-    parser.add_argument('--product', choices=['NRML', 'MIS'], help='Product type')
+    parser.add_argument('--product', choices=['NRML', 'MIS', 'CNC'], help='Product type')
     parser.add_argument('--poll-interval', type=float, help='Poll interval seconds')
     parser.add_argument('--max-reanchors', type=int, help='Max reanchors before stopping')
 

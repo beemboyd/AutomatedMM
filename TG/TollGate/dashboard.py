@@ -38,7 +38,7 @@ _DEFAULT_CONFIG = {
     "levels_per_side": 10,
     "qty_per_level": 4000,
     "max_reanchors": 100,
-    "product": "NRML",
+    "product": "CNC",
     "poll_interval": 2.0,
     "interactive_key": "1d17edd135146be7572510",
     "interactive_secret": "Htvy720#4K",

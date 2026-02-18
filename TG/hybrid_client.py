@@ -62,7 +62,7 @@ _EXCHANGE_MAP = {
 
 # Product type mapping
 _PRODUCT_MAP = {
-    'CNC': 'NRML',
+    'CNC': 'CNC',
     'NRML': 'NRML',
     'MIS': 'MIS',
 }
@@ -196,7 +196,8 @@ class HybridClient:
                 return False
 
             # Set token on XTS SDK directly
-            self.xt._set_common_variables(token, user_id, False)
+            is_investor = session.get('isInvestorClient', True)
+            self.xt._set_common_variables(token, user_id, is_investor)
             self.client_id = user_id
 
             # Validate by attempting a lightweight API call
@@ -218,6 +219,7 @@ class HybridClient:
             session = {
                 'token': token,
                 'userID': user_id,
+                'isInvestorClient': getattr(self.xt, 'isInvestorClient', True),
                 'timestamp': time.time(),
             }
             tmp = _SESSION_FILE + '.tmp'
