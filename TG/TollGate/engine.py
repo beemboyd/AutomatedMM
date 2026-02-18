@@ -98,6 +98,10 @@ class TollGateEngine:
         # Load state or start fresh
         if self.state.load():
             logger.info("Resuming from saved state")
+            # Use state's anchor for grid computation (not auto-anchor from CLI)
+            if self.state.anchor_price > 0:
+                self.config.anchor_price = self.state.anchor_price
+                logger.info("Using state anchor: %.2f", self.state.anchor_price)
             if self.state.current_spacing > 0:
                 current_spacing = self.state.current_spacing
             else:
