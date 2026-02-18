@@ -45,7 +45,8 @@ def main():
     # Credentials
     parser.add_argument('--interactive-key', type=str, help='XTS Interactive API key')
     parser.add_argument('--interactive-secret', type=str, help='XTS Interactive secret')
-    parser.add_argument('--user', type=str, help='Zerodha user name (default: Sai)')
+    parser.add_argument('--marketdata-key', type=str, help='XTS Market Data API key')
+    parser.add_argument('--marketdata-secret', type=str, help='XTS Market Data secret')
     parser.add_argument('--xts-root', type=str, help='XTS root URL')
 
     # Actions
@@ -118,8 +119,10 @@ def main():
         config.interactive_key = args.interactive_key
     if args.interactive_secret:
         config.interactive_secret = args.interactive_secret
-    if args.user:
-        config.zerodha_user = args.user
+    if args.marketdata_key:
+        config.marketdata_key = args.marketdata_key
+    if args.marketdata_secret:
+        config.marketdata_secret = args.marketdata_secret
     if args.xts_root:
         config.xts_root = args.xts_root
 
@@ -190,23 +193,20 @@ def _resolve_auto_anchor(config) -> float:
     If market has active bid/ask, the anchor is set to the mid-point.
     Falls back to LTP only if bid/ask is unavailable (e.g., pre-market).
     """
-    import TG.hybrid_client as hc_module
-    original_session_file = hc_module._SESSION_FILE
-    tollgate_session = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
-    hc_module._SESSION_FILE = tollgate_session
+    from .client import TollGateClient
     _logger = logging.getLogger(__name__)
 
-    try:
-        from TG.hybrid_client import HybridClient
-        client = HybridClient(
-            interactive_key=config.interactive_key,
-            interactive_secret=config.interactive_secret,
-            zerodha_user=config.zerodha_user,
-            root_url=config.xts_root,
-        )
-        if not client.connect():
-            return 0.0
+    client = TollGateClient(
+        interactive_key=config.interactive_key,
+        interactive_secret=config.interactive_secret,
+        marketdata_key=config.marketdata_key,
+        marketdata_secret=config.marketdata_secret,
+        root_url=config.xts_root,
+    )
+    if not client.connect():
+        return 0.0
 
+    try:
         quote = client.get_quote(config.symbol, config.exchange)
         if not quote:
             _logger.warning("Quote unavailable, falling back to LTP")
@@ -229,13 +229,11 @@ def _resolve_auto_anchor(config) -> float:
             spread = best_ask - best_bid
             _logger.info("Auto-anchor: using bid/ask mid=%.2f (spread=%.2f)", mid, spread)
 
-            # Warn if LTP was far from current market
             if ltp > 0 and abs(ltp - mid) > spread * 2:
                 _logger.warning("LTP %.2f is far from bid/ask mid %.2f — "
                                 "LTP appears stale, using mid-point instead", ltp, mid)
             return mid
 
-        # Bid/ask not available (pre-market or no depth) — fall back to LTP
         if ltp and ltp > 0:
             anchor = round(ltp, 2)
             _logger.info("Auto-anchor (no bid/ask): LTP=%.2f", anchor)
@@ -243,31 +241,26 @@ def _resolve_auto_anchor(config) -> float:
 
         return 0.0
     finally:
-        hc_module._SESSION_FILE = original_session_file
+        client.stop()
 
 
 def _cancel_all_orders(config):
     """Connect and cancel all open orders."""
-    import TG.hybrid_client as hc_module
-    original_session_file = hc_module._SESSION_FILE
-    tollgate_session = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
-    hc_module._SESSION_FILE = tollgate_session
+    from .client import TollGateClient
+    from .engine import TollGateEngine
+
+    client = TollGateClient(
+        interactive_key=config.interactive_key,
+        interactive_secret=config.interactive_secret,
+        marketdata_key=config.marketdata_key,
+        marketdata_secret=config.marketdata_secret,
+        root_url=config.xts_root,
+    )
+    if not client.connect():
+        logging.getLogger(__name__).error("Cannot connect to cancel orders")
+        return
 
     try:
-        from TG.hybrid_client import HybridClient
-        from .state import TollGateState
-        from .engine import TollGateEngine
-
-        client = HybridClient(
-            interactive_key=config.interactive_key,
-            interactive_secret=config.interactive_secret,
-            zerodha_user=config.zerodha_user,
-            root_url=config.xts_root,
-        )
-        if not client.connect():
-            logging.getLogger(__name__).error("Cannot connect to cancel orders")
-            return
-
         engine = TollGateEngine(config)
         engine.client = client
         engine.state.load()
@@ -275,7 +268,7 @@ def _cancel_all_orders(config):
         engine.cancel_all()
         logging.getLogger(__name__).info("All orders cancelled")
     finally:
-        hc_module._SESSION_FILE = original_session_file
+        client.stop()
 
 
 if __name__ == '__main__':

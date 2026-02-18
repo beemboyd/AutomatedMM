@@ -2,8 +2,8 @@
 TollGate Engine — unified polling loop for SPCENET market-making.
 
 Single engine handles both buy and sell sides (no separate BuyBot/SellBot).
-Uses HybridClient from TG.hybrid_client with session isolation so the
-separate XTS account doesn't collide with the main TG bots' session.
+Uses TollGateClient (XTS-only) for both trading and market data — no
+Zerodha dependency.
 
 Key features:
 - Immediate partial fill handling (place target for each partial increment)
@@ -72,33 +72,24 @@ class TollGateEngine:
         """
         Start the TollGate engine.
 
-        1. Connect to XTS (with TollGate credentials) + Zerodha
+        1. Connect to XTS (Interactive + Market Data WebSocket)
         2. Load existing state or initialize fresh
         3. Compute grid levels
         4. Reconcile with broker
         5. Place entry orders for free levels
         6. Enter main polling loop
         """
-        # Session isolation: override session file before connecting
-        import TG.hybrid_client as hc_module
-        original_session_file = hc_module._SESSION_FILE
-        self._tollgate_session_file = os.path.join(os.path.dirname(__file__), 'state', '.xts_session.json')
-        hc_module._SESSION_FILE = self._tollgate_session_file
-
-        try:
-            from TG.hybrid_client import HybridClient
-            self.client = HybridClient(
-                interactive_key=self.config.interactive_key,
-                interactive_secret=self.config.interactive_secret,
-                zerodha_user=self.config.zerodha_user,
-                root_url=self.config.xts_root,
-            )
-            if not self.client.connect():
-                logger.error("Cannot start: connection failed")
-                return
-        finally:
-            # Restore original session file path
-            hc_module._SESSION_FILE = original_session_file
+        from .client import TollGateClient
+        self.client = TollGateClient(
+            interactive_key=self.config.interactive_key,
+            interactive_secret=self.config.interactive_secret,
+            marketdata_key=self.config.marketdata_key,
+            marketdata_secret=self.config.marketdata_secret,
+            root_url=self.config.xts_root,
+        )
+        if not self.client.connect():
+            logger.error("Cannot start: connection failed")
+            return
 
         self._last_session_refresh = datetime.now()
 
@@ -218,18 +209,12 @@ class TollGateEngine:
         self._shutdown()
 
     def _refresh_xts_session(self):
-        """Refresh XTS session with session file isolation."""
-        import TG.hybrid_client as hc_module
-        original = hc_module._SESSION_FILE
-        hc_module._SESSION_FILE = self._tollgate_session_file
-        try:
-            if self.client.refresh_session():
-                self._last_session_refresh = datetime.now()
-                logger.info("Session refresh successful")
-            else:
-                logger.error("Session refresh failed, will retry next cycle")
-        finally:
-            hc_module._SESSION_FILE = original
+        """Refresh XTS Interactive session."""
+        if self.client.refresh_session():
+            self._last_session_refresh = datetime.now()
+            logger.info("Session refresh successful")
+        else:
+            logger.error("Session refresh failed, will retry next cycle")
 
     def _place_entries(self):
         """Place entry orders for all free levels on both sides."""
@@ -950,7 +935,7 @@ class TollGateEngine:
         self.running = False
 
     def _shutdown(self):
-        """Graceful shutdown: save state, do NOT cancel orders."""
+        """Graceful shutdown: save state, disconnect WebSocket, do NOT cancel orders."""
         logger.info("Shutting down TollGate engine...")
         self.state.save()
         self.state.print_summary()
@@ -961,6 +946,10 @@ class TollGateEngine:
                 self._pnl_session_id,
                 total_pnl=self.state.total_pnl,
                 total_cycles=self.state.total_cycles)
+
+        # Disconnect WebSocket
+        if self.client:
+            self.client.stop()
 
         logger.info("State saved. Orders remain active. "
                      "Run with --cancel-all to cancel open orders.")

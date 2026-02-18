@@ -1,5 +1,35 @@
 # Activity Log
 
+## 2026-02-18 (Late Night) - Claude
+**TollGate Warmup Script + XTS WebSocket Migration**
+
+Removed Zerodha dependency from TollGate — now fully self-contained on XTS. Added automated morning warmup.
+
+### New Files
+1. **`TG/TollGate/client.py`** — TollGateClient: XTS Interactive (REST) for trading + XTS Market Data (WebSocket) for real-time LTP/bid/ask. Bypasses MDSocket_io SDK, uses lightweight socketio.Client with 1501-json-full touchline events. Daemon thread for WebSocket, thread-safe market data cache, 30s staleness fallback to REST.
+
+2. **`TG/TollGate/warmup.py`** — Morning warmup script (6 steps): kill leftovers, fresh XTS login, cancel stale orders, reset state, start engine, verify. Supports `--dry-run`, `--skip-verify`, `--verify-only`. Config from `tollgate_config.json`.
+
+3. **`Daily/scheduler/plists/com.india-ts.tg-tollgate-warmup.plist`** — Scheduled at 9:10 AM weekdays (10 min after main TG warmup).
+
+### Modified Files
+4. **`TG/TollGate/config.py`** — Added `marketdata_key`/`marketdata_secret`, removed `zerodha_user`. Updated broker line in print_grid_layout.
+
+5. **`TG/TollGate/engine.py`** — Replaced HybridClient with TollGateClient. Removed session file monkey-patching from `start()` and `_refresh_xts_session()`. Added `client.stop()` in `_shutdown()`.
+
+6. **`TG/TollGate/run.py`** — Replaced HybridClient with TollGateClient in `_resolve_auto_anchor()` and `_cancel_all_orders()`. Added `--marketdata-key`/`--marketdata-secret` CLI args, removed `--user`.
+
+7. **`TG/TollGate/dashboard.py`** — Updated `_DEFAULT_CONFIG`: added `marketdata_key`/`marketdata_secret`, removed `zerodha_user`. Updated `_start_bot()` CLI args and config HTML form.
+
+8. **`TG/TollGate/__init__.py`** — Updated module docstring.
+
+### Impact
+- TollGate no longer depends on Zerodha API/token for market data
+- Automated daily startup at 9:10 AM via launchd
+- XTS Market Data credentials: `202e06ba0b421bf9e1e515` / `Payr544@nk` (shared read-only from main TG)
+
+---
+
 ## 2026-02-18 (Night) - Claude
 **Restructure PnL Dashboard — Account-Based Daily Reports**
 

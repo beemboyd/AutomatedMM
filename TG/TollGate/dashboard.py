@@ -42,8 +42,9 @@ _DEFAULT_CONFIG = {
     "poll_interval": 2.0,
     "interactive_key": "1d17edd135146be7572510",
     "interactive_secret": "Htvy720#4K",
+    "marketdata_key": "202e06ba0b421bf9e1e515",
+    "marketdata_secret": "Payr544@nk",
     "xts_root": "https://xts.myfindoc.com",
-    "zerodha_user": "Sai",
     "auto_anchor": True,
     "anchor_price": 0,
 }
@@ -134,7 +135,8 @@ def _start_bot(config: dict) -> bool:
         sys.executable, '-m', 'TG.TollGate.run',
         '--interactive-key', config.get('interactive_key', ''),
         '--interactive-secret', config.get('interactive_secret', ''),
-        '--user', config.get('zerodha_user', 'Sai'),
+        '--marketdata-key', config.get('marketdata_key', ''),
+        '--marketdata-secret', config.get('marketdata_secret', ''),
         '--xts-root', config.get('xts_root', 'https://xts.myfindoc.com'),
         '--spacing', str(config.get('base_spacing', 0.01)),
         '--profit', str(config.get('round_trip_profit', 0.01)),
@@ -909,12 +911,16 @@ def _build_config_html() -> str:
             <input id="cfg-secret" type="password" style="font-size:10px;">
         </div>
         <div>
-            <label class="block text-xs mb-1" style="color:var(--dim);">XTS Root URL</label>
-            <input id="cfg-xts-root" style="font-size:10px;">
+            <label class="block text-xs mb-1" style="color:var(--dim);">XTS Market Data Key</label>
+            <input id="cfg-md-key" style="font-size:10px;">
         </div>
         <div>
-            <label class="block text-xs mb-1" style="color:var(--dim);">Zerodha User</label>
-            <input id="cfg-user">
+            <label class="block text-xs mb-1" style="color:var(--dim);">XTS Market Data Secret</label>
+            <input id="cfg-md-secret" type="password" style="font-size:10px;">
+        </div>
+        <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">XTS Root URL</label>
+            <input id="cfg-xts-root" style="font-size:10px;">
         </div>
     </div>
 </div>
@@ -949,8 +955,9 @@ function loadConfig() {
             document.getElementById('cfg-auto-anchor').checked = cfg.auto_anchor !== false;
             document.getElementById('cfg-key').value = cfg.interactive_key || '';
             document.getElementById('cfg-secret').value = cfg.interactive_secret || '';
+            document.getElementById('cfg-md-key').value = cfg.marketdata_key || '';
+            document.getElementById('cfg-md-secret').value = cfg.marketdata_secret || '';
             document.getElementById('cfg-xts-root').value = cfg.xts_root || '';
-            document.getElementById('cfg-user').value = cfg.zerodha_user || 'Sai';
         })
         .catch(e => console.error('Load config error:', e));
 }
@@ -969,8 +976,9 @@ function saveConfig() {
         auto_anchor: document.getElementById('cfg-auto-anchor').checked,
         interactive_key: document.getElementById('cfg-key').value.trim(),
         interactive_secret: document.getElementById('cfg-secret').value.trim(),
+        marketdata_key: document.getElementById('cfg-md-key').value.trim(),
+        marketdata_secret: document.getElementById('cfg-md-secret').value.trim(),
         xts_root: document.getElementById('cfg-xts-root').value.trim(),
-        zerodha_user: document.getElementById('cfg-user').value.trim(),
     };
     fetch('/api/config', {
         method: 'POST',

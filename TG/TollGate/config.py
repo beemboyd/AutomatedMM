@@ -2,7 +2,7 @@
 TollGate Configuration — grid parameters, credentials, and order ID generation.
 
 Handles XTS Interactive credentials for the separate "Interactive Order Data"
-account and Zerodha user selection for market data.
+account and XTS Market Data credentials for real-time quotes.
 """
 
 import os
@@ -58,8 +58,9 @@ class TollGateConfig:
     interactive_key: str = "1d17edd135146be7572510"
     interactive_secret: str = "Htvy720#4K"
 
-    # Zerodha user for market data
-    zerodha_user: str = "Sai"
+    # XTS Market Data credentials (shared read-only from main TG)
+    marketdata_key: str = "202e06ba0b421bf9e1e515"
+    marketdata_secret: str = "Payr544@nk"
 
     # XTS API root URL
     xts_root: str = _DEFAULT_XTS_ROOT
@@ -119,7 +120,7 @@ class TollGateConfig:
         print(f"  Max Reanchors    : {self.max_reanchors}")
         print(f"  Product          : {self.product}")
         print(f"  Poll Interval    : {self.poll_interval}s")
-        print(f"  Broker           : XTS + Zerodha (user={self.zerodha_user})")
+        print(f"  Broker           : XTS Interactive + XTS Market Data")
         print(f"{'='*60}")
 
         print(f"\n  BUY GRID (Bot A) — entries below anchor")
