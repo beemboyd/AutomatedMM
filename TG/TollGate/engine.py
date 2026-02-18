@@ -413,12 +413,158 @@ class TollGateEngine:
             logger.warning("REJECTED (untracked): order=%s, reason=%s", order_id, reason)
 
     def _handle_cancellation(self, order: dict):
-        """Log cancelled orders."""
+        """
+        Handle cancelled orders.
+
+        - Target cancellation (e.g. self-trade prevention): process partial fill,
+          adjust qty to reflect final filled amount, re-place for unfilled remainder,
+          and check if the cycle can now complete.
+        - Entry cancellation: re-place the entry order so the level stays active.
+        """
         order_id = str(order.get('order_id', ''))
+        reason = order.get('status_message', '')
+        filled_qty = int(order.get('filled_quantity', 0))
+        fill_price = float(order.get('average_price', 0))
         group = self.state.get_group_by_order(order_id)
-        if group:
-            logger.info("ORDER CANCELLED: order=%s, group=%s, bot=%s",
-                        order_id, group.group_id, group.bot)
+
+        if not group:
+            logger.warning("CANCELLED (untracked): order=%s, reason=%s", order_id, reason)
+            return
+
+        logger.info("ORDER CANCELLED: order=%s, group=%s, bot=%s, reason=%s",
+                    order_id, group.group_id, group.bot, reason)
+
+        # --- Handle TARGET order cancellation ---
+        target_handled = False
+        for target in group.target_orders:
+            if target.get('order_id') != order_id:
+                continue
+            target_handled = True
+
+            # Process partial fill on the cancelled target if any
+            prev_filled = target.get('filled_qty', 0)
+            if filled_qty > prev_filled and fill_price > 0:
+                increment = filled_qty - prev_filled
+                target['filled_qty'] = filled_qty
+                target['fill_price'] = fill_price
+
+                if group.entry_side == "BUY":
+                    self.state.net_inventory -= increment
+                    pnl_increment = round((fill_price - group.entry_fill_price) * increment, 2)
+                else:
+                    self.state.net_inventory += increment
+                    pnl_increment = round((group.entry_fill_price - fill_price) * increment, 2)
+
+                group.realized_pnl = round(group.realized_pnl + pnl_increment, 2)
+                logger.info("Cancelled target partial fill: %d @ %.2f, PnL incr=%.2f (group=%s)",
+                            increment, fill_price, pnl_increment, group.group_id)
+
+            # Capture original qty before adjusting, then mark target as done at its fill level
+            original_qty = int(order.get('quantity', 0)) or target.get('qty', 0)
+            target['qty'] = filled_qty  # Adjust to final filled amount
+
+            # Re-place target for unfilled remainder — but only if not already covered
+            remainder = original_qty - filled_qty
+            existing_target_qty = sum(t.get('qty', 0) for t in group.target_orders)
+            if remainder > 0 and existing_target_qty < group.entry_filled_so_far:
+                group.target_seq += 1
+                target_uid = generate_order_id(
+                    "TP", group.entry_side, group.subset_index,
+                    group.cycle_number, group.group_id, seq=group.target_seq,
+                )
+                new_order_id = self.client.place_order(
+                    symbol=self.config.symbol,
+                    transaction_type=group.target_side,
+                    qty=remainder,
+                    price=group.target_price,
+                    exchange=self.config.exchange,
+                    product=self.config.product,
+                    order_unique_id=target_uid,
+                )
+                if new_order_id:
+                    new_target = {
+                        'order_id': new_order_id,
+                        'qty': remainder,
+                        'filled_qty': 0,
+                        'fill_price': None,
+                        'placed_at': datetime.now().isoformat(),
+                    }
+                    group.target_orders.append(new_target)
+                    self.state.register_order(new_order_id, group.group_id)
+                    logger.info("Re-placed target: %s %d @ %.2f -> order=%s (group=%s, replacing cancelled %s)",
+                                group.target_side, remainder, group.target_price,
+                                new_order_id, group.group_id, order_id)
+                else:
+                    logger.error("FAILED to re-place target for remainder %d (group=%s)",
+                                 remainder, group.group_id)
+            elif remainder > 0:
+                logger.info("Target capacity already sufficient (%d >= %d), skip re-place (group=%s)",
+                            existing_target_qty, group.entry_filled_so_far, group.group_id)
+
+            # Check if the cycle is now complete (all targets filled, entry done)
+            entry_complete = (group.status == TollGateStatus.TARGET_PENDING)
+            all_filled = group.all_targets_filled and group.total_target_filled_qty >= group.entry_filled_so_far
+            if entry_complete and all_filled:
+                logger.info("CYCLE COMPLETE (after cancel-recheck): %s L%d C%d, PnL=%.2f (group=%s)",
+                            group.entry_side, group.subset_index, group.cycle_number,
+                            group.realized_pnl, group.group_id)
+                level_key = f"{group.bot}:{group.subset_index}"
+                self.level_groups.pop(level_key, None)
+                self.state.close_group(group.group_id)
+
+                # Re-enter at same grid level
+                if group.bot == 'A' and group.subset_index < len(self.buy_levels):
+                    self._place_entry(self.buy_levels[group.subset_index], bot="A")
+                elif group.bot == 'B' and group.subset_index < len(self.sell_levels):
+                    self._place_entry(self.sell_levels[group.subset_index], bot="B")
+
+            self.state.save()
+            break
+
+        # --- Handle ENTRY order cancellation ---
+        if not target_handled and order_id == group.entry_order_id:
+            if filled_qty > 0 and fill_price > 0:
+                # Entry had partial fill before cancellation — process it
+                increment = filled_qty - group.entry_filled_so_far
+                if increment > 0:
+                    group.entry_fill_price = fill_price
+                    group.entry_filled_so_far = filled_qty
+                    if group.entry_side == "BUY":
+                        self.state.net_inventory += increment
+                    else:
+                        self.state.net_inventory -= increment
+                    logger.info("Cancelled entry partial: %d @ %.2f (group=%s)",
+                                increment, fill_price, group.group_id)
+
+            # Re-place entry for unfilled remainder
+            entry_remainder = group.qty - group.entry_filled_so_far
+            if entry_remainder > 0:
+                cycle = group.cycle_number
+                order_uid = generate_order_id("EN", group.entry_side, group.subset_index,
+                                              cycle, group.group_id)
+                new_entry_id = self.client.place_order(
+                    symbol=self.config.symbol,
+                    transaction_type=group.entry_side,
+                    qty=entry_remainder,
+                    price=group.entry_price,
+                    exchange=self.config.exchange,
+                    product=self.config.product,
+                    order_unique_id=order_uid,
+                )
+                if new_entry_id:
+                    group.entry_order_id = new_entry_id
+                    self.state.register_order(new_entry_id, group.group_id)
+                    logger.info("Re-placed entry: %s %d @ %.2f -> order=%s (group=%s, replacing cancelled %s)",
+                                group.entry_side, entry_remainder, group.entry_price,
+                                new_entry_id, group.group_id, order_id)
+                else:
+                    logger.error("FAILED to re-place entry for remainder %d (group=%s)",
+                                 entry_remainder, group.group_id)
+            else:
+                logger.info("Entry fully filled before cancellation, no re-place needed (group=%s)",
+                            group.group_id)
+
+            self.state.save()
 
     def _check_grid_exhausted(self) -> Optional[str]:
         """
@@ -609,13 +755,45 @@ class TollGateEngine:
             # Check target orders
             for target in group.target_orders:
                 tid = target.get('order_id')
-                if tid and target.get('filled_qty', 0) < target.get('qty', 0):
-                    broker_order = broker_orders.get(tid)
-                    if broker_order:
-                        status = broker_order.get('status', '')
-                        if status in ('COMPLETE', 'PARTIAL'):
-                            logger.info("Reconcile: target fill for group=%s", group.group_id)
-                            self._handle_fill_event(broker_order)
+                if not tid:
+                    continue
+                broker_order = broker_orders.get(tid)
+                if not broker_order:
+                    continue
+                status = broker_order.get('status', '')
+                if status in ('COMPLETE', 'PARTIAL'):
+                    if target.get('filled_qty', 0) < target.get('qty', 0):
+                        logger.info("Reconcile: target fill for group=%s", group.group_id)
+                        self._handle_fill_event(broker_order)
+                elif status == 'CANCELLED':
+                    if target.get('qty', 0) != target.get('filled_qty', 0):
+                        logger.info("Reconcile: cancelled target for group=%s, adjusting qty", group.group_id)
+                        self._handle_cancellation(broker_order)
+
+        # After reconciliation, check for groups that should be closed
+        for group in list(self.state.open_groups.values()):
+            if group.status == TollGateStatus.TARGET_PENDING:
+                all_filled = group.all_targets_filled and group.total_target_filled_qty >= group.entry_filled_so_far
+                if all_filled:
+                    logger.info("Reconcile: closing completed cycle %s L%d C%d, PnL=%.2f",
+                                group.entry_side, group.subset_index, group.cycle_number,
+                                group.realized_pnl)
+                    level_key = f"{group.bot}:{group.subset_index}"
+                    self.level_groups.pop(level_key, None)
+                    self.state.close_group(group.group_id)
+
+                    if group.bot == 'A' and group.subset_index < len(self.buy_levels):
+                        self._place_entry(self.buy_levels[group.subset_index], bot="A")
+                    elif group.bot == 'B' and group.subset_index < len(self.sell_levels):
+                        self._place_entry(self.sell_levels[group.subset_index], bot="B")
+
+        # Populate status cache from all broker orders so poll loop won't re-process
+        for order in orders:
+            oid = str(order.get('order_id', ''))
+            st = order.get('status', '')
+            fq = int(order.get('filled_quantity', 0))
+            self._order_status_cache[oid] = f"{st}:{fq}"
+        logger.info("Status cache seeded with %d orders from reconciliation", len(orders))
 
         self.state.save()
         logger.info("Reconciliation complete")
@@ -637,7 +815,7 @@ class TollGateEngine:
         logger.info("Shutting down TollGate engine...")
         self.state.save()
         self.state.print_summary()
-        logger.info("State saved. Orders remain active (NRML). "
+        logger.info("State saved. Orders remain active. "
                      "Run with --cancel-all to cancel open orders.")
         logger.info("Total PnL: %.2f | Cycles: %d | Inventory: %d",
                      self.state.total_pnl, self.state.total_cycles,
