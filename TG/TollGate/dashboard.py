@@ -410,14 +410,14 @@ def _build_monitor_html() -> str:
         <div>
             <h3 class="text-xs font-semibold mb-2" style="color:var(--green);">BUY GRID (Bot A) — entries below anchor</h3>
             <table>
-                <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Fill</th><th>Status</th></tr></thead>
+                <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Order ID</th><th>Fill</th><th>Status</th></tr></thead>
                 <tbody id="buy-grid"></tbody>
             </table>
         </div>
         <div>
             <h3 class="text-xs font-semibold mb-2" style="color:var(--red);">SELL GRID (Bot B) — entries above anchor</h3>
             <table>
-                <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Fill</th><th>Status</th></tr></thead>
+                <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Order ID</th><th>Fill</th><th>Status</th></tr></thead>
                 <tbody id="sell-grid"></tbody>
             </table>
         </div>
@@ -481,6 +481,54 @@ function statusBadge(status, filledSoFar, qty) {
     return '<span style="color:var(--dim);">Free</span>';
 }
 
+function renderGridRow(lv, g) {
+    let statusHTML = '<span style="color:var(--dim);">Free</span>';
+    let fillHTML = '\u2014';
+    let orderHTML = '<span style="color:var(--dim);">\u2014</span>';
+    let rowClass = '';
+    let subRows = '';
+
+    if (g) {
+        statusHTML = statusBadge(g.status, g.entry_filled_so_far || 0, g.qty || 4000);
+        orderHTML = '<span style="font-size:10px;color:var(--cyan);">' + (g.entry_order_id || '\u2014') + '</span>';
+        if (g.entry_filled_so_far > 0) {
+            const vwap = g.entry_fill_price ? ' @ ' + g.entry_fill_price.toFixed(2) : '';
+            fillHTML = g.entry_filled_so_far + '/' + (g.qty || 4000) + vwap;
+        }
+        if (g.status === 'ENTRY_PENDING') rowClass = 'grid-row-active';
+        else if (g.status === 'ENTRY_PARTIAL') rowClass = 'grid-row-partial';
+        else if (g.status === 'TARGET_PENDING') rowClass = 'grid-row-filled';
+
+        // Target order sub-rows
+        const targets = g.target_orders || [];
+        if (targets.length > 0) {
+            targets.forEach((t, i) => {
+                const tFill = (t.filled_qty || 0) + '/' + t.qty;
+                const tPrice = t.fill_price ? ' @ ' + t.fill_price.toFixed(2) : '';
+                const tStatus = (t.filled_qty || 0) >= t.qty
+                    ? '<span class="status-badge badge-closed">FILLED</span>'
+                    : (t.filled_qty || 0) > 0
+                        ? '<span class="status-badge badge-partial">PARTIAL</span>'
+                        : '<span class="status-badge badge-entry">OPEN</span>';
+                subRows += '<tr style="background:rgba(179,136,255,0.04);">' +
+                    '<td style="padding-left:20px;font-size:10px;color:var(--purple);">T' + (i+1) + '</td>' +
+                    '<td colspan="2" style="font-size:10px;color:var(--dim);">target \u2192 ' + g.target_price.toFixed(2) + '</td>' +
+                    '<td style="font-size:10px;color:var(--purple);">' + (t.order_id || '\u2014') + '</td>' +
+                    '<td style="font-size:10px;">' + tFill + tPrice + '</td>' +
+                    '<td>' + tStatus + '</td></tr>';
+            });
+        }
+    }
+
+    return '<tr class="' + rowClass + '">' +
+        '<td>L' + lv.index + '</td>' +
+        '<td>' + lv.entry.toFixed(2) + '</td>' +
+        '<td>' + lv.target.toFixed(2) + '</td>' +
+        '<td>' + orderHTML + '</td>' +
+        '<td>' + fillHTML + '</td>' +
+        '<td>' + statusHTML + '</td></tr>' + subRows;
+}
+
 function updateMonitor() {
     fetch('/api/state')
         .then(r => r.json())
@@ -530,44 +578,12 @@ function updateMonitor() {
 
             // Buy grid
             document.getElementById('buy-grid').innerHTML = grid.buy.map(lv => {
-                const g = groupByLevel['A:' + lv.index];
-                let statusHTML = '<span style="color:var(--dim);">Free</span>';
-                let fillHTML = '—';
-                let rowClass = '';
-                if (g) {
-                    statusHTML = statusBadge(g.status, g.entry_filled_so_far || 0, g.qty || 4000);
-                    if (g.entry_filled_so_far > 0) fillHTML = g.entry_filled_so_far + '/' + (g.qty || 4000);
-                    if (g.status === 'ENTRY_PENDING') rowClass = 'grid-row-active';
-                    else if (g.status === 'ENTRY_PARTIAL') rowClass = 'grid-row-partial';
-                    else if (g.status === 'TARGET_PENDING') rowClass = 'grid-row-filled';
-                }
-                return '<tr class="' + rowClass + '">' +
-                    '<td>L' + lv.index + '</td>' +
-                    '<td>' + lv.entry.toFixed(2) + '</td>' +
-                    '<td>' + lv.target.toFixed(2) + '</td>' +
-                    '<td>' + fillHTML + '</td>' +
-                    '<td>' + statusHTML + '</td></tr>';
+                return renderGridRow(lv, groupByLevel['A:' + lv.index]);
             }).join('');
 
             // Sell grid
             document.getElementById('sell-grid').innerHTML = grid.sell.map(lv => {
-                const g = groupByLevel['B:' + lv.index];
-                let statusHTML = '<span style="color:var(--dim);">Free</span>';
-                let fillHTML = '—';
-                let rowClass = '';
-                if (g) {
-                    statusHTML = statusBadge(g.status, g.entry_filled_so_far || 0, g.qty || 4000);
-                    if (g.entry_filled_so_far > 0) fillHTML = g.entry_filled_so_far + '/' + (g.qty || 4000);
-                    if (g.status === 'ENTRY_PENDING') rowClass = 'grid-row-active';
-                    else if (g.status === 'ENTRY_PARTIAL') rowClass = 'grid-row-partial';
-                    else if (g.status === 'TARGET_PENDING') rowClass = 'grid-row-filled';
-                }
-                return '<tr class="' + rowClass + '">' +
-                    '<td>L' + lv.index + '</td>' +
-                    '<td>' + lv.entry.toFixed(2) + '</td>' +
-                    '<td>' + lv.target.toFixed(2) + '</td>' +
-                    '<td>' + fillHTML + '</td>' +
-                    '<td>' + statusHTML + '</td></tr>';
+                return renderGridRow(lv, groupByLevel['B:' + lv.index]);
             }).join('');
 
             // Closed trades
@@ -775,6 +791,7 @@ def _build_config_html() -> str:
         <div>
             <label class="block text-xs mb-1" style="color:var(--dim);">Product</label>
             <select id="cfg-product">
+                <option value="CNC">CNC</option>
                 <option value="NRML">NRML</option>
                 <option value="MIS">MIS</option>
             </select>
