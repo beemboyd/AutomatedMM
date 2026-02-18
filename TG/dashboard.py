@@ -580,6 +580,7 @@ let allStatesCache = {};
 let activeTab = 'monitor';
 let knownPrimaries = [];
 let allCyclesCache = [];
+let allSecOrdersCache = [];
 
 // --- Helpers ---
 function fmtPnl(v) {
@@ -819,8 +820,13 @@ function buildSecondaryPanelHTML() {
     </div>
     <!-- Orders table -->
     <div class="rounded-lg p-4" style="background:var(--card);border:1px solid var(--border);">
-        <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">
-            ${sym} Pair Orders</h2>
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-sm font-semibold" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">
+                ${sym} Pair Orders</h2>
+            <select id="sec-filter" onchange="renderSecondaryOrders()" style="background:#0f1117;border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;width:auto;">
+                <option value="ALL">All Primaries</option>
+            </select>
+        </div>
         <div style="overflow-x:auto;">
             <table class="data-table" style="min-width:900px;">
                 <thead><tr>
@@ -864,8 +870,9 @@ function renderSecondaryPanel(allStates) {
 
     // Sort newest first
     orders.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+    allSecOrdersCache = orders;
 
-    // KPIs
+    // KPIs (always show totals across all primaries)
     document.getElementById('sec-total-orders').textContent = orders.length;
     const buyQty = orders.filter(o => o.side === 'BUY').reduce((s, o) => s + (o.qty || 0), 0);
     const sellQty = orders.filter(o => o.side === 'SELL').reduce((s, o) => s + (o.qty || 0), 0);
@@ -877,15 +884,39 @@ function renderSecondaryPanel(allStates) {
     pnlEl.textContent = fmtPnlText(totalPairPnl);
     pnlEl.className = 'text-base font-bold ' + (totalPairPnl >= 0 ? 'pnl-pos' : 'pnl-neg');
 
-    // Table
+    // Update dropdown options and render table
+    updateSecFilterOptions();
+    renderSecondaryOrders();
+}
+
+function updateSecFilterOptions() {
+    const sel = document.getElementById('sec-filter');
+    if (!sel) return;
+    const current = sel.value;
+    const syms = [...new Set(allSecOrdersCache.map(o => o.primary).filter(Boolean))].sort();
+    const existing = Array.from(sel.options).map(o => o.value).filter(v => v !== 'ALL');
+    if (JSON.stringify(syms) !== JSON.stringify(existing)) {
+        sel.innerHTML = '<option value="ALL">All Primaries</option>';
+        syms.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s; opt.textContent = s;
+            sel.appendChild(opt);
+        });
+        sel.value = syms.includes(current) ? current : 'ALL';
+    }
+}
+
+function renderSecondaryOrders() {
+    const filter = document.getElementById('sec-filter').value;
+    const filtered = filter === 'ALL' ? allSecOrdersCache : allSecOrdersCache.filter(o => o.primary === filter);
     const tbody = document.getElementById('sec-orders-tbody');
     const empty = document.getElementById('sec-orders-empty');
-    if (orders.length === 0) {
+    if (filtered.length === 0) {
         tbody.innerHTML = '';
         empty.style.display = 'block';
     } else {
         empty.style.display = 'none';
-        tbody.innerHTML = orders.map(o => {
+        tbody.innerHTML = filtered.map(o => {
             const roleCls = o.role === 'HEDGE'
                 ? 'background:rgba(179,136,255,0.15);color:var(--purple);'
                 : 'background:rgba(0,200,83,0.15);color:var(--green);';
