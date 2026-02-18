@@ -29,6 +29,7 @@ import logging
 import argparse
 import subprocess
 import time
+from datetime import datetime, timezone, timedelta
 
 # Ensure project root is on path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -292,6 +293,40 @@ def reset_state(dry_run: bool = False) -> bool:
         return False
 
 
+_IST = timezone(timedelta(hours=5, minutes=30))
+_MARKET_OPEN_HOUR = 9
+_MARKET_OPEN_MINUTE = 16
+
+
+def wait_for_market_open(dry_run: bool = False):
+    """
+    Wait until 9:16 AM IST before starting the engine.
+
+    The engine needs live bid/ask for auto-anchor, and NSE regular
+    trading only starts at 9:15 AM. We wait until 9:16 to ensure
+    at least one trade has occurred and bid/ask depth is available.
+    """
+    now = datetime.now(_IST)
+    target = now.replace(hour=_MARKET_OPEN_HOUR, minute=_MARKET_OPEN_MINUTE,
+                         second=0, microsecond=0)
+
+    if now >= target:
+        logger.info("Market already open (now=%s), no wait needed",
+                     now.strftime('%H:%M:%S'))
+        return
+
+    wait_secs = (target - now).total_seconds()
+    if dry_run:
+        logger.info("[DRY RUN] Would wait %.0fs until %s IST",
+                     wait_secs, target.strftime('%H:%M'))
+        return
+
+    logger.info("Waiting %.0fs until %s IST for market open...",
+                 wait_secs, target.strftime('%H:%M'))
+    time.sleep(wait_secs)
+    logger.info("Market open — proceeding to start engine")
+
+
 def start_engine(config: dict, dry_run: bool = False) -> int:
     """
     Launch TG.TollGate.run --auto-anchor as subprocess.
@@ -518,6 +553,10 @@ def main():
     # Step 4: Reset state
     logger.info("Step 4: Resetting state...")
     reset_state(dry_run=dry_run)
+
+    # Step 4b: Wait for market open (9:16 AM IST)
+    logger.info("Step 4b: Waiting for market open...")
+    wait_for_market_open(dry_run=dry_run)
 
     # Step 5: Start engine
     logger.info("Step 5: Starting TollGate engine...")
