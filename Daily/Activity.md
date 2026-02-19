@@ -1,5 +1,45 @@
 # Activity Log
 
+## 2026-02-19 22:00 IST - Claude
+**AMM: New Ratio Mean-Reversion Stat-Arb Bot**
+
+Implemented a new stat-arb bot in `TG/AMM/` that trades ratio mean-reversion between pairs. Two pairs share SPCENET as denominator:
+- R1 = TATAGOLD / SPCENET
+- R2 = YESBANK / SPCENET
+
+### Architecture
+- Every `sample_interval` (60s default), compute ratios from live LTP
+- After rolling warmup window, compute rolling mean and SD
+- Enter pair trade when z-score exceeds `entry_sd` threshold
+- Exit when ratio reverts to mean (within `mean_reversion_tolerance`)
+- Stacking up to `max_positions_per_pair` (3) per pair
+- Target-only exit, no stop-loss
+- XTS account: 01MU07 (separate from TollGate's 01MU01)
+
+### New Files
+1. **`TG/AMM/__init__.py`** — Package init
+2. **`TG/AMM/__main__.py`** — Module entry point
+3. **`TG/AMM/config.py`** — `AMMConfig` + `PairConfig` dataclasses with serialization
+4. **`TG/AMM/client.py`** — `AMMClient` multi-instrument XTS client (WebSocket + REST fallback)
+5. **`TG/AMM/state.py`** — `AMMState` with `RatioSample` timeseries + `AMMPosition` tracking
+6. **`TG/AMM/engine.py`** — `AMMEngine` with ratio sampling, entry/exit signals, order polling
+7. **`TG/AMM/run.py`** — CLI entry point with --dry-run, --dashboard, --config-file modes
+8. **`TG/AMM/dashboard.py`** — Flask dashboards: Monitor (7797) + Config/Admin (7796)
+9. **`TG/AMM/state/`** — Runtime state directory
+10. **`TG/AMM/logs/`** — Log directory
+
+### Dashboards
+- **Monitor (7797)**: Ratio charts with mean/SD bands, KPIs, open positions, trade history
+- **Config (7796)**: Edit pair configs, global settings, start/stop bot
+
+### Usage
+- Dry run: `python -m TG.AMM.run --dry-run`
+- Start engine: `python -m TG.AMM.run`
+- Monitor dashboard: `python -m TG.AMM.run --dashboard --mode monitor --port 7797`
+- Config dashboard: `python -m TG.AMM.run --dashboard --mode config --port 7796`
+
+---
+
 ## 2026-02-19 - Claude
 **TollGate: Amount-Based Sizing + Disclosed Quantity (Iceberging)**
 
