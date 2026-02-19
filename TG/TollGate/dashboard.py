@@ -413,6 +413,20 @@ def _build_monitor_html() -> str:
     .grid-row-active { background: rgba(68,138,255,0.08); }
     .grid-row-filled { background: rgba(0,200,83,0.08); }
     .grid-row-partial { background: rgba(179,136,255,0.08); }
+    .grid-main-row { cursor: pointer; }
+    .grid-main-row:hover td { background: rgba(68,138,255,0.10); }
+    .grid-sub-row td { padding: 2px 8px 2px 24px; font-size: 11px; color: var(--dim); border-bottom: 1px solid rgba(30,33,48,0.5); }
+    .grid-sub-row.hidden { display: none; }
+    .grid-sub-label { display: inline-block; width: 56px; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.3px; }
+    .grid-sub-label.entry-label { color: var(--blue); }
+    .grid-sub-label.target-label { color: var(--orange); }
+    .grid-sub-label.reentry-label { color: var(--cyan); }
+    .grid-sub-label.final-label { color: var(--green); }
+    .grid-expand-icon { display: inline-block; width: 14px; font-size: 10px; color: var(--dim); transition: transform 0.15s; }
+    .grid-expand-icon.open { transform: rotate(90deg); }
+    .grid-id-mono { font-family: monospace; font-size: 10px; color: var(--dim); opacity: 0.7; }
+    .grid-pnl-pos { color: var(--green); }
+    .grid-pnl-neg { color: var(--red); }
 </style>
 </head>
 <body class="p-4">
@@ -480,21 +494,19 @@ def _build_monitor_html() -> str:
 <!-- GRID VISUALIZATION -->
 <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
     <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Grid Levels</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-            <h3 class="text-xs font-semibold mb-2" style="color:var(--green);">BUY GRID (Bot A) — entries below anchor</h3>
-            <table>
-                <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Order ID</th><th>Fill</th><th>Status</th></tr></thead>
-                <tbody id="buy-grid"></tbody>
-            </table>
-        </div>
-        <div>
-            <h3 class="text-xs font-semibold mb-2" style="color:var(--red);">SELL GRID (Bot B) — entries above anchor</h3>
-            <table>
-                <thead><tr><th>Level</th><th>Entry</th><th>Target</th><th>Order ID</th><th>Fill</th><th>Status</th></tr></thead>
-                <tbody id="sell-grid"></tbody>
-            </table>
-        </div>
+    <div class="mb-4">
+        <h3 class="text-xs font-semibold mb-2" style="color:var(--green);">BUY GRID (Bot A) — entries below anchor</h3>
+        <table style="width:100%;">
+            <thead><tr><th style="width:20px;"></th><th>Level</th><th>Entry &rarr; Target</th><th>Qty</th><th>Status</th><th>PnL</th><th>Cycle ID</th></tr></thead>
+            <tbody id="buy-grid"></tbody>
+        </table>
+    </div>
+    <div>
+        <h3 class="text-xs font-semibold mb-2" style="color:var(--red);">SELL GRID (Bot B) — entries above anchor</h3>
+        <table style="width:100%;">
+            <thead><tr><th style="width:20px;"></th><th>Level</th><th>Entry &rarr; Target</th><th>Qty</th><th>Status</th><th>PnL</th><th>Cycle ID</th></tr></thead>
+            <tbody id="sell-grid"></tbody>
+        </table>
     </div>
 </div>
 
@@ -555,64 +567,129 @@ function statusBadge(status, filledSoFar, qty) {
     return '<span style="color:var(--dim);">Free</span>';
 }
 
-function renderGridRow(lv, g) {
+const expandedGridRows = new Set();
+
+function toggleGridSub(rid) {
+    const rows = document.querySelectorAll('.sub-' + CSS.escape(rid));
+    const icon = document.getElementById('icon-' + rid);
+    const wasOpen = expandedGridRows.has(rid);
+    if (wasOpen) {
+        expandedGridRows.delete(rid);
+        rows.forEach(r => r.classList.add('hidden'));
+        if (icon) icon.classList.remove('open');
+    } else {
+        expandedGridRows.add(rid);
+        rows.forEach(r => r.classList.remove('hidden'));
+        if (icon) icon.classList.add('open');
+    }
+}
+
+function renderGridLevel(lv, g, gridId) {
+    const rid = gridId + '-' + lv.index;
+    const isOpen = expandedGridRows.has(rid);
+
     let statusHTML = '<span style="color:var(--dim);">Free</span>';
-    let fillHTML = '\u2014';
-    let orderHTML = '<span style="color:var(--dim);">\u2014</span>';
     let rowClass = '';
-    let subRows = '';
+    let priceDisplay = lv.entry.toFixed(2) + ' \u2192 ' + lv.target.toFixed(2);
+    let pnlHTML = '', cycleId = '';
+    let hasDetails = false;
+    const qtyDisplay = lv.qty;
 
     if (g) {
+        hasDetails = true;
         statusHTML = statusBadge(g.status, g.entry_filled_so_far || 0, g.qty || 4000);
-        orderHTML = '<span style="font-size:10px;color:var(--cyan);">' + (g.entry_order_id || '\u2014') + '</span>';
-        if (g.entry_filled_so_far > 0) {
-            const vwap = g.entry_fill_price ? ' @ ' + g.entry_fill_price.toFixed(2) : '';
-            fillHTML = g.entry_filled_so_far + '/' + (g.qty || 4000) + vwap;
-        }
+        cycleId = '<span class="grid-id-mono">' + g.group_id + '</span>';
+        const eP = g.entry_fill_price ? g.entry_fill_price.toFixed(2) : lv.entry.toFixed(2);
+        priceDisplay = eP + ' \u2192 ' + lv.target.toFixed(2);
+
         if (g.status === 'ENTRY_PENDING') rowClass = 'grid-row-active';
         else if (g.status === 'ENTRY_PARTIAL') rowClass = 'grid-row-partial';
         else if (g.status === 'TARGET_PENDING') rowClass = 'grid-row-filled';
 
-        // Target order sub-rows (depth-aware for sub-target cascading)
-        const targets = g.target_orders || [];
-        if (targets.length > 0) {
-            const depthColors = {1:'var(--purple)', 2:'var(--cyan)', 3:'var(--purple)', 4:'var(--cyan)', 5:'var(--green)'};
-            const depthLabels = {1:'target', 2:'re-entry', 3:'target', 4:'re-entry', 5:'target(final)'};
-            targets.forEach((t, i) => {
-                const depth = t.depth || 1;
-                const tag = t.tag || ('T' + (i+1));
-                const isClosing = (depth % 2 === 1);
-                const orderPrice = isClosing ? g.target_price : g.entry_price;
-                const tFill = (t.filled_qty || 0) + '/' + t.qty;
-                const tPrice = t.fill_price ? ' @ ' + t.fill_price.toFixed(2) : '';
-                const tStatus = (t.filled_qty || 0) >= t.qty
-                    ? '<span class="status-badge badge-closed">FILLED</span>'
-                    : (t.filled_qty || 0) > 0
-                        ? '<span class="status-badge badge-partial">PARTIAL</span>'
-                        : '<span class="status-badge badge-entry">OPEN</span>';
-                const indent = 14 + (depth - 1) * 8;
-                const dColor = depthColors[depth] || 'var(--purple)';
-                const dLabel = depthLabels[depth] || 'target';
-                const depthBg = depth > 1 ? 'rgba(0,255,200,0.03)' : 'rgba(179,136,255,0.04)';
-                subRows += '<tr style="background:' + depthBg + ';">' +
-                    '<td style="padding-left:' + indent + 'px;font-size:10px;color:' + dColor + ';">' +
-                        (depth > 1 ? '\u2514 ' : '') + tag +
-                        ' <span style="color:var(--dim);font-size:9px;">d' + depth + '</span></td>' +
-                    '<td colspan="2" style="font-size:10px;color:var(--dim);">' + dLabel + ' \u2192 ' + orderPrice.toFixed(2) + '</td>' +
-                    '<td style="font-size:10px;color:' + dColor + ';">' + (t.order_id || '\u2014') + '</td>' +
-                    '<td style="font-size:10px;">' + tFill + tPrice + '</td>' +
-                    '<td>' + tStatus + '</td></tr>';
-            });
+        if (g.realized_pnl) {
+            const cls = g.realized_pnl >= 0 ? 'grid-pnl-pos' : 'grid-pnl-neg';
+            pnlHTML = '<span class="' + cls + '">' + (g.realized_pnl >= 0 ? '+' : '') + g.realized_pnl.toFixed(2) + '</span>';
         }
     }
 
-    return '<tr class="' + rowClass + '">' +
+    // Main row
+    const iconCls = (hasDetails && isOpen) ? 'grid-expand-icon open' : 'grid-expand-icon';
+    const expandIcon = hasDetails ? '<span class="' + iconCls + '" id="icon-' + rid + '">&#9654;</span>' : '';
+    let html = '<tr class="grid-main-row ' + rowClass + '" ' +
+        (hasDetails ? "onclick=\\"toggleGridSub('" + rid + "')\\"" : '') + '>' +
+        '<td style="width:20px;">' + expandIcon + '</td>' +
         '<td>L' + lv.index + '</td>' +
-        '<td>' + lv.entry.toFixed(2) + '</td>' +
-        '<td>' + lv.target.toFixed(2) + '</td>' +
-        '<td>' + orderHTML + '</td>' +
-        '<td>' + fillHTML + '</td>' +
-        '<td>' + statusHTML + '</td></tr>' + subRows;
+        '<td>' + priceDisplay + '</td>' +
+        '<td>' + qtyDisplay + '</td>' +
+        '<td>' + statusHTML + '</td>' +
+        '<td>' + pnlHTML + '</td>' +
+        '<td>' + cycleId + '</td></tr>';
+
+    // Sub-rows (hidden by default, toggled on click)
+    if (g) {
+        const subVis = isOpen ? 'grid-sub-row sub-' : 'grid-sub-row hidden sub-';
+        const cs = ' colspan="6"';
+
+        // --- ENTRY sub-row ---
+        const eSide = g.entry_side || 'BUY';
+        const ePrice = g.entry_price ? g.entry_price.toFixed(2) : lv.entry.toFixed(2);
+        const eQty = g.entry_filled_so_far || 0;
+        const eOid = g.entry_order_id || '\u2014';
+        let eDetail = '';
+        if (eQty >= (g.qty || 4000)) {
+            eDetail = '\u2713 filled ' + eQty + '/' + (g.qty || 4000) + (g.entry_fill_price ? ' @ ' + g.entry_fill_price.toFixed(2) : '');
+        } else if (eQty > 0) {
+            eDetail = 'partial ' + eQty + '/' + (g.qty || 4000) + (g.entry_fill_price ? ' @ ' + g.entry_fill_price.toFixed(2) : '');
+        } else {
+            eDetail = 'pending';
+        }
+        html += '<tr class="' + subVis + rid + '">' +
+            '<td></td><td' + cs + '>' +
+            '<span class="grid-sub-label entry-label">ENTRY</span> ' +
+            eSide + ' ' + (g.qty || 4000) + ' @ ' + ePrice +
+            '  <span style="opacity:0.6;">(' + eDetail + ')</span>' +
+            '  <span class="grid-id-mono">OID:' + eOid + '</span>' +
+            '</td></tr>';
+
+        // --- TARGET sub-rows (depth-aware) ---
+        const targets = g.target_orders || [];
+        const depthLabelMap = {1:'TARGET', 2:'RE-ENTRY', 3:'TARGET', 4:'RE-ENTRY', 5:'FINAL'};
+        const depthLabelCls = {1:'target-label', 2:'reentry-label', 3:'target-label', 4:'reentry-label', 5:'final-label'};
+
+        targets.forEach((t, i) => {
+            const depth = t.depth || 1;
+            const tag = t.tag || ('T' + (i+1));
+            const isClosing = (depth % 2 === 1);
+            const tSide = isClosing ? (eSide === 'BUY' ? 'SELL' : 'BUY') : eSide;
+            const orderPrice = isClosing ? g.target_price : g.entry_price;
+            const tFilled = t.filled_qty || 0;
+            const tQty = t.qty || 0;
+            const tOid = t.order_id || '\u2014';
+            let tDetail = '';
+            if (tFilled >= tQty && tQty > 0) {
+                tDetail = '\u2713 filled ' + tFilled + '/' + tQty + (t.fill_price ? ' @ ' + t.fill_price.toFixed(2) : '');
+            } else if (tFilled > 0) {
+                tDetail = 'partial ' + tFilled + '/' + tQty + (t.fill_price ? ' @ ' + t.fill_price.toFixed(2) : '');
+            } else {
+                tDetail = 'pending';
+            }
+
+            const lblText = depthLabelMap[depth] || 'TARGET';
+            const lblCls = depthLabelCls[depth] || 'target-label';
+            const indent = depth > 1 ? 'padding-left:' + (24 + (depth - 1) * 10) + 'px;' : '';
+            const prefix = depth > 1 ? '\u2514 ' : '';
+
+            html += '<tr class="' + subVis + rid + '">' +
+                '<td></td><td' + cs + ' style="' + indent + '">' +
+                prefix + '<span class="grid-sub-label ' + lblCls + '">' + lblText + '</span> ' +
+                '<span style="color:var(--dim);font-size:10px;">[' + tag + ' d' + depth + ']</span> ' +
+                tSide + ' ' + tQty + ' @ ' + orderPrice.toFixed(2) +
+                '  <span style="opacity:0.6;">(' + tDetail + ')</span>' +
+                '  <span class="grid-id-mono">OID:' + tOid + '</span>' +
+                '</td></tr>';
+        });
+    }
+    return html;
 }
 
 function updateMonitor() {
@@ -692,12 +769,12 @@ function updateMonitor() {
 
             // Buy grid
             document.getElementById('buy-grid').innerHTML = grid.buy.map(lv => {
-                return renderGridRow(lv, groupByLevel['A:' + lv.index]);
+                return renderGridLevel(lv, groupByLevel['A:' + lv.index], 'buy');
             }).join('');
 
             // Sell grid
             document.getElementById('sell-grid').innerHTML = grid.sell.map(lv => {
-                return renderGridRow(lv, groupByLevel['B:' + lv.index]);
+                return renderGridLevel(lv, groupByLevel['B:' + lv.index], 'sell');
             }).join('');
 
             // Closed trades
