@@ -218,14 +218,19 @@ def _compute_summary(state: dict) -> dict:
     wins = sum(1 for g in closed_groups if g.get('realized_pnl', 0) > 0)
     win_rate = (wins / len(closed_groups) * 100) if closed_groups else 0.0
 
-    # Compute Buy VWAP and Sell VWAP across all groups (open + closed)
+    # Compute Buy VWAP and Sell VWAP for today only
+    # Filter groups by created_at date to today
     # Buy VWAP = VWAP of all shares we BOUGHT (buy entries + sell targets)
     # Sell VWAP = VWAP of all shares we SOLD (sell entries + buy targets)
     buy_cost, buy_qty = 0.0, 0
     sell_cost, sell_qty = 0.0, 0
 
+    today_str = datetime.now().strftime('%Y-%m-%d')
     all_groups = list(open_groups.values()) + closed_groups
     for g in all_groups:
+        created = g.get('created_at', '')
+        if not created or created[:10] != today_str:
+            continue
         entry_side = g.get('entry_side', '')
         efp = g.get('entry_fill_price', 0) or 0
         efsf = g.get('entry_filled_so_far', 0) or 0
@@ -252,10 +257,19 @@ def _compute_summary(state: dict) -> dict:
     sell_vwap = round(sell_cost / sell_qty, 4) if sell_qty > 0 else None
     spread = round(sell_vwap - buy_vwap, 4) if (buy_vwap and sell_vwap) else None
 
+    # Compute realized PnL including partial fills from open groups
+    # total_pnl only counts fully completed cycles; we add open group realized_pnl
+    engine_pnl = state.get('total_pnl', 0)
+    open_partial_pnl = sum(g.get('realized_pnl', 0) or 0 for g in open_groups.values())
+    closed_partial_pnl = sum(g.get('realized_pnl', 0) or 0
+                             for g in closed_groups if g.get('status') != 'CLOSED')
+    total_realized_pnl = round(engine_pnl + open_partial_pnl + closed_partial_pnl, 2)
+
     return {
         'symbol': state.get('symbol', 'SPCENET'),
         'anchor_price': state.get('anchor_price', 0),
-        'total_pnl': round(state.get('total_pnl', 0), 2),
+        'total_pnl': total_realized_pnl,
+        'engine_pnl': round(engine_pnl, 2),
         'total_cycles': state.get('total_cycles', 0),
         'current_spacing': state.get('current_spacing', 0),
         'net_inventory': state.get('net_inventory', 0),
@@ -419,8 +433,9 @@ def _build_monitor_html() -> str:
 <!-- KPI CARDS ROW 1 -->
 <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
     <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">PnL</div>
+        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Realized PnL</div>
         <div class="text-xl font-bold" id="kpi-pnl">—</div>
+        <div class="text-xs mt-1" style="color:var(--dim);" id="kpi-engine-pnl"></div>
     </div>
     <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
         <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Cycles</div>
@@ -443,20 +458,20 @@ def _build_monitor_html() -> str:
         <div class="text-xl font-bold" style="color:var(--purple);" id="kpi-reanchors">—</div>
     </div>
 </div>
-<!-- KPI CARDS ROW 2: VWAP -->
+<!-- KPI CARDS ROW 2: TODAY VWAP -->
 <div class="grid grid-cols-3 gap-3 mb-4">
     <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Buy VWAP</div>
+        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Today Buy VWAP</div>
         <div class="text-lg font-bold" style="color:var(--green);" id="kpi-buy-vwap">—</div>
         <div class="text-xs mt-1" style="color:var(--dim);" id="kpi-buy-qty"></div>
     </div>
     <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Sell VWAP</div>
+        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Today Sell VWAP</div>
         <div class="text-lg font-bold" style="color:var(--red);" id="kpi-sell-vwap">—</div>
         <div class="text-xs mt-1" style="color:var(--dim);" id="kpi-sell-qty"></div>
     </div>
     <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Spread</div>
+        <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Today Spread</div>
         <div class="text-lg font-bold" id="kpi-spread">—</div>
         <div class="text-xs mt-1" style="color:var(--dim);" id="kpi-spread-hint">sell - buy</div>
     </div>
@@ -558,10 +573,16 @@ function renderGridRow(lv, g) {
         else if (g.status === 'ENTRY_PARTIAL') rowClass = 'grid-row-partial';
         else if (g.status === 'TARGET_PENDING') rowClass = 'grid-row-filled';
 
-        // Target order sub-rows
+        // Target order sub-rows (depth-aware for sub-target cascading)
         const targets = g.target_orders || [];
         if (targets.length > 0) {
+            const depthColors = {1:'var(--purple)', 2:'var(--cyan)', 3:'var(--purple)', 4:'var(--cyan)', 5:'var(--green)'};
+            const depthLabels = {1:'target', 2:'re-entry', 3:'target', 4:'re-entry', 5:'target(final)'};
             targets.forEach((t, i) => {
+                const depth = t.depth || 1;
+                const tag = t.tag || ('T' + (i+1));
+                const isClosing = (depth % 2 === 1);
+                const orderPrice = isClosing ? g.target_price : g.entry_price;
                 const tFill = (t.filled_qty || 0) + '/' + t.qty;
                 const tPrice = t.fill_price ? ' @ ' + t.fill_price.toFixed(2) : '';
                 const tStatus = (t.filled_qty || 0) >= t.qty
@@ -569,10 +590,16 @@ function renderGridRow(lv, g) {
                     : (t.filled_qty || 0) > 0
                         ? '<span class="status-badge badge-partial">PARTIAL</span>'
                         : '<span class="status-badge badge-entry">OPEN</span>';
-                subRows += '<tr style="background:rgba(179,136,255,0.04);">' +
-                    '<td style="padding-left:20px;font-size:10px;color:var(--purple);">T' + (i+1) + '</td>' +
-                    '<td colspan="2" style="font-size:10px;color:var(--dim);">target \u2192 ' + g.target_price.toFixed(2) + '</td>' +
-                    '<td style="font-size:10px;color:var(--purple);">' + (t.order_id || '\u2014') + '</td>' +
+                const indent = 14 + (depth - 1) * 8;
+                const dColor = depthColors[depth] || 'var(--purple)';
+                const dLabel = depthLabels[depth] || 'target';
+                const depthBg = depth > 1 ? 'rgba(0,255,200,0.03)' : 'rgba(179,136,255,0.04)';
+                subRows += '<tr style="background:' + depthBg + ';">' +
+                    '<td style="padding-left:' + indent + 'px;font-size:10px;color:' + dColor + ';">' +
+                        (depth > 1 ? '\u2514 ' : '') + tag +
+                        ' <span style="color:var(--dim);font-size:9px;">d' + depth + '</span></td>' +
+                    '<td colspan="2" style="font-size:10px;color:var(--dim);">' + dLabel + ' \u2192 ' + orderPrice.toFixed(2) + '</td>' +
+                    '<td style="font-size:10px;color:' + dColor + ';">' + (t.order_id || '\u2014') + '</td>' +
                     '<td style="font-size:10px;">' + tFill + tPrice + '</td>' +
                     '<td>' + tStatus + '</td></tr>';
             });
@@ -614,6 +641,8 @@ function updateMonitor() {
             const pnl = s.total_pnl || 0;
             pnlEl.textContent = fmtPnlText(pnl);
             pnlEl.className = 'text-xl font-bold ' + (pnl >= 0 ? 'pnl-pos' : 'pnl-neg');
+            const enginePnl = s.engine_pnl || 0;
+            document.getElementById('kpi-engine-pnl').textContent = 'completed cycles: ' + fmtPnlText(enginePnl);
             document.getElementById('kpi-cycles').textContent = s.total_cycles || 0;
             document.getElementById('kpi-anchor').textContent = s.anchor_price ? s.anchor_price.toFixed(2) : '—';
             document.getElementById('kpi-spacing').textContent = s.current_spacing ? s.current_spacing.toFixed(4) : '—';
