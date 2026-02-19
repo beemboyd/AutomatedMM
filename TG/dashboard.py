@@ -263,6 +263,9 @@ def _compute_summary(state: dict) -> dict:
     if not state:
         return {}
 
+    from datetime import date
+    today_str = date.today().isoformat()  # e.g. '2026-02-19'
+
     open_groups = state.get('open_groups', {})
     closed_groups = state.get('closed_groups', [])
     total_pnl = state.get('total_pnl', 0.0)
@@ -286,6 +289,15 @@ def _compute_summary(state: dict) -> dict:
     pair_pnl += open_pair_pnl
     combined_pnl = round(total_pnl + pair_pnl, 2)
 
+    # Today-only metrics: filter closed_groups by closed_at date + open group pair PnL
+    today_closed = [g for g in closed_groups if (g.get('closed_at') or '').startswith(today_str)]
+    today_primary_pnl = round(sum(g.get('realized_pnl', 0.0) for g in today_closed), 2)
+    today_pair_pnl = round(sum(g.get('pair_pnl', 0.0) for g in today_closed) + open_pair_pnl, 2)
+    today_combined_pnl = round(today_primary_pnl + today_pair_pnl, 2)
+    today_cycles = len(today_closed)
+    today_wins = sum(1 for g in today_closed if g.get('realized_pnl', 0) > 0)
+    today_win_rate = (today_wins / today_cycles * 100) if today_cycles else 0.0
+
     return {
         'symbol': state.get('symbol', ''),
         'anchor_price': state.get('anchor_price', 0),
@@ -305,6 +317,12 @@ def _compute_summary(state: dict) -> dict:
         'current_buy_spacing': state.get('current_buy_spacing', 0),
         'current_sell_spacing': state.get('current_sell_spacing', 0),
         'last_updated': state.get('last_updated', ''),
+        # Today-only metrics
+        'today_primary_pnl': today_primary_pnl,
+        'today_pair_pnl': today_pair_pnl,
+        'today_combined_pnl': today_combined_pnl,
+        'today_cycles': today_cycles,
+        'today_win_rate': round(today_win_rate, 1),
     }
 
 
@@ -522,19 +540,19 @@ def _build_html() -> str:
 <div id="panel-monitor">
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Combined PnL</div>
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Combined PnL (Today)</div>
             <div class="text-xl font-bold" id="agg-combined-pnl">—</div>
         </div>
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Primary PnL</div>
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Primary PnL (Today)</div>
             <div class="text-xl font-bold" id="agg-primary-pnl">—</div>
         </div>
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Secondary PnL</div>
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Secondary PnL (Today)</div>
             <div class="text-xl font-bold" id="agg-pair-pnl">—</div>
         </div>
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Total Cycles</div>
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Cycles (Today)</div>
             <div class="text-xl font-bold" style="color:var(--blue);" id="agg-cycles">—</div>
         </div>
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
@@ -705,15 +723,15 @@ function buildBotPanelHTML(sym) {
             <div class="text-base font-bold" style="color:var(--blue);" id="${sym}-anchor">—</div>
         </div>
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Combined PnL</div>
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Combined PnL (Today)</div>
             <div class="text-base font-bold" id="${sym}-combined">—</div>
         </div>
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Cycles</div>
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Cycles (Today)</div>
             <div class="text-base font-bold" style="color:var(--blue);" id="${sym}-cycles">—</div>
         </div>
         <div class="rounded-lg p-3 text-center" style="background:var(--card);border:1px solid var(--border);">
-            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Open / Win Rate</div>
+            <div class="text-xs mb-1" style="color:var(--dim);text-transform:uppercase;">Open / Win Rate (Today)</div>
             <div class="text-base font-bold" id="${sym}-open-wr">—</div>
         </div>
     </div>
@@ -1108,14 +1126,14 @@ function renderBotPanel(sym, data) {
     if (anchorEl) anchorEl.textContent = anchor > 0 ? anchor.toFixed(2) : '—';
     const combEl = document.getElementById(sym + '-combined');
     if (combEl) {
-        const comb = s.combined_pnl || 0;
+        const comb = s.today_combined_pnl || 0;
         combEl.textContent = fmtPnlText(comb);
         combEl.className = 'text-base font-bold ' + (comb >= 0 ? 'pnl-pos' : 'pnl-neg');
     }
     const cycEl = document.getElementById(sym + '-cycles');
-    if (cycEl) cycEl.textContent = s.total_cycles || 0;
+    if (cycEl) cycEl.textContent = s.today_cycles || 0;
     const owrEl = document.getElementById(sym + '-open-wr');
-    if (owrEl) owrEl.textContent = (s.open_groups || 0) + ' / ' + (s.win_rate || 0).toFixed(1) + '%';
+    if (owrEl) owrEl.textContent = (s.open_groups || 0) + ' / ' + (s.today_win_rate || 0).toFixed(1) + '%';
 
     // Epoch KPIs
     const buyLvlEl = document.getElementById(sym + '-buy-levels');
@@ -1350,12 +1368,13 @@ function updateMonitor() {
                 const running = data.running;
                 botStatuses[sym] = running;
 
-                const primaryPnl = s.total_pnl || 0;
-                const pairPnl = s.pair_pnl || 0;
-                const combined = s.combined_pnl || 0;
-                const cycles = s.total_cycles || 0;
+                // Use today-only metrics
+                const primaryPnl = s.today_primary_pnl || 0;
+                const pairPnl = s.today_pair_pnl || 0;
+                const combined = s.today_combined_pnl || 0;
+                const cycles = s.today_cycles || 0;
                 const open = s.open_groups || 0;
-                const winRate = s.win_rate || 0;
+                const winRate = s.today_win_rate || 0;
 
                 aggPrimary += primaryPnl;
                 aggPair += pairPnl;
