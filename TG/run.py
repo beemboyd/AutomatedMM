@@ -100,10 +100,10 @@ def parse_args():
     # Pair trading
     parser.add_argument('--pair-symbol', default='',
                         help='Pair hedge symbol (e.g., SPCENET). Trades opposite direction on fills.')
-    parser.add_argument('--hedge-ratio', type=int, default=0,
-                        help='Pair hedge ratio on full fill (0 = disabled)')
-    parser.add_argument('--partial-hedge-ratio', type=int, default=0,
-                        help='Pair hedge ratio on partial fills (0 = no partial hedging)')
+    parser.add_argument('--hedge-ratio', type=float, default=0,
+                        help='Hedge %% of primary qty on COMPLETE fill (40 = 40%%, 0 = disabled)')
+    parser.add_argument('--partial-hedge-ratio', type=float, default=0,
+                        help='Hedge %% of primary qty on PARTIAL fill (40 = 40%%, 0 = disabled)')
     parser.add_argument('--holdings', type=int, default=-1,
                         help='Override holdings qty for SellBot (-1 = use API, 0+ = override)')
 

@@ -47,8 +47,8 @@ _DEFAULT_CONFIG = {
             "target": 0.03,
             "levels_per_side": 10,
             "qty_per_level": 100,
-            "hedge_ratio": 1,
-            "partial_hedge_ratio": 1,
+            "hedge_ratio": 40,
+            "partial_hedge_ratio": 40,
             "holdings_override": 2000,
             "product": "NRML",
             "poll_interval": 2.0,
@@ -1653,14 +1653,14 @@ def _build_config_html() -> str:
                 <div class="field-hint">Shares per grid level order</div>
             </div>
             <div>
-                <label class="block text-xs mb-1" style="color:var(--dim);">Hedge Ratio</label>
-                <input id="m-hedge-ratio" type="number">
-                <div class="field-hint">Secondary shares per primary on COMPLETE fill (0=disabled)</div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Hedge Ratio (%)</label>
+                <input id="m-hedge-ratio" type="number" step="0.1">
+                <div class="field-hint">% of primary qty to hedge on COMPLETE fill (40=40%, 0=disabled)</div>
             </div>
             <div>
-                <label class="block text-xs mb-1" style="color:var(--dim);">Partial Hedge Ratio</label>
-                <input id="m-partial-hedge-ratio" type="number">
-                <div class="field-hint">Secondary shares per primary on PARTIAL fill (0=disabled)</div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Partial Hedge Ratio (%)</label>
+                <input id="m-partial-hedge-ratio" type="number" step="0.1">
+                <div class="field-hint">% of primary qty to hedge on PARTIAL fill (40=40%, 0=disabled)</div>
             </div>
             <div>
                 <label class="block text-xs mb-1" style="color:var(--dim);">Holdings Override</label>
@@ -1791,8 +1791,8 @@ function renderPrimaries() {
                 <div>Product: <span style="color:var(--text);">${p.product || 'NRML'}</span></div>
                 <div>Levels/Side: <span style="color:var(--text);">${p.levels_per_side || 10}</span></div>
                 <div>Qty/Level: <span style="color:var(--text);">${p.qty_per_level || 100}</span></div>
-                <div>Hedge: <span style="color:var(--text);">${p.hedge_ratio}</span></div>
-                <div>Partial: <span style="color:var(--text);">${p.partial_hedge_ratio}</span></div>
+                <div>Hedge: <span style="color:var(--text);">${p.hedge_ratio}%</span></div>
+                <div>Partial: <span style="color:var(--text);">${p.partial_hedge_ratio}%</span></div>
                 <div>Holdings: <span style="color:var(--text);">${p.holdings_override}</span></div>
                 <div>Epoch: <span style="color:var(--text);">${p.reanchor_epoch || 100}</span></div>
                 <div>Max Levels: <span style="color:var(--text);">${p.max_grid_levels || 2000}</span></div>
@@ -1808,7 +1808,7 @@ function addPrimary() {
     currentConfig.primaries.push({
         symbol: '', enabled: true, auto_anchor: true, anchor_price: 0,
         grid_space: 0.01, target: 0.03, levels_per_side: 10, qty_per_level: 100,
-        hedge_ratio: 1, partial_hedge_ratio: 1, holdings_override: 2000,
+        hedge_ratio: 40, partial_hedge_ratio: 40, holdings_override: 2000,
         product: 'NRML', poll_interval: 2.0, reanchor_epoch: 100, max_grid_levels: 2000,
         max_sub_depth: 10,
     });
@@ -1859,8 +1859,8 @@ function saveModal() {
     p.target = parseFloat(document.getElementById('m-target').value);
     p.levels_per_side = parseInt(document.getElementById('m-levels-per-side').value);
     p.qty_per_level = parseInt(document.getElementById('m-qty-per-level').value);
-    p.hedge_ratio = parseInt(document.getElementById('m-hedge-ratio').value);
-    p.partial_hedge_ratio = parseInt(document.getElementById('m-partial-hedge-ratio').value);
+    p.hedge_ratio = parseFloat(document.getElementById('m-hedge-ratio').value);
+    p.partial_hedge_ratio = parseFloat(document.getElementById('m-partial-hedge-ratio').value);
     p.holdings_override = parseInt(document.getElementById('m-holdings').value);
     p.reanchor_epoch = parseInt(document.getElementById('m-reanchor-epoch').value);
     p.max_grid_levels = parseInt(document.getElementById('m-max-grid-levels').value);

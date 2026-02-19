@@ -82,8 +82,8 @@ class GridConfig:
 
     # Pair trading parameters
     pair_symbol: str = ""           # e.g., "SPCENET" — opposite-direction hedge
-    hedge_ratio: int = 0            # target pair ratio on COMPLETE (0 = disabled)
-    partial_hedge_ratio: int = 0    # pair ratio on PARTIAL fills (0 = no partial hedging)
+    hedge_ratio: float = 0.0       # hedge % on COMPLETE fill (40 = 40% of primary qty, 0 = disabled)
+    partial_hedge_ratio: float = 0.0  # hedge % on PARTIAL fills (0 = no partial hedging)
 
     # Holdings override (bypasses XTS holdings API which may return empty)
     holdings_override: int = -1     # -1 = use API, 0+ = override with this qty
@@ -189,8 +189,8 @@ class GridConfig:
         print(f"  Auto Re-enter    : {self.auto_reenter}")
         if self.has_pair:
             print(f"  Pair Symbol      : {self.pair_symbol}")
-            print(f"  Hedge Ratio      : {self.hedge_ratio} (on COMPLETE)")
-            print(f"  Partial Hedge    : {self.partial_hedge_ratio} (on PARTIAL, 0=disabled)")
+            print(f"  Hedge Ratio      : {self.hedge_ratio}% (on COMPLETE)")
+            print(f"  Partial Hedge    : {self.partial_hedge_ratio}% (on PARTIAL, 0=disabled)")
             print(f"  Pair Mode        : OPPOSITE (entry→hedge, target→unwind)")
         print(f"{'='*60}")
 

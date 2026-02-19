@@ -1,5 +1,23 @@
 # Activity Log
 
+## 2026-02-20 01:00 IST - Claude
+**TG Grid Bot: Convert hedge_ratio from integer multiplier to percentage**
+
+Changed `hedge_ratio` and `partial_hedge_ratio` from integer multipliers (1 = 1:1 ratio) to percentage values (40 = 40% of primary qty). Default is now 40% — if primary leg is 100 qty, hedge is 40 qty on SPCENET.
+
+### Modified Files
+1. **`TG/config.py`** — Changed `hedge_ratio: int = 0` to `hedge_ratio: float = 0.0`, same for `partial_hedge_ratio`. Updated `print_grid_layout()` labels to show "%" suffix.
+2. **`TG/engine.py`** — Changed hedge calculations from `qty * ratio` to `round(qty * ratio / 100)` for all 4 hedge/unwind paths (entry complete, entry partial, target complete, target partial). Added `pair_qty > 0` guard for partial fills. Updated log format strings to show "%.1f%%".
+3. **`TG/run.py`** — Changed argparse `type=int` to `type=float` for both `--hedge-ratio` and `--partial-hedge-ratio`. Updated help text to describe percentage semantics.
+4. **`TG/dashboard.py`** — Changed defaults from 1 to 40. Updated modal labels to "Hedge Ratio (%)" / "Partial Hedge Ratio (%)". Added `step="0.1"` to inputs. Changed `parseInt` to `parseFloat` in JS save. Updated display to show "%" suffix. Updated `addPrimary()` defaults to 40.
+5. **`TG/state/tg_config.json`** — Updated all 3 primaries (TATSILV, TATAGOLD, IDEA) from `hedge_ratio: 1` to `hedge_ratio: 40` and `partial_hedge_ratio: 1` to `partial_hedge_ratio: 40`.
+6. **`TG/warmup.py`** — No changes needed (passes values as strings to CLI).
+
+### Impact
+- Existing bots must be restarted to pick up the new percentage semantics
+- Config file values updated from 1 → 40 automatically
+- Dashboard (7779) now shows "%" labels and accepts decimal values
+
 ## 2026-02-20 00:30 IST - Claude
 **TG Grid Bot: Port partial-fill depth cascading from TollGate + TollGate default change**
 

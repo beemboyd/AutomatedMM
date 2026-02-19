@@ -181,7 +181,7 @@ class GridEngine:
         # Enter main loop
         self.running = True
         if self.config.has_pair:
-            logger.info("Pair trading ENABLED: %s hedge_ratio=%d partial_ratio=%d (opposite direction)",
+            logger.info("Pair trading ENABLED: %s hedge_ratio=%.1f%% partial_ratio=%.1f%% (opposite direction)",
                         self.config.pair_symbol, self.config.hedge_ratio,
                         self.config.partial_hedge_ratio)
         logger.info("Grid engine started. Polling every %.1fs | max_sub_depth=%d",
@@ -286,16 +286,17 @@ class GridEngine:
             increment = filled_qty - group.entry_filled_so_far
             if increment > 0 and self.config.has_pair:
                 if is_complete:
-                    # Final fill: hedge to target ratio, accounting for partials already hedged
-                    target_hedge = filled_qty * self.config.hedge_ratio
+                    # Final fill: hedge to target ratio (%), accounting for partials already hedged
+                    target_hedge = round(filled_qty * self.config.hedge_ratio / 100)
                     remaining = target_hedge - group.pair_hedged_qty
                     if remaining > 0:
                         bot.place_pair_hedge(group, remaining)
                 else:
-                    # Partial: hedge at partial ratio
+                    # Partial: hedge at partial ratio (%)
                     if self.config.partial_hedge_ratio > 0:
-                        pair_qty = increment * self.config.partial_hedge_ratio
-                        bot.place_pair_hedge(group, pair_qty)
+                        pair_qty = round(increment * self.config.partial_hedge_ratio / 100)
+                        if pair_qty > 0:
+                            bot.place_pair_hedge(group, pair_qty)
 
             # Delegate to engine fill handler (places D1 target, updates VWAP, etc.)
             return self._on_entry_fill(group, order_id, fill_price, filled_qty, is_complete)
@@ -314,16 +315,17 @@ class GridEngine:
 
                 if increment > 0 and self.config.has_pair and is_closing:
                     if is_complete:
-                        # Final fill: unwind to target ratio
-                        target_unwind = filled_qty * self.config.hedge_ratio
+                        # Final fill: unwind to target ratio (%)
+                        target_unwind = round(filled_qty * self.config.hedge_ratio / 100)
                         remaining = target_unwind - group.pair_unwound_qty
                         if remaining > 0:
                             bot.place_pair_unwind(group, remaining)
                     else:
-                        # Partial: unwind at partial ratio
+                        # Partial: unwind at partial ratio (%)
                         if self.config.partial_hedge_ratio > 0:
-                            pair_qty = increment * self.config.partial_hedge_ratio
-                            bot.place_pair_unwind(group, pair_qty)
+                            pair_qty = round(increment * self.config.partial_hedge_ratio / 100)
+                            if pair_qty > 0:
+                                bot.place_pair_unwind(group, pair_qty)
 
                 # Delegate to engine fill handler
                 return self._on_target_fill(group, target, order_id, fill_price, filled_qty, is_complete)
