@@ -41,6 +41,7 @@ def main():
     parser.add_argument('--product', choices=['NRML', 'MIS', 'CNC'], help='Product type')
     parser.add_argument('--poll-interval', type=float, help='Poll interval seconds')
     parser.add_argument('--max-reanchors', type=int, help='Max reanchors before stopping')
+    parser.add_argument('--max-sub-depth', type=int, help='Max sub-target depth for partial fills (default: 5)')
 
     # Credentials
     parser.add_argument('--interactive-key', type=str, help='XTS Interactive API key')
@@ -115,6 +116,8 @@ def main():
         config.poll_interval = args.poll_interval
     if args.max_reanchors is not None:
         config.max_reanchors = args.max_reanchors
+    if args.max_sub_depth is not None:
+        config.max_sub_depth = args.max_sub_depth
     if args.interactive_key:
         config.interactive_key = args.interactive_key
     if args.interactive_secret:

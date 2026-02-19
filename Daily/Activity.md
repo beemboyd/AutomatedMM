@@ -1,6 +1,30 @@
 # Activity Log
 
 ## 2026-02-19 - Claude
+**TollGate: 5-Level Deep Sub-Target Cascading for Partial Fills**
+
+When an entry partially fills (e.g., 1893/4000), a target is placed for the filled qty. Previously, if the target filled, the group was stuck in ENTRY_PARTIAL status — the remaining entry may never fill, and the level was permanently occupied. Now, when a depth-1 target fills, the engine places a re-entry order at the original entry price, then another target, ping-ponging up to 5 levels deep (T→ST→TT→FT→FI), capturing the 1-cent spread repeatedly. After depth 5 fills, the sub-chain closes, the remaining original entry is cancelled, and the level re-enters fresh with full qty.
+
+### Modified Files
+1. **`TG/TollGate/config.py`** — Added `max_sub_depth: int = 5` to TollGateConfig. Added `DEPTH_TAGS` mapping ({1:"T", 2:"ST", 3:"TT", 4:"FT", 5:"FI"}). Updated `generate_order_id()` to accept a `tag` parameter with auto-truncation of group_id to stay within 20-char XTS limit. Added Max Sub-Depth to grid layout printout.
+2. **`TG/TollGate/run.py`** — Added `--max-sub-depth` CLI argument wired to `config.max_sub_depth`.
+3. **`TG/TollGate/state.py`** — Extended target_orders schema with `depth`, `tag`, and `ref_price` fields (backwards compatible via `.get('depth', 1)`). Added `max_target_depth` property, `leaf_targets_filled(max_sub_depth)` method for sub-chain completion checking, and `has_pending_sub_targets()` method.
+4. **`TG/TollGate/engine.py`** — Core cascading logic:
+   - `_on_entry_fill()`: Sets `depth=1`, `tag`, and `ref_price` on initial target records.
+   - `_on_target_fill()`: Depth-aware PnL (odd depths = closing with PnL using ref_price, even depths = re-entry with no PnL). Spawns next-depth sub-target when current depth fills completely and depth < max_sub_depth. Alternates side/price: odd depths use target_side @ target_price, even depths use entry_side @ entry_price.
+   - New `_complete_cycle()` and `_complete_partial_cycle()` helper methods extracted from inline logic. Partial cycle close cancels remaining entry order and re-enters fresh.
+   - Updated `_handle_cancellation()` to be depth-aware for PnL, re-placement (carries forward depth/tag/ref_price), and cycle completion checking.
+   - Updated reconciliation post-check to handle sub-chain-aware cycle completion.
+
+### Impact
+- Unsticks partial-fill groups by ping-ponging the filled qty up to 5 times
+- Each round trip captures 0.01 spread × partial_qty profit
+- After 5 depths, level recycles with full qty — no permanent stuck levels
+- Backwards compatible: existing targets without depth field default to depth=1
+
+---
+
+## 2026-02-19 - Claude
 **TG Dashboard: Redesigned Grid Levels UI with expandable sub-rows**
 
 ### Modified Files

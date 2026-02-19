@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 
-from .config import TollGateConfig, GridLevel, generate_order_id
+from .config import TollGateConfig, GridLevel, generate_order_id, DEPTH_TAGS
 from .state import TollGateState, TollGateGroup, TollGateStatus
 
 logger = logging.getLogger(__name__)
@@ -381,11 +381,12 @@ class TollGateEngine:
                 running_pnl=self.state.total_pnl,
                 net_inventory=self.state.net_inventory)
 
-        # Place target for this increment
+        # Place target for this increment (depth=1, closing position)
         group.target_seq += 1
+        tag = f"{DEPTH_TAGS[1]}{group.target_seq:02d}"
         target_uid = generate_order_id(
-            "TP", group.entry_side, group.subset_index,
-            group.cycle_number, group.group_id, seq=group.target_seq,
+            "TP", group.target_side, group.subset_index,
+            group.cycle_number, group.group_id, tag=tag,
         )
         target_order_id = self.client.place_order(
             symbol=self.config.symbol,
@@ -404,11 +405,14 @@ class TollGateEngine:
                 'filled_qty': 0,
                 'fill_price': None,
                 'placed_at': datetime.now().isoformat(),
+                'depth': 1,
+                'tag': tag,
+                'ref_price': fill_price,   # cost basis = entry fill VWAP
             }
             group.target_orders.append(target_record)
             self.state.register_order(target_order_id, group.group_id)
-            logger.info("Target T%d placed: %s %d @ %.2f -> order=%s (group=%s, entry fill %d/%d)",
-                        group.target_seq, group.target_side, increment,
+            logger.info("Target %s placed: %s %d @ %.2f -> order=%s (group=%s, depth=1, entry fill %d/%d)",
+                        tag, group.target_side, increment,
                         group.target_price, target_order_id, group.group_id,
                         filled_qty, group.qty)
         else:
@@ -437,7 +441,12 @@ class TollGateEngine:
         """
         Handle target fill (partial or complete).
 
-        Computes PnL increment and checks if all targets are filled.
+        Computes PnL increment, spawns sub-target cascading for partial-fill
+        groups, and checks if all targets/sub-chains are filled.
+
+        Depth rules (for SELL entry, target_side=BUY):
+        - Odd depths (1,3,5): closing fills (target_side @ target_price) -> generate PnL
+        - Even depths (2,4): re-entry fills (entry_side @ entry_price) -> no PnL
         """
         prev_filled = target.get('filled_qty', 0)
         increment = filled_qty - prev_filled
@@ -447,29 +456,46 @@ class TollGateEngine:
         target['filled_qty'] = filled_qty
         target['fill_price'] = fill_price
 
-        # Update net inventory (target is opposite side of entry)
-        if group.entry_side == "BUY":
-            # Entry was BUY, target is SELL -> reduce long
-            self.state.net_inventory -= increment
-            pnl_increment = round((fill_price - group.entry_fill_price) * increment, 2)
+        depth = target.get('depth', 1)
+        tag = target.get('tag', f"T{order_id[-4:]}")
+        is_closing = (depth % 2 == 1)  # odd depths are closing fills
+
+        # Update net inventory and compute PnL
+        if is_closing:
+            # Closing fill: opposite of entry side -> reduce inventory
+            if group.entry_side == "BUY":
+                self.state.net_inventory -= increment
+            else:
+                self.state.net_inventory += increment
+
+            # PnL: use ref_price (cost basis) from this target record
+            ref_price = target.get('ref_price', group.entry_fill_price)
+            if group.entry_side == "BUY":
+                pnl_increment = round((fill_price - ref_price) * increment, 2)
+            else:
+                pnl_increment = round((ref_price - fill_price) * increment, 2)
+
+            group.realized_pnl = round(group.realized_pnl + pnl_increment, 2)
         else:
-            # Entry was SELL, target is BUY -> reduce short
-            self.state.net_inventory += increment
-            pnl_increment = round((group.entry_fill_price - fill_price) * increment, 2)
+            # Re-entry fill: same side as entry -> increase inventory
+            if group.entry_side == "BUY":
+                self.state.net_inventory += increment
+            else:
+                self.state.net_inventory -= increment
+            pnl_increment = 0.0
 
-        group.realized_pnl = round(group.realized_pnl + pnl_increment, 2)
-
-        # PnL: record target fill
+        # PnL tracker: record fill
         if self.pnl and self._pnl_pair_id:
+            fill_side = group.target_side if is_closing else group.entry_side
             self.pnl.record_fill(
                 cycle_id=self._pnl_cycle_ids.get(group.group_id),
                 pair_id=self._pnl_pair_id,
                 session_id=self._pnl_session_id,
                 ticker=self.config.symbol,
-                side=group.target_side,
+                side=fill_side,
                 qty=increment,
                 price=fill_price,
-                txn_type='TARGET',
+                txn_type='TARGET' if is_closing else 'SUB_ENTRY',
                 is_partial=not is_complete,
                 order_id=order_id,
                 group_id=group.group_id,
@@ -477,42 +503,160 @@ class TollGateEngine:
                 running_pnl=self.state.total_pnl + group.realized_pnl,
                 net_inventory=self.state.net_inventory)
 
-        logger.info("Target fill: %s L%d C%d.T%s, %d @ %.2f, PnL incr=%.2f (group=%s)",
-                    group.target_side, group.subset_index, group.cycle_number,
-                    order_id[-8:], increment, fill_price, pnl_increment, group.group_id)
+        logger.info("Target fill: %s depth=%d L%d C%d, %d @ %.2f, PnL incr=%.2f (group=%s)",
+                    tag, depth, group.subset_index, group.cycle_number,
+                    increment, fill_price, pnl_increment, group.group_id)
 
-        # Check if all targets filled AND entry is complete
+        # --- Sub-target cascading ---
+        max_depth = self.config.max_sub_depth
+        target_fully_filled = (filled_qty >= target.get('qty', 0))
+
+        if target_fully_filled and depth < max_depth:
+            # Spawn next depth order
+            next_depth = depth + 1
+            next_is_closing = (next_depth % 2 == 1)
+
+            if next_is_closing:
+                # Closing: target_side @ target_price
+                next_side = group.target_side
+                next_price = group.target_price
+                # ref_price = the re-entry fill price (current fill_price)
+                next_ref_price = fill_price
+            else:
+                # Re-entry: entry_side @ entry_price
+                next_side = group.entry_side
+                next_price = group.entry_price
+                # ref_price not used for PnL on even depths, but store fill_price for child
+                next_ref_price = None  # will be set on fill
+
+            # Build tag: e.g. "ST01", "TT01", reusing the sequence from parent
+            seq_str = tag[-2:] if len(tag) >= 2 and tag[-2:].isdigit() else f"{group.target_seq:02d}"
+            next_tag = f"{DEPTH_TAGS[next_depth]}{seq_str}"
+
+            next_uid = generate_order_id(
+                "TP", next_side, group.subset_index,
+                group.cycle_number, group.group_id, tag=next_tag,
+            )
+            next_order_id = self.client.place_order(
+                symbol=self.config.symbol,
+                transaction_type=next_side,
+                qty=target.get('qty', increment),
+                price=next_price,
+                exchange=self.config.exchange,
+                product=self.config.product,
+                order_unique_id=next_uid,
+            )
+
+            if next_order_id:
+                next_record = {
+                    'order_id': next_order_id,
+                    'qty': target.get('qty', increment),
+                    'filled_qty': 0,
+                    'fill_price': None,
+                    'placed_at': datetime.now().isoformat(),
+                    'depth': next_depth,
+                    'tag': next_tag,
+                    'ref_price': next_ref_price,
+                }
+                group.target_orders.append(next_record)
+                self.state.register_order(next_order_id, group.group_id)
+                logger.info("Sub-target %s placed: %s %d @ %.2f (depth=%d, group=%s)",
+                            next_tag, next_side, target.get('qty', increment),
+                            next_price, next_depth, group.group_id)
+            else:
+                logger.error("Sub-target FAILED: %s %d @ %.2f (depth=%d, group=%s)",
+                             next_side, target.get('qty', increment),
+                             next_price, next_depth, group.group_id)
+
+        # --- Cycle completion check ---
         entry_complete = (group.status == TollGateStatus.TARGET_PENDING)
-        all_filled = group.all_targets_filled and group.total_target_filled_qty >= group.entry_filled_so_far
 
-        if entry_complete and all_filled:
-            logger.info("CYCLE COMPLETE: %s L%d C%d, PnL=%.2f (group=%s)",
-                        group.entry_side, group.subset_index, group.cycle_number,
-                        group.realized_pnl, group.group_id)
-
-            # PnL: close cycle
-            if self.pnl:
-                cid = self._pnl_cycle_ids.pop(group.group_id, None)
-                self.pnl.close_cycle(
-                    cid,
-                    entry_fill_price=group.entry_fill_price,
-                    target_fill_price=fill_price,
-                    primary_pnl=group.realized_pnl)
-
-            # Free the level
-            level_key = f"{group.bot}:{group.subset_index}"
-            self.level_groups.pop(level_key, None)
-
-            # Close group
-            self.state.close_group(group.group_id)
-
-            # Re-enter at same grid level
-            if group.bot == 'A' and group.subset_index < len(self.buy_levels):
-                self._place_entry(self.buy_levels[group.subset_index], bot="A")
-            elif group.bot == 'B' and group.subset_index < len(self.sell_levels):
-                self._place_entry(self.sell_levels[group.subset_index], bot="B")
+        if group.has_pending_sub_targets() or depth > 1:
+            # Sub-chains are active — check if ALL leaf targets at max_depth are filled
+            if entry_complete and group.leaf_targets_filled(max_depth):
+                self._complete_cycle(group, fill_price, "CYCLE COMPLETE (full entry + all sub-chains)")
+            elif group.status == TollGateStatus.ENTRY_PARTIAL and group.leaf_targets_filled(max_depth):
+                # Partial entry with all sub-chains exhausted to max depth
+                self._complete_partial_cycle(group, fill_price)
+        else:
+            # No sub-chains — original behavior
+            all_filled = group.all_targets_filled and group.total_target_filled_qty >= group.entry_filled_so_far
+            if entry_complete and all_filled:
+                self._complete_cycle(group, fill_price, "CYCLE COMPLETE")
 
         return True
+
+    def _complete_cycle(self, group: TollGateGroup, fill_price: float, label: str):
+        """Close a completed cycle and re-enter at the same grid level."""
+        logger.info("%s: %s L%d C%d, PnL=%.2f (group=%s)",
+                    label, group.entry_side, group.subset_index,
+                    group.cycle_number, group.realized_pnl, group.group_id)
+
+        # PnL: close cycle
+        if self.pnl:
+            cid = self._pnl_cycle_ids.pop(group.group_id, None)
+            self.pnl.close_cycle(
+                cid,
+                entry_fill_price=group.entry_fill_price,
+                target_fill_price=fill_price,
+                primary_pnl=group.realized_pnl)
+
+        # Free the level
+        level_key = f"{group.bot}:{group.subset_index}"
+        self.level_groups.pop(level_key, None)
+
+        # Close group
+        self.state.close_group(group.group_id)
+
+        # Re-enter at same grid level
+        if group.bot == 'A' and group.subset_index < len(self.buy_levels):
+            self._place_entry(self.buy_levels[group.subset_index], bot="A")
+        elif group.bot == 'B' and group.subset_index < len(self.sell_levels):
+            self._place_entry(self.sell_levels[group.subset_index], bot="B")
+
+    def _complete_partial_cycle(self, group: TollGateGroup, fill_price: float):
+        """
+        Handle partial-fill cycle completion after all sub-chains reach max depth.
+
+        Cancels the remaining entry order, closes the group, and re-enters fresh
+        with full qty at the same grid level.
+        """
+        logger.info("PARTIAL CYCLE CLOSE: %s L%d C%d, filled=%d/%d, PnL=%.2f, "
+                    "sub-chains exhausted -> recycling level (group=%s)",
+                    group.entry_side, group.subset_index, group.cycle_number,
+                    group.entry_filled_so_far, group.qty, group.realized_pnl,
+                    group.group_id)
+
+        # Cancel remaining entry order
+        if group.entry_order_id:
+            if self.client.cancel_order(group.entry_order_id):
+                logger.info("Cancelled remaining entry order %s (group=%s)",
+                            group.entry_order_id, group.group_id)
+            else:
+                logger.warning("Failed to cancel remaining entry %s (group=%s, may already be done)",
+                               group.entry_order_id, group.group_id)
+
+        # PnL: close cycle
+        if self.pnl:
+            cid = self._pnl_cycle_ids.pop(group.group_id, None)
+            self.pnl.close_cycle(
+                cid,
+                entry_fill_price=group.entry_fill_price,
+                target_fill_price=fill_price,
+                primary_pnl=group.realized_pnl)
+
+        # Free the level
+        level_key = f"{group.bot}:{group.subset_index}"
+        self.level_groups.pop(level_key, None)
+
+        # Close group
+        self.state.close_group(group.group_id)
+
+        # Re-enter at same grid level with full qty
+        if group.bot == 'A' and group.subset_index < len(self.buy_levels):
+            self._place_entry(self.buy_levels[group.subset_index], bot="A")
+        elif group.bot == 'B' and group.subset_index < len(self.sell_levels):
+            self._place_entry(self.sell_levels[group.subset_index], bot="B")
 
     def _handle_rejection(self, order: dict):
         """Log rejected orders and free the level."""
@@ -559,6 +703,9 @@ class TollGateEngine:
                 continue
             target_handled = True
 
+            depth = target.get('depth', 1)
+            is_closing = (depth % 2 == 1)
+
             # Process partial fill on the cancelled target if any
             prev_filled = target.get('filled_qty', 0)
             if filled_qty > prev_filled and fill_price > 0:
@@ -566,85 +713,101 @@ class TollGateEngine:
                 target['filled_qty'] = filled_qty
                 target['fill_price'] = fill_price
 
-                if group.entry_side == "BUY":
-                    self.state.net_inventory -= increment
-                    pnl_increment = round((fill_price - group.entry_fill_price) * increment, 2)
+                if is_closing:
+                    ref_price = target.get('ref_price', group.entry_fill_price)
+                    if group.entry_side == "BUY":
+                        self.state.net_inventory -= increment
+                        pnl_increment = round((fill_price - ref_price) * increment, 2)
+                    else:
+                        self.state.net_inventory += increment
+                        pnl_increment = round((ref_price - fill_price) * increment, 2)
+                    group.realized_pnl = round(group.realized_pnl + pnl_increment, 2)
                 else:
-                    self.state.net_inventory += increment
-                    pnl_increment = round((group.entry_fill_price - fill_price) * increment, 2)
+                    # Even depth (re-entry): adjust inventory, no PnL
+                    if group.entry_side == "BUY":
+                        self.state.net_inventory += increment
+                    else:
+                        self.state.net_inventory -= increment
+                    pnl_increment = 0.0
 
-                group.realized_pnl = round(group.realized_pnl + pnl_increment, 2)
-                logger.info("Cancelled target partial fill: %d @ %.2f, PnL incr=%.2f (group=%s)",
-                            increment, fill_price, pnl_increment, group.group_id)
+                logger.info("Cancelled target partial fill: depth=%d, %d @ %.2f, PnL incr=%.2f (group=%s)",
+                            depth, increment, fill_price, pnl_increment, group.group_id)
 
             # Capture original qty before adjusting, then mark target as done at its fill level
             original_qty = int(order.get('quantity', 0)) or target.get('qty', 0)
             target['qty'] = filled_qty  # Adjust to final filled amount
 
-            # Re-place target for unfilled remainder — but only if not already covered
+            # Re-place target for unfilled remainder — carry forward depth/tag/ref_price
             remainder = original_qty - filled_qty
-            existing_target_qty = sum(t.get('qty', 0) for t in group.target_orders)
-            if remainder > 0 and existing_target_qty < group.entry_filled_so_far:
-                group.target_seq += 1
-                target_uid = generate_order_id(
-                    "TP", group.entry_side, group.subset_index,
-                    group.cycle_number, group.group_id, seq=group.target_seq,
-                )
-                new_order_id = self.client.place_order(
-                    symbol=self.config.symbol,
-                    transaction_type=group.target_side,
-                    qty=remainder,
-                    price=group.target_price,
-                    exchange=self.config.exchange,
-                    product=self.config.product,
-                    order_unique_id=target_uid,
-                )
-                if new_order_id:
-                    new_target = {
-                        'order_id': new_order_id,
-                        'qty': remainder,
-                        'filled_qty': 0,
-                        'fill_price': None,
-                        'placed_at': datetime.now().isoformat(),
-                    }
-                    group.target_orders.append(new_target)
-                    self.state.register_order(new_order_id, group.group_id)
-                    logger.info("Re-placed target: %s %d @ %.2f -> order=%s (group=%s, replacing cancelled %s)",
-                                group.target_side, remainder, group.target_price,
-                                new_order_id, group.group_id, order_id)
+            # For depth-1 targets, check against entry_filled_so_far; for sub-targets, always re-place
+            if remainder > 0:
+                should_replace = (depth > 1)  # sub-targets always get replaced
+                if not should_replace:
+                    existing_target_qty = sum(t.get('qty', 0) for t in group.target_orders
+                                             if t.get('depth', 1) == 1)
+                    should_replace = existing_target_qty < group.entry_filled_so_far
+
+                if should_replace:
+                    # Determine side and price based on depth
+                    if is_closing:
+                        replace_side = group.target_side
+                        replace_price = group.target_price
+                    else:
+                        replace_side = group.entry_side
+                        replace_price = group.entry_price
+
+                    replace_tag = target.get('tag', f"T{group.target_seq:02d}")
+                    replace_uid = generate_order_id(
+                        "TP", replace_side, group.subset_index,
+                        group.cycle_number, group.group_id, tag=replace_tag,
+                    )
+                    new_order_id = self.client.place_order(
+                        symbol=self.config.symbol,
+                        transaction_type=replace_side,
+                        qty=remainder,
+                        price=replace_price,
+                        exchange=self.config.exchange,
+                        product=self.config.product,
+                        order_unique_id=replace_uid,
+                    )
+                    if new_order_id:
+                        new_target = {
+                            'order_id': new_order_id,
+                            'qty': remainder,
+                            'filled_qty': 0,
+                            'fill_price': None,
+                            'placed_at': datetime.now().isoformat(),
+                            'depth': depth,
+                            'tag': replace_tag,
+                            'ref_price': target.get('ref_price'),
+                        }
+                        group.target_orders.append(new_target)
+                        self.state.register_order(new_order_id, group.group_id)
+                        logger.info("Re-placed target: %s %s %d @ %.2f depth=%d -> order=%s (group=%s)",
+                                    replace_tag, replace_side, remainder, replace_price,
+                                    depth, new_order_id, group.group_id)
+                    else:
+                        logger.error("FAILED to re-place target for remainder %d depth=%d (group=%s)",
+                                     remainder, depth, group.group_id)
                 else:
-                    logger.error("FAILED to re-place target for remainder %d (group=%s)",
-                                 remainder, group.group_id)
-            elif remainder > 0:
-                logger.info("Target capacity already sufficient (%d >= %d), skip re-place (group=%s)",
-                            existing_target_qty, group.entry_filled_so_far, group.group_id)
+                    existing_d1_qty = sum(t.get('qty', 0) for t in group.target_orders
+                                         if t.get('depth', 1) == 1)
+                    logger.info("Target capacity already sufficient (%d >= %d), skip re-place (group=%s)",
+                                existing_d1_qty, group.entry_filled_so_far, group.group_id)
 
-            # Check if the cycle is now complete (all targets filled, entry done)
+            # Check if the cycle is now complete
             entry_complete = (group.status == TollGateStatus.TARGET_PENDING)
-            all_filled = group.all_targets_filled and group.total_target_filled_qty >= group.entry_filled_so_far
-            if entry_complete and all_filled:
-                logger.info("CYCLE COMPLETE (after cancel-recheck): %s L%d C%d, PnL=%.2f (group=%s)",
-                            group.entry_side, group.subset_index, group.cycle_number,
-                            group.realized_pnl, group.group_id)
+            max_depth = self.config.max_sub_depth
 
-                # PnL: close cycle
-                if self.pnl:
-                    cid = self._pnl_cycle_ids.pop(group.group_id, None)
-                    self.pnl.close_cycle(
-                        cid,
-                        entry_fill_price=group.entry_fill_price,
-                        target_fill_price=fill_price,
-                        primary_pnl=group.realized_pnl)
-
-                level_key = f"{group.bot}:{group.subset_index}"
-                self.level_groups.pop(level_key, None)
-                self.state.close_group(group.group_id)
-
-                # Re-enter at same grid level
-                if group.bot == 'A' and group.subset_index < len(self.buy_levels):
-                    self._place_entry(self.buy_levels[group.subset_index], bot="A")
-                elif group.bot == 'B' and group.subset_index < len(self.sell_levels):
-                    self._place_entry(self.sell_levels[group.subset_index], bot="B")
+            if group.has_pending_sub_targets() or depth > 1:
+                if entry_complete and group.leaf_targets_filled(max_depth):
+                    self._complete_cycle(group, fill_price, "CYCLE COMPLETE (after cancel-recheck, sub-chains)")
+                elif group.status == TollGateStatus.ENTRY_PARTIAL and group.leaf_targets_filled(max_depth):
+                    self._complete_partial_cycle(group, fill_price)
+            else:
+                all_filled = group.all_targets_filled and group.total_target_filled_qty >= group.entry_filled_so_far
+                if entry_complete and all_filled:
+                    self._complete_cycle(group, fill_price, "CYCLE COMPLETE (after cancel-recheck)")
 
             self.state.save()
             break
@@ -899,21 +1062,22 @@ class TollGateEngine:
                         self._handle_cancellation(broker_order)
 
         # After reconciliation, check for groups that should be closed
+        max_depth = self.config.max_sub_depth
         for group in list(self.state.open_groups.values()):
             if group.status == TollGateStatus.TARGET_PENDING:
-                all_filled = group.all_targets_filled and group.total_target_filled_qty >= group.entry_filled_so_far
-                if all_filled:
-                    logger.info("Reconcile: closing completed cycle %s L%d C%d, PnL=%.2f",
-                                group.entry_side, group.subset_index, group.cycle_number,
-                                group.realized_pnl)
-                    level_key = f"{group.bot}:{group.subset_index}"
-                    self.level_groups.pop(level_key, None)
-                    self.state.close_group(group.group_id)
-
-                    if group.bot == 'A' and group.subset_index < len(self.buy_levels):
-                        self._place_entry(self.buy_levels[group.subset_index], bot="A")
-                    elif group.bot == 'B' and group.subset_index < len(self.sell_levels):
-                        self._place_entry(self.sell_levels[group.subset_index], bot="B")
+                if group.has_pending_sub_targets():
+                    if group.leaf_targets_filled(max_depth):
+                        self._complete_cycle(group, group.target_price,
+                                             "Reconcile: CYCLE COMPLETE (sub-chains)")
+                else:
+                    all_filled = (group.all_targets_filled and
+                                  group.total_target_filled_qty >= group.entry_filled_so_far)
+                    if all_filled:
+                        self._complete_cycle(group, group.target_price,
+                                             "Reconcile: CYCLE COMPLETE")
+            elif group.status == TollGateStatus.ENTRY_PARTIAL:
+                if group.has_pending_sub_targets() and group.leaf_targets_filled(max_depth):
+                    self._complete_partial_cycle(group, group.target_price)
 
         # Populate status cache from all broker orders so poll loop won't re-process
         for order in orders:

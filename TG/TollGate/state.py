@@ -52,7 +52,10 @@ class TollGateGroup:
 
     # Target tracking — list of targets (one per partial fill increment)
     target_orders: List[dict] = field(default_factory=list)
-    # Each: {order_id, qty, filled_qty, fill_price, placed_at}
+    # Each: {order_id, qty, filled_qty, fill_price, placed_at, depth, tag, ref_price}
+    # depth: 1=T (initial target), 2=ST (sub re-entry), 3=TT, 4=FT, 5=FI
+    # tag: "T01", "ST01", "TT01", "FT01", "FI01"
+    # ref_price: cost basis for PnL calculation at this depth
     target_seq: int = 0                 # Counter for target naming (T1, T2, T3...)
 
     # Timestamps
@@ -95,6 +98,31 @@ class TollGateGroup:
     def total_target_filled_qty(self) -> int:
         """Sum of filled qty across all target orders."""
         return sum(t.get('filled_qty', 0) for t in self.target_orders)
+
+    @property
+    def max_target_depth(self) -> int:
+        """Highest depth among target orders (1 if no targets or no depth field)."""
+        if not self.target_orders:
+            return 0
+        return max(t.get('depth', 1) for t in self.target_orders)
+
+    def leaf_targets_filled(self, max_sub_depth: int) -> bool:
+        """
+        True when all sub-chains have completed to max depth.
+
+        A leaf target is one at max_sub_depth. All leaf targets must be fully filled,
+        and their total filled qty must cover the entry filled qty.
+        """
+        leaf_targets = [t for t in self.target_orders if t.get('depth', 1) == max_sub_depth]
+        if not leaf_targets:
+            return False
+        all_filled = all(t.get('filled_qty', 0) >= t.get('qty', 0) for t in leaf_targets)
+        total_leaf_filled = sum(t.get('filled_qty', 0) for t in leaf_targets)
+        return all_filled and total_leaf_filled >= self.entry_filled_so_far
+
+    def has_pending_sub_targets(self) -> bool:
+        """True if any target at depth > 1 exists (sub-chain is active)."""
+        return any(t.get('depth', 1) > 1 for t in self.target_orders)
 
     def to_dict(self) -> dict:
         return {

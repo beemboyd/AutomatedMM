@@ -13,6 +13,9 @@ from typing import List, Tuple
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Sub-target depth tag mapping: depth -> tag prefix
+DEPTH_TAGS = {1: "T", 2: "ST", 3: "TT", 4: "FT", 5: "FI"}
 _DEFAULT_XTS_ROOT = 'https://xts.myfindoc.com'
 
 
@@ -46,6 +49,9 @@ class TollGateConfig:
     round_trip_profit: float = 0.01     # 1 paisa round-trip target
     levels_per_side: int = 10
     qty_per_level: int = 4000
+
+    # Sub-target cascading for partial fills
+    max_sub_depth: int = 5              # Max depth for sub-target ping-pong (1=T, 2=ST, 3=TT, 4=FT, 5=FI)
 
     # Reanchor limits
     max_reanchors: int = 100            # Stop bot after N total reanchors
@@ -117,6 +123,7 @@ class TollGateConfig:
         print(f"  Current Spacing  : {space} ({space*100:.0f} paisa)")
         print(f"  Levels Per Side  : {self.levels_per_side}")
         print(f"  Qty Per Level    : {self.qty_per_level}")
+        print(f"  Max Sub-Depth    : {self.max_sub_depth}")
         print(f"  Max Reanchors    : {self.max_reanchors}")
         print(f"  Product          : {self.product}")
         print(f"  Poll Interval    : {self.poll_interval}s")
@@ -145,20 +152,30 @@ class TollGateConfig:
 
 
 def generate_order_id(role: str, side: str, level: int, cycle: int,
-                      group_id: str, seq: int = 0) -> str:
+                      group_id: str, seq: int = 0, tag: str = None) -> str:
     """
     Generate compact order identifier for XTS orderUniqueIdentifier (max 20 chars).
 
-    Format: {ROLE}-{SIDE}L{LEVEL}C{CYCLE}-{GROUP_ID}
+    Format: {TAG}-{SIDE}L{LEVEL}C{CYCLE}-{GROUP_ID}
 
     Examples:
       EN-BL0C1-abc12345    Entry BUY level 0 cycle 1       (18 chars)
-      EN-SL3C5-def67890    Entry SELL level 3 cycle 5       (18 chars)
-      T1-BL0C1-abc12345    Target #1 level 0 cycle 1       (18 chars)
-      T2-BL0C1-abc12345    Target #2 (2nd partial) cycle 1  (18 chars)
+      T01-BL0C1-abc12345   Target #1 level 0 cycle 1       (19 chars)
+      ST01-BL0C1-abc1234   Sub-target depth 2              (19 chars)
+      TT01-BL0C1-abc1234   Sub-target depth 3              (19 chars)
+      FT01-BL0C1-abc1234   Sub-target depth 4              (19 chars)
+      FI01-BL0C1-abc1234   Sub-target depth 5              (19 chars)
     """
-    tag = role
-    if seq > 0:
-        tag = f"T{seq}"
+    if tag:
+        label = tag
+    elif seq > 0:
+        label = f"T{seq}"
+    else:
+        label = role
     side_code = side[0]  # B or S
-    return f"{tag}-{side_code}L{level}C{cycle}-{group_id}"
+    middle = f"{side_code}L{level}C{cycle}"
+    # {label}-{middle}-{group_id} must be <= 20 chars
+    # overhead = len(label) + 1 + len(middle) + 1
+    max_gid_len = 20 - len(label) - 1 - len(middle) - 1
+    gid = group_id[:max(max_gid_len, 4)]
+    return f"{label}-{middle}-{gid}"
