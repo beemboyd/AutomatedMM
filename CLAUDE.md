@@ -20,6 +20,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Reset MIS positions: `python utils/cleanup_mis_positions.py --reset-mis`
 - Sync with broker positions: `python utils/cleanup_mis_positions.py --sync-broker`
 - Remove specific position: `python utils/cleanup_mis_positions.py --remove-ticker TICKER`
+- AMM dry run (verify config): `python -m TG.AMM.run --dry-run`
+- AMM start engine: `python -m TG.AMM.run`
+- AMM start engine with overrides: `python -m TG.AMM.run --base-qty 5000 --sample-interval 30 --product MIS`
+- AMM monitor dashboard: `python -m TG.AMM.run --dashboard --mode monitor --port 7797`
+- AMM config/admin dashboard: `python -m TG.AMM.run --dashboard --mode config --port 7796`
+- AMM start from config file: `python -m TG.AMM.run --config-file TG/AMM/state/amm_config.json`
 
 ## System Startup & Token Management
 **IMPORTANT - Daily Service Management:**
@@ -43,6 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Testing**: Use mock_kiteconnect for testing instead of real API connections
 
 ## System Changes & Fixes
+- **2026-02-19**: Added AMM (Automated Market Maker) stat-arb bot in `TG/AMM/`. Trades ratio mean-reversion between pairs sharing SPCENET as denominator (R1=TATAGOLD/SPCENET, R2=YESBANK/SPCENET). Multi-instrument XTS client (01MU07 account), rolling z-score signals, 2-leg entry/exit, stacking up to 3 positions per pair, target-only exit (no stop-loss). Dashboards: Monitor on 7797, Config/Admin on 7796. Files: `TG/AMM/{__init__,__main__,config,client,state,engine,run,dashboard}.py`.
 - **2025-05-10**: Consolidated all backtesting functionality into a single unified script (backtest.py). This new script replaces the following older scripts which have been moved to the archive folder: run_kb_hh_sl.py, run_kb_hh_sl_interactive.py, run_backtest.py, run_backtest_optimizer.py, run_price_action_backtest.py, run_test_backtest.py, run_simplified_backtest.py, portfolio_backtest.py, and simple_portfolio_report.py. Also archived create_test_tickers.py and test_tickers.xlsx as they're no longer needed with the new consolidated backtest system. The consolidated script provides a single interface for all backtesting functionality with improved error handling, support for data caching, and enhanced reporting.
 - **2025-05-07 14:00**: Added ticker_cooldown_hours (default: 2.0) to config.ini to prevent placing multiple orders for the same ticker within the specified time period. This addresses the issue with tickers like WELSPUNLIV and BANARISUG having multiple positions opened and closed in quick succession when they are stopped out and then reappear in scan results.
 - **2025-05-07 11:40**: Identified manage_risk.py as obsolete and recommended removal since all risk management functionality has been integrated into position_watchdog.py. Created documentation explaining this change in Diagrams/delete_manage_risk.md.
@@ -75,6 +82,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Archived backtesting scripts are available in the BT/archive/ directory for reference
 
 Always verify changes with individual strategy tests before committing. Be careful with Zerodha API interactions to avoid unintended orders.
+
+## AMM Module Guidelines (TG/AMM/)
+- AMM is a ratio mean-reversion stat-arb bot living in `TG/AMM/`
+- Uses XTS account **01MU07** (separate from TollGate's 01MU01 and Grid's 01MU06)
+- Pair config is defined in `PairConfig` dataclass in `config.py` — each pair has numerator/denominator tickers, entry_sd threshold, and trade percentages
+- Engine samples ratios every `sample_interval` (default 60s) and computes rolling mean/SD over `rolling_window` (default 30) samples
+- No trading occurs during `warmup_samples` (default 30) collection period (~30 min at 60s intervals)
+- Positions are 2-legged (numerator + denominator) with independent fill tracking per leg
+- State persists to `TG/AMM/state/amm_state.json` (atomic writes)
+- Dashboards: Monitor on **7797**, Config/Admin on **7796**
+- XTS credentials are in `AMMConfig` dataclass defaults — do not hardcode elsewhere
+- WebSocket market data with REST fallback (30s staleness threshold)
+- Session management: 30-min proactive refresh + 5-error reactive refresh (same pattern as TollGate)
 
 ## Git Workflow - IMPORTANT
 **COMMIT AND PUSH AFTER EVERY CHANGE**: When making any code modifications, you MUST:

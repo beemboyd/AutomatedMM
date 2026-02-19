@@ -35,8 +35,40 @@ Implemented a new stat-arb bot in `TG/AMM/` that trades ratio mean-reversion bet
 ### Usage
 - Dry run: `python -m TG.AMM.run --dry-run`
 - Start engine: `python -m TG.AMM.run`
+- Start with overrides: `python -m TG.AMM.run --base-qty 5000 --sample-interval 30`
 - Monitor dashboard: `python -m TG.AMM.run --dashboard --mode monitor --port 7797`
 - Config dashboard: `python -m TG.AMM.run --dashboard --mode config --port 7796`
+- Start from config: `python -m TG.AMM.run --config-file TG/AMM/state/amm_config.json`
+
+### Verification
+- All modules import cleanly: `python3 -c "import TG.AMM.config; import TG.AMM.client; import TG.AMM.engine"`
+- Dry run prints config summary with both pairs and effective quantities
+- Engine connects to XTS (01MU07), resolves all 3 instruments (SPCENET, TATAGOLD, YESBANK)
+- Ratio sampling confirmed: Pair 0 R≈2.93, Pair 1 R≈4.13 (after-hours values)
+- PnL tracker integrates (session created in DB)
+
+---
+
+## 2026-02-19 22:15 IST - Claude
+**AMM: Fix dashboard visibility during warmup**
+
+Engine was not saving state after each ratio sample — only on fills or every 100 polls. This meant the monitor dashboard showed empty data during the entire 30-minute warmup period. Also, sampling diagnostic logs were at DEBUG level, invisible at default INFO.
+
+### Modified Files
+1. **`TG/AMM/engine.py`** — Added `self.state.save()` call after `_sample_ratios()` in the main loop. Upgraded "LTP unavailable" and "warmup N/30" log messages from DEBUG to INFO for operational visibility.
+
+### Impact
+- Dashboard immediately shows warmup progress (samples collected per pair)
+- Ratio chart starts populating from the first sample
+- Engine logs show per-sample diagnostics at INFO level
+
+---
+
+## 2026-02-19 22:20 IST - Claude
+**Documentation: CLAUDE.md updated for AMM module**
+
+### Modified Files
+1. **`CLAUDE.md`** — Added AMM CLI commands to Build/Test Commands section. Added `2026-02-19` entry to System Changes & Fixes. Added new "AMM Module Guidelines" section with architecture notes, credential info, dashboard ports, and development guidelines.
 
 ---
 
