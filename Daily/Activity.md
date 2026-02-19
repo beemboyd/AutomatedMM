@@ -1,5 +1,23 @@
 # Activity Log
 
+## 2026-02-19 - Claude
+**TG Dashboard: Redesigned Grid Levels UI with expandable sub-rows**
+
+### Modified Files
+1. **`TG/dashboard.py`** — Redesigned the Grid Levels section on the 7777 monitor dashboard:
+   - **HTML template**: Replaced 2-column layout with full-width tables. New columns: expand icon, Level, Entry → Target, Qty, Status, Primary PnL, Pair PnL, Cycle ID.
+   - **JS `renderGridLevel()` helper**: New function renders each grid level as a clickable main row with collapsible sub-rows:
+     - **Entry**: side, qty, fill price, fill status, order ID (OID)
+     - **Target**: side, qty, fill price, fill status, order ID (OID)
+     - **Hedge** (conditional): side, secondary symbol, qty, VWAP, order count
+     - **Unwind** (conditional): side, secondary symbol, qty, VWAP, pair PnL
+   - Sub-rows hidden by default, toggled via click on main row (▶ expand icon)
+   - Shows `group_id` (unique cycle ID) and `entry_order_id`/`target_order_id` for reconciliation
+   - **CSS**: Added styles for `.grid-main-row`, `.grid-sub-row`, expand icons, color-coded sub-labels (Entry=blue, Target=orange, Hedge=purple, Unwind=yellow), PnL coloring
+   - "Free" levels show no expand icon or sub-rows
+
+---
+
 ## 2026-02-18 (Late Night) - Claude
 **TollGate Warmup Script + XTS WebSocket Migration**
 
