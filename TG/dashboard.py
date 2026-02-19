@@ -54,6 +54,7 @@ _DEFAULT_CONFIG = {
             "poll_interval": 2.0,
             "reanchor_epoch": 100,
             "max_grid_levels": 2000,
+            "max_sub_depth": 10,
         }
     ],
 }
@@ -188,6 +189,7 @@ def _start_bot(symbol: str, config: dict) -> bool:
         '--poll-interval', str(primary.get('poll_interval', 2.0)),
         '--reanchor-epoch', str(primary.get('reanchor_epoch', 100)),
         '--max-grid-levels', str(primary.get('max_grid_levels', 2000)),
+        '--max-sub-depth', str(primary.get('max_sub_depth', 10)),
     ]
 
     if primary.get('auto_anchor'):
@@ -385,6 +387,7 @@ def create_app(mode: str = 'monitor') -> Flask:
                     'product': p.get('product', 'NRML'),
                     'reanchor_epoch': p.get('reanchor_epoch', 100),
                     'max_grid_levels': p.get('max_grid_levels', 2000),
+                    'max_sub_depth': p.get('max_sub_depth', 10),
                 },
             }
         return jsonify(result)
@@ -1675,6 +1678,11 @@ def _build_config_html() -> str:
                 <div class="field-hint">Stop bot after N grid levels on one side</div>
             </div>
             <div>
+                <label class="block text-xs mb-1" style="color:var(--dim);">Max Sub-Depth</label>
+                <input id="m-max-sub-depth" type="number">
+                <div class="field-hint">Depth for partial-fill sub-target ping-pong (D1→D2→...DN)</div>
+            </div>
+            <div>
                 <label class="block text-xs mb-1" style="color:var(--dim);">Poll Interval (s)</label>
                 <input id="m-poll" type="number" step="0.5">
                 <div class="field-hint">Order status check frequency</div>
@@ -1788,6 +1796,7 @@ function renderPrimaries() {
                 <div>Holdings: <span style="color:var(--text);">${p.holdings_override}</span></div>
                 <div>Epoch: <span style="color:var(--text);">${p.reanchor_epoch || 100}</span></div>
                 <div>Max Levels: <span style="color:var(--text);">${p.max_grid_levels || 2000}</span></div>
+                <div>Sub-Depth: <span style="color:var(--text);">${p.max_sub_depth || 10}</span></div>
                 <div>Poll: <span style="color:var(--text);">${p.poll_interval}s</span></div>
             </div>
         </div>`;
@@ -1801,6 +1810,7 @@ function addPrimary() {
         grid_space: 0.01, target: 0.03, levels_per_side: 10, qty_per_level: 100,
         hedge_ratio: 1, partial_hedge_ratio: 1, holdings_override: 2000,
         product: 'NRML', poll_interval: 2.0, reanchor_epoch: 100, max_grid_levels: 2000,
+        max_sub_depth: 10,
     });
     editPrimary(currentConfig.primaries.length - 1);
 }
@@ -1828,6 +1838,7 @@ function editPrimary(idx) {
     document.getElementById('m-holdings').value = p.holdings_override != null ? p.holdings_override : -1;
     document.getElementById('m-reanchor-epoch').value = p.reanchor_epoch != null ? p.reanchor_epoch : 100;
     document.getElementById('m-max-grid-levels').value = p.max_grid_levels != null ? p.max_grid_levels : 2000;
+    document.getElementById('m-max-sub-depth').value = p.max_sub_depth != null ? p.max_sub_depth : 10;
     document.getElementById('m-poll').value = p.poll_interval || 2.0;
     document.getElementById('m-anchor').value = p.anchor_price || 0;
     document.getElementById('m-auto-anchor').checked = p.auto_anchor !== false;
@@ -1853,6 +1864,7 @@ function saveModal() {
     p.holdings_override = parseInt(document.getElementById('m-holdings').value);
     p.reanchor_epoch = parseInt(document.getElementById('m-reanchor-epoch').value);
     p.max_grid_levels = parseInt(document.getElementById('m-max-grid-levels').value);
+    p.max_sub_depth = parseInt(document.getElementById('m-max-sub-depth').value);
     p.poll_interval = parseFloat(document.getElementById('m-poll').value);
     p.anchor_price = parseFloat(document.getElementById('m-anchor').value);
     p.auto_anchor = document.getElementById('m-auto-anchor').checked;

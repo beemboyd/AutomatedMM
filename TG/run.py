@@ -94,6 +94,8 @@ def parse_args():
                         help='Reanchors before spacing increases (default: 100)')
     parser.add_argument('--max-grid-levels', type=int, default=2000,
                         help='Stop bot after N grid levels on one side (default: 2000)')
+    parser.add_argument('--max-sub-depth', type=int, default=10,
+                        help='Max depth for sub-target ping-pong cascading (default: 10)')
 
     # Pair trading
     parser.add_argument('--pair-symbol', default='',
@@ -200,6 +202,7 @@ def main():
         qty_per_level=args.qty_per_level,
         reanchor_epoch=args.reanchor_epoch,
         max_grid_levels=args.max_grid_levels,
+        max_sub_depth=args.max_sub_depth,
         pair_symbol=args.pair_symbol,
         hedge_ratio=args.hedge_ratio,
         partial_hedge_ratio=args.partial_hedge_ratio,

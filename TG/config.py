@@ -22,6 +22,11 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DEFAULT_XTS_ROOT = 'https://xts.myfindoc.com'
 
 
+def depth_tag(depth: int) -> str:
+    """Generate tag prefix for a given sub-target depth. D1, D2, D3, ..."""
+    return f"D{depth}"
+
+
 @dataclass
 class SubsetConfig:
     """
@@ -82,6 +87,9 @@ class GridConfig:
 
     # Holdings override (bypasses XTS holdings API which may return empty)
     holdings_override: int = -1     # -1 = use API, 0+ = override with this qty
+
+    # Sub-target cascading for partial fills
+    max_sub_depth: int = 10         # Max depth for sub-target ping-pong (D1, D2, D3, ...)
 
     # Operational parameters
     auto_reenter: bool = True       # re-place entry after target fills
@@ -175,6 +183,7 @@ class GridConfig:
         print(f"  Max Grid Levels  : {self.max_grid_levels}")
         print(f"  Buy Spacing      : {buy_space}")
         print(f"  Sell Spacing     : {sell_space}")
+        print(f"  Max Sub-Depth    : {self.max_sub_depth}")
         print(f"  Product          : {self.product}")
         print(f"  Broker           : XTS + Zerodha (user={self.zerodha_user})")
         print(f"  Auto Re-enter    : {self.auto_reenter}")
@@ -211,7 +220,8 @@ class GridConfig:
 
 
 def generate_order_id(primary: str, secondary: str, subset_index: int,
-                      role: str, bot: str, group_id: str, seq: int = 0) -> str:
+                      role: str, bot: str, group_id: str, seq: int = 0,
+                      tag: str = None) -> str:
     """
     Generate compact order identifier for XTS orderUniqueIdentifier (max 20 chars).
 
@@ -222,14 +232,16 @@ def generate_order_id(primary: str, secondary: str, subset_index: int,
 
     For PH/PU roles, seq is appended (1-indexed).
     EN/TP roles don't need seq.
+    Optional tag overrides role (used for depth tags like D101, D201).
 
     Examples:
-      EN-A-L0-abc12345     (16 chars)
-      TP-B-L5-abc12345     (16 chars)
-      PH1-A-L0-abc12345    (17 chars)
-      PU1-B-L99-abc12345   (19 chars, extreme)
+      EN-A-L0-abc12345       (16 chars)
+      TP-B-L5-abc12345       (16 chars)
+      PH1-A-L0-abc12345      (17 chars)
+      D101-A-L0-abc12345     (18 chars, depth target)
+      D201-B-L5-abc12345     (18 chars, depth sub-target)
     """
-    tag = role
-    if seq > 0:
-        tag += str(seq)
-    return f"{tag}-{bot}-L{subset_index}-{group_id}"
+    label = tag or role
+    if not tag and seq > 0:
+        label += str(seq)
+    return f"{label}-{bot}-L{subset_index}-{group_id}"

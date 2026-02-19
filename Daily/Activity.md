@@ -1,5 +1,36 @@
 # Activity Log
 
+## 2026-02-20 00:30 IST - Claude
+**TG Grid Bot: Port partial-fill depth cascading from TollGate + TollGate default change**
+
+Ported TollGate's proven sub-target depth cascading system to the TG Grid bot. When an entry partially fills, a D1 target is placed for the filled increment. When D1 fills, D2 re-entry is placed, then D3 close, alternating buy/sell up to `max_sub_depth`. Also changed TollGate's default `max_sub_depth` from 5 to 10.
+
+### Architecture Change
+Moved entry/target fill handling from BuyBot/SellBot into the engine. Sub-target cascading logic is identical for both sides — duplicating across two bot files was wasteful. Engine now handles all fill logic centrally (matching TollGate's architecture). Bots retain: `place_entries()`, `_place_entry()`, pair hedge/unwind, `cancel_all()`, `restore_level_groups()`.
+
+### Modified Files
+1. **`TG/config.py`** — Added `max_sub_depth: int = 10` to `GridConfig`, added `depth_tag()` function, updated `generate_order_id()` with optional `tag` parameter, added max_sub_depth to `print_grid_layout()`
+2. **`TG/group.py`** — Added `ENTRY_PARTIAL` status, replaced single `target_order_id` with `target_orders: List[dict]`, added `target_seq` counter, added computed properties (`all_targets_filled`, `total_target_filled_qty`, `max_target_depth`, `leaf_targets_filled()`, `has_pending_sub_targets()`), backward-compatible `from_dict()` migrates old `target_order_id` to `target_orders` list
+3. **`TG/engine.py`** — Ported `_on_entry_fill()`, `_on_target_fill()`, `_complete_cycle()`, `_complete_partial_cycle()` from TollGate. Entry fills (both partial and complete) now place D1 targets for each increment. Target fills compute PnL on odd depths, spawn sub-targets, check cycle completion. Updated `_handle_fill_event()` to route through engine methods instead of bot methods. Updated `_reconcile_orders()` to iterate `target_orders` list.
+4. **`TG/bot_buy.py`** — Removed `on_entry_fill()` and `on_target_fill()`. Updated `cancel_all()` to iterate `target_orders` list.
+5. **`TG/bot_sell.py`** — Same removals as bot_buy.py. Updated `cancel_all()` similarly.
+6. **`TG/run.py`** — Added `--max-sub-depth` CLI argument (default: 10)
+7. **`TG/dashboard.py`** — Added `max_sub_depth` to default config template, start command, config modal, state API, and primary display
+8. **`TG/TollGate/config.py`** — Changed `max_sub_depth` default from 5 to 10
+
+### Depth Cascading Rules
+- D1 (odd, closing): opposite side @ target_price → PnL
+- D2 (even, re-entry): same side @ entry_price → no PnL
+- D3 (odd, closing): opposite side @ target_price → PnL
+- ...continues to max_sub_depth
+
+### Backward Compatibility
+- `Group.from_dict()` migrates old `target_order_id` → `target_orders` list
+- `target_order_id` property reads first target's order_id
+- Existing state files load correctly (verified with real TATSILV state)
+
+---
+
 ## 2026-02-19 23:30 IST - Claude
 **PnL Dashboard: Fix zero PnL and zero round trips for TollGate**
 

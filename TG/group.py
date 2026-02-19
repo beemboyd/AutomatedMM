@@ -1,11 +1,16 @@
 """
-Group Model — tracks an entry + target order pair.
+Group Model — tracks an entry + target order pair with depth cascading.
 
 Each grid trade is a "group" consisting of:
   1. Entry order (BUY for Bot A, SELL for Bot B)
-  2. Target order (opposite side, placed after entry fills)
+  2. One or more target orders (placed as entry fills, with sub-target cascading)
 
-Lifecycle: ENTRY_PENDING → ENTRY_FILLED → TARGET_PENDING → CLOSED
+Lifecycle: ENTRY_PENDING → [ENTRY_PARTIAL →] TARGET_PENDING → CLOSED
+
+Depth cascading (ported from TollGate):
+  D1 target placed for each partial/full entry fill increment.
+  When D1 fills, D2 re-entry placed, then D3 close, etc.
+  Odd depths = closing (PnL), even depths = re-entry (no PnL).
 """
 
 import uuid
@@ -19,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class GroupStatus:
     ENTRY_PENDING = "ENTRY_PENDING"    # entry order placed, awaiting fill
+    ENTRY_PARTIAL = "ENTRY_PARTIAL"    # entry partially filled, D1 targets placed
     ENTRY_FILLED = "ENTRY_FILLED"      # entry filled, target not yet placed
     TARGET_PENDING = "TARGET_PENDING"  # target order placed, awaiting fill
     CLOSED = "CLOSED"                  # target filled, PnL realized
@@ -27,7 +33,7 @@ class GroupStatus:
 
 @dataclass
 class Group:
-    """A single grid trade: entry order + target order."""
+    """A single grid trade: entry order + target order(s) with depth cascading."""
     group_id: str
     bot: str                # "A" (buy bot) or "B" (sell bot)
     subset_index: int
@@ -39,11 +45,14 @@ class Group:
 
     # Order IDs from broker
     entry_order_id: Optional[str] = None
-    target_order_id: Optional[str] = None
+
+    # Target tracking — list of targets (one per partial fill increment, with depth cascading)
+    # Each: {order_id, qty, filled_qty, fill_price, placed_at, depth, tag, ref_price}
+    target_orders: List[Dict] = field(default_factory=list)
+    target_seq: int = 0                 # Counter for target naming (D101, D102, ...)
 
     # Partial fill tracking
     entry_filled_so_far: int = 0           # cumulative entry fills (for increment calc)
-    target_filled_so_far: int = 0          # cumulative target fills
 
     # Pair tracking (cumulative across all partial + final fills)
     pair_hedged_qty: int = 0               # total secondary shares hedged
@@ -60,6 +69,10 @@ class Group:
     entry_fill_qty: Optional[int] = None
     target_fill_price: Optional[float] = None
     target_fill_qty: Optional[int] = None
+
+    # Legacy single target_order_id — kept for backward compat in cancel_all, reconciliation
+    # Reads first target's order_id when accessed
+    target_filled_so_far: int = 0          # cumulative target fills (legacy compat)
 
     # Timestamps
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -90,6 +103,50 @@ class Group:
         return "SELL" if self.entry_side == "BUY" else "BUY"
 
     @property
+    def target_order_id(self) -> Optional[str]:
+        """Backward compat: return first target's order_id (or None)."""
+        if self.target_orders:
+            return self.target_orders[0].get('order_id')
+        return None
+
+    @property
+    def all_targets_filled(self) -> bool:
+        """True if all placed targets have been fully filled."""
+        if not self.target_orders:
+            return False
+        return all(t.get('filled_qty', 0) >= t.get('qty', 0) for t in self.target_orders)
+
+    @property
+    def total_target_filled_qty(self) -> int:
+        """Sum of filled qty across all target orders."""
+        return sum(t.get('filled_qty', 0) for t in self.target_orders)
+
+    @property
+    def max_target_depth(self) -> int:
+        """Highest depth among target orders (0 if no targets)."""
+        if not self.target_orders:
+            return 0
+        return max(t.get('depth', 1) for t in self.target_orders)
+
+    def leaf_targets_filled(self, max_sub_depth: int) -> bool:
+        """
+        True when all sub-chains have completed to max depth.
+
+        A leaf target is one at max_sub_depth. All leaf targets must be fully filled,
+        and their total filled qty must cover the entry filled qty.
+        """
+        leaf_targets = [t for t in self.target_orders if t.get('depth', 1) == max_sub_depth]
+        if not leaf_targets:
+            return False
+        all_filled = all(t.get('filled_qty', 0) >= t.get('qty', 0) for t in leaf_targets)
+        total_leaf_filled = sum(t.get('filled_qty', 0) for t in leaf_targets)
+        return all_filled and total_leaf_filled >= self.entry_filled_so_far
+
+    def has_pending_sub_targets(self) -> bool:
+        """True if any target at depth > 1 exists (sub-chain is active)."""
+        return any(t.get('depth', 1) > 1 for t in self.target_orders)
+
+    @property
     def pair_hedge_vwap(self) -> float:
         """Volume-weighted average price of all hedge fills."""
         return round(self.pair_hedge_total / self.pair_hedged_qty, 2) if self.pair_hedged_qty else 0.0
@@ -110,7 +167,8 @@ class Group:
             'qty': self.qty,
             'status': self.status,
             'entry_order_id': self.entry_order_id,
-            'target_order_id': self.target_order_id,
+            'target_orders': self.target_orders,
+            'target_seq': self.target_seq,
             'entry_filled_so_far': self.entry_filled_so_far,
             'target_filled_so_far': self.target_filled_so_far,
             'pair_hedged_qty': self.pair_hedged_qty,
@@ -136,6 +194,21 @@ class Group:
 
     @classmethod
     def from_dict(cls, d: dict) -> 'Group':
+        # Backward compat: migrate old target_order_id to target_orders list
+        target_orders = d.get('target_orders', [])
+        if not target_orders:
+            old_tid = d.get('target_order_id')
+            if old_tid:
+                target_orders = [{
+                    'order_id': old_tid,
+                    'qty': d.get('target_fill_qty') or d.get('qty', 0),
+                    'filled_qty': d.get('target_filled_so_far', 0),
+                    'fill_price': d.get('target_fill_price'),
+                    'depth': 1,
+                    'tag': 'D101',
+                    'ref_price': d.get('entry_fill_price'),
+                }]
+
         return cls(
             group_id=d['group_id'],
             bot=d['bot'],
@@ -146,7 +219,8 @@ class Group:
             qty=d['qty'],
             status=d.get('status', GroupStatus.ENTRY_PENDING),
             entry_order_id=d.get('entry_order_id'),
-            target_order_id=d.get('target_order_id'),
+            target_orders=target_orders,
+            target_seq=d.get('target_seq', 0),
             entry_filled_so_far=d.get('entry_filled_so_far', 0),
             target_filled_so_far=d.get('target_filled_so_far', 0),
             pair_hedged_qty=d.get('pair_hedged_qty', 0),

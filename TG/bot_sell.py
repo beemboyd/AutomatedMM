@@ -145,116 +145,6 @@ class SellBot:
                          level.subset_index, level.qty, level.entry_price)
             return False
 
-    def on_entry_fill(self, group: Group, fill_price: float, fill_qty: int):
-        """
-        Handle sell entry fill → place buy target.
-
-        Target price uses the theoretical grid level target.
-        """
-        group.status = GroupStatus.ENTRY_FILLED
-        group.entry_fill_price = fill_price
-        group.entry_fill_qty = fill_qty
-        group.entry_filled_at = datetime.now().isoformat()
-
-        logger.info("SellBot ENTRY FILLED: group=%s, SELL %d @ %.2f (level=%.2f)",
-                     group.group_id, fill_qty, fill_price, group.entry_price)
-
-        # PnL: record entry fill
-        pnl = getattr(self.config, '_pnl', None)
-        if pnl and getattr(self.config, '_pnl_pair_id', None):
-            pnl.record_fill(
-                cycle_id=self.config._pnl_cycle_ids.get(group.group_id),
-                pair_id=self.config._pnl_pair_id,
-                session_id=self.config._pnl_session_id,
-                ticker=self.config.symbol,
-                side='SELL', qty=fill_qty, price=fill_price,
-                txn_type='ENTRY', order_id=group.entry_order_id,
-                group_id=group.group_id,
-                running_pnl=self.state.total_pnl)
-
-        # Place buy target at the theoretical target price
-        target_oid = generate_order_id(
-            self.config.symbol, self.config.pair_symbol or "NONE",
-            group.subset_index, "TP", "B", group.group_id)
-        order_id = self.client.place_order(
-            symbol=self.config.symbol,
-            transaction_type="BUY",
-            qty=fill_qty,
-            price=group.target_price,
-            exchange=self.config.exchange,
-            product=self.config.product,
-            order_unique_id=target_oid,
-        )
-
-        if order_id:
-            group.target_order_id = order_id
-            group.status = GroupStatus.TARGET_PENDING
-            self.state.register_order(order_id, group.group_id)
-            logger.info("SellBot TARGET: group=%s, BUY %d @ %.2f, order=%s [%s]",
-                        group.group_id, fill_qty, group.target_price, order_id, target_oid)
-        else:
-            logger.error("SellBot TARGET FAILED: group=%s, BUY %d @ %.2f",
-                         group.group_id, fill_qty, group.target_price)
-
-    def on_target_fill(self, group: Group, fill_price: float, fill_qty: int):
-        """
-        Handle buy target fill → close group, compute PnL.
-
-        PnL = (sell_price - buy_price) * qty
-        """
-        group.target_fill_price = fill_price
-        group.target_fill_qty = fill_qty
-        group.target_filled_at = datetime.now().isoformat()
-
-        # PnL: sold at entry, bought back at target (lower price)
-        sell_price = group.entry_fill_price or group.entry_price
-        group.realized_pnl = round((sell_price - fill_price) * fill_qty, 2)
-
-        logger.info("SellBot TARGET FILLED: group=%s, BUY %d @ %.2f, PnL=%.2f",
-                     group.group_id, fill_qty, fill_price, group.realized_pnl)
-
-        # PnL: record target fill + close cycle
-        pnl = getattr(self.config, '_pnl', None)
-        if pnl and getattr(self.config, '_pnl_pair_id', None):
-            pnl.record_fill(
-                cycle_id=self.config._pnl_cycle_ids.get(group.group_id),
-                pair_id=self.config._pnl_pair_id,
-                session_id=self.config._pnl_session_id,
-                ticker=self.config.symbol,
-                side='BUY', qty=fill_qty, price=fill_price,
-                txn_type='TARGET', order_id=group.target_order_id,
-                group_id=group.group_id,
-                pnl_increment=group.realized_pnl,
-                running_pnl=self.state.total_pnl + group.realized_pnl)
-            cid = self.config._pnl_cycle_ids.pop(group.group_id, None)
-            pnl.close_cycle(
-                cid,
-                entry_fill_price=sell_price,
-                target_fill_price=fill_price,
-                primary_pnl=group.realized_pnl,
-                pair_pnl=group.pair_pnl)
-
-        # Free the level
-        if group.subset_index in self.level_groups:
-            del self.level_groups[group.subset_index]
-
-        # Close the group
-        self.state.close_group(group.group_id)
-
-        # Re-enter if configured and holdings available
-        if self.config.auto_reenter:
-            for level in self.levels:
-                if level.subset_index == group.subset_index:
-                    available = self.client.get_available_qty(self.config.symbol)
-                    if available >= level.qty:
-                        logger.info("SellBot RE-ENTERING: subset=%d", level.subset_index)
-                        self._place_entry(level)
-                    else:
-                        logger.warning("SellBot: cannot re-enter subset=%d, "
-                                       "insufficient holdings (%d < %d)",
-                                       level.subset_index, available, level.qty)
-                    break
-
     def place_pair_hedge(self, group: Group, pair_qty: int):
         """
         Place pair HEDGE: SELL primary entry → BUY secondary.
@@ -349,11 +239,14 @@ class SellBot:
         """Cancel all active entry and target orders for this bot."""
         cancelled = 0
         for group in list(self.state.get_open_groups_for_bot('B')):
-            if group.status == GroupStatus.ENTRY_PENDING and group.entry_order_id:
+            if group.status in (GroupStatus.ENTRY_PENDING, GroupStatus.ENTRY_PARTIAL) and group.entry_order_id:
                 if self.client.cancel_order(group.entry_order_id):
                     cancelled += 1
-            elif group.status == GroupStatus.TARGET_PENDING and group.target_order_id:
-                if self.client.cancel_order(group.target_order_id):
-                    cancelled += 1
+            if group.status in (GroupStatus.TARGET_PENDING, GroupStatus.ENTRY_PARTIAL):
+                for target in group.target_orders:
+                    tid = target.get('order_id')
+                    if tid and target.get('filled_qty', 0) < target.get('qty', 0):
+                        if self.client.cancel_order(tid):
+                            cancelled += 1
         logger.info("SellBot cancelled %d orders", cancelled)
         return cancelled
