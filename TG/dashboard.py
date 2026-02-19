@@ -845,7 +845,7 @@ function renderGridLevel(lv, g, secSym, gridId) {
     // Main row
     const expandIcon = hasDetails ? '<span class="grid-expand-icon" id="icon-' + rid + '">&#9654;</span>' : '';
     let html = '<tr class="grid-main-row ' + rowClass + '" ' +
-        (hasDetails ? 'onclick="toggleGridSub(\'' + rid + '\')" style="cursor:pointer;"' : '') + '>' +
+        (hasDetails ? 'onclick="toggleGridSub(\\'' + rid + '\\')" style="cursor:pointer;"' : '') + '>' +
         '<td style="width:20px;">' + expandIcon + '</td>' +
         '<td>L' + lv.index + '</td>' +
         '<td>' + priceDisplay + '</td>' +
