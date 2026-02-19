@@ -811,6 +811,7 @@ function computeGridLevels(anchor, gridSpace, target, levelsPerSide, qtyPerLevel
 // --- Render a single grid level as main row + collapsible sub-rows ---
 function renderGridLevel(lv, g, secSym, gridId) {
     const rid = gridId + '-' + lv.index;
+    const isOpen = expandedGridRows.has(rid);
     // Determine status
     let statusHTML = '<span style="color:var(--dim);">Free</span>';
     let rowClass = '';
@@ -858,7 +859,6 @@ function renderGridLevel(lv, g, secSym, gridId) {
         '<td>' + cycleId + '</td></tr>';
 
     // Sub-rows — use expandedGridRows set to preserve open/closed state
-    const isOpen = expandedGridRows.has(rid);
     const subVis = isOpen ? 'grid-sub-row sub-' : 'grid-sub-row hidden sub-';
     if (g) {
         const cs = ' colspan="7"';
