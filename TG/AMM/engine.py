@@ -140,6 +140,7 @@ class AMMEngine:
                 if now - self._last_sample_time >= self.config.sample_interval:
                     self._sample_ratios()
                     self._last_sample_time = now
+                    self.state.save()  # Save after each sample for dashboard visibility
 
                 # Order polling (every poll_interval)
                 fills_processed = self._poll_orders()
@@ -193,8 +194,8 @@ class AMMEngine:
             den_ltp = self.client.get_ltp(pair.denominator_ticker)
 
             if not num_ltp or not den_ltp or den_ltp == 0:
-                logger.debug("Pair %d: LTP unavailable (num=%s, den=%s)",
-                             i, num_ltp, den_ltp)
+                logger.info("Pair %d: LTP unavailable (num=%s, den=%s)",
+                            i, num_ltp, den_ltp)
                 continue
 
             ratio = num_ltp / den_ltp
@@ -210,8 +211,8 @@ class AMMEngine:
             stats = self.state.get_rolling_stats(i)
             if stats is None:
                 series_len = len(self.state.ratio_series.get(i, []))
-                logger.debug("Pair %d: warmup %d/%d (R=%.6f)",
-                             i, series_len, self.config.warmup_samples, ratio)
+                logger.info("Pair %d: warmup %d/%d (R=%.6f)",
+                            i, series_len, self.config.warmup_samples, ratio)
                 continue
 
             mean, sd = stats
