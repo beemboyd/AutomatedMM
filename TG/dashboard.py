@@ -589,6 +589,7 @@ def _build_html() -> str:
 let currentConfig = {};
 let pnlChart = null;
 let secondarySymbol = '';
+const expandedGridRows = new Set();
 let botStatuses = {};
 let allStatesCache = {};
 let activeTab = 'monitor';
@@ -843,7 +844,8 @@ function renderGridLevel(lv, g, secSym, gridId) {
     }
 
     // Main row
-    const expandIcon = hasDetails ? '<span class="grid-expand-icon" id="icon-' + rid + '">&#9654;</span>' : '';
+    const iconCls = (hasDetails && isOpen) ? 'grid-expand-icon open' : 'grid-expand-icon';
+    const expandIcon = hasDetails ? '<span class="' + iconCls + '" id="icon-' + rid + '">&#9654;</span>' : '';
     let html = '<tr class="grid-main-row ' + rowClass + '" ' +
         (hasDetails ? 'onclick="toggleGridSub(\\'' + rid + '\\')" style="cursor:pointer;"' : '') + '>' +
         '<td style="width:20px;">' + expandIcon + '</td>' +
@@ -855,32 +857,48 @@ function renderGridLevel(lv, g, secSym, gridId) {
         '<td>' + pairPnl + '</td>' +
         '<td>' + cycleId + '</td></tr>';
 
-    // Sub-rows (hidden by default)
+    // Sub-rows — use expandedGridRows set to preserve open/closed state
+    const isOpen = expandedGridRows.has(rid);
+    const subVis = isOpen ? 'grid-sub-row sub-' : 'grid-sub-row hidden sub-';
     if (g) {
         const cs = ' colspan="7"';
-        // Entry sub-row
+        // Entry sub-row: show order price, then fill info
         const eSide = g.entry_side || 'BUY';
-        const eFill = g.entry_fill_price ? g.entry_fill_price.toFixed(2) : '—';
+        const ePrice = g.entry_price ? g.entry_price.toFixed(2) : lv.entry.toFixed(2);
         const eQty = g.entry_filled_so_far || 0;
         const eOid = g.entry_order_id ? g.entry_order_id : '—';
-        const eStatus = eQty >= g.qty ? '✓ filled' : (eQty > 0 ? 'partial ' + eQty + '/' + g.qty : 'pending');
-        html += '<tr class="grid-sub-row hidden sub-' + rid + '">' +
+        let eDetail = '';
+        if (eQty >= g.qty) {
+            eDetail = '✓ filled' + (g.entry_fill_price ? ' @ ' + g.entry_fill_price.toFixed(2) : '');
+        } else if (eQty > 0) {
+            eDetail = 'partial ' + eQty + '/' + g.qty + (g.entry_fill_price ? ' @ ' + g.entry_fill_price.toFixed(2) : '');
+        } else {
+            eDetail = 'pending';
+        }
+        html += '<tr class="' + subVis + rid + '">' +
             '<td></td><td' + cs + '>' +
             '<span class="grid-sub-label entry-label">Entry</span> ' +
-            eSide + ' ' + g.qty + ' @ ' + eFill + '  <span style="opacity:0.6;">(' + eStatus + ')</span>' +
+            eSide + ' ' + g.qty + ' @ ' + ePrice + '  <span style="opacity:0.6;">(' + eDetail + ')</span>' +
             '  <span class="grid-id-mono">OID:' + eOid + '</span>' +
             '</td></tr>';
 
-        // Target sub-row
+        // Target sub-row: show order price, then fill info
         const tSide = eSide === 'BUY' ? 'SELL' : 'BUY';
-        const tFill = g.target_fill_price ? g.target_fill_price.toFixed(2) : '—';
+        const tPrice = g.target_price ? g.target_price.toFixed(2) : lv.target.toFixed(2);
         const tQty = g.target_filled_so_far || 0;
         const tOid = g.target_order_id ? g.target_order_id : '—';
-        const tStatus = tQty >= g.qty ? '✓ filled' : (tQty > 0 ? 'partial ' + tQty + '/' + g.qty : 'pending');
-        html += '<tr class="grid-sub-row hidden sub-' + rid + '">' +
+        let tDetail = '';
+        if (tQty >= g.qty) {
+            tDetail = '✓ filled' + (g.target_fill_price ? ' @ ' + g.target_fill_price.toFixed(2) : '');
+        } else if (tQty > 0) {
+            tDetail = 'partial ' + tQty + '/' + g.qty + (g.target_fill_price ? ' @ ' + g.target_fill_price.toFixed(2) : '');
+        } else {
+            tDetail = 'pending';
+        }
+        html += '<tr class="' + subVis + rid + '">' +
             '<td></td><td' + cs + '>' +
             '<span class="grid-sub-label target-label">Target</span> ' +
-            tSide + ' ' + g.qty + ' @ ' + tFill + '  <span style="opacity:0.6;">(' + tStatus + ')</span>' +
+            tSide + ' ' + g.qty + ' @ ' + tPrice + '  <span style="opacity:0.6;">(' + tDetail + ')</span>' +
             '  <span class="grid-id-mono">OID:' + tOid + '</span>' +
             '</td></tr>';
 
@@ -888,7 +906,7 @@ function renderGridLevel(lv, g, secSym, gridId) {
         if (g.pair_hedged_qty && g.pair_hedged_qty > 0) {
             const hSide = eSide === 'BUY' ? 'SELL' : 'BUY';
             const hVwap = g.pair_hedge_vwap ? g.pair_hedge_vwap.toFixed(2) : '—';
-            html += '<tr class="grid-sub-row hidden sub-' + rid + '">' +
+            html += '<tr class="' + subVis + rid + '">' +
                 '<td></td><td' + cs + '>' +
                 '<span class="grid-sub-label hedge-label">Hedge</span> ' +
                 hSide + ' ' + secSym + ' ' + g.pair_hedged_qty + ' @ ' + hVwap +
@@ -902,7 +920,7 @@ function renderGridLevel(lv, g, secSym, gridId) {
             const uVwap = g.pair_unwind_vwap ? g.pair_unwind_vwap.toFixed(2) : '—';
             const ppnl = g.pair_pnl ? g.pair_pnl.toFixed(2) : '0.00';
             const ppCls = g.pair_pnl >= 0 ? 'grid-pnl-pos' : 'grid-pnl-neg';
-            html += '<tr class="grid-sub-row hidden sub-' + rid + '">' +
+            html += '<tr class="' + subVis + rid + '">' +
                 '<td></td><td' + cs + '>' +
                 '<span class="grid-sub-label unwind-label">Unwind</span> ' +
                 uSide + ' ' + secSym + ' ' + g.pair_unwound_qty + ' @ ' + uVwap +
@@ -916,8 +934,16 @@ function renderGridLevel(lv, g, secSym, gridId) {
 function toggleGridSub(rid) {
     const rows = document.querySelectorAll('.sub-' + rid);
     const icon = document.getElementById('icon-' + rid);
-    rows.forEach(r => r.classList.toggle('hidden'));
-    if (icon) icon.classList.toggle('open');
+    const wasOpen = expandedGridRows.has(rid);
+    if (wasOpen) {
+        expandedGridRows.delete(rid);
+        rows.forEach(r => r.classList.add('hidden'));
+        if (icon) icon.classList.remove('open');
+    } else {
+        expandedGridRows.add(rid);
+        rows.forEach(r => r.classList.remove('hidden'));
+        if (icon) icon.classList.add('open');
+    }
 }
 
 // --- Secondary (SPCENET) panel ---
