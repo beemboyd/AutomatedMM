@@ -68,6 +68,12 @@ class TollGateEngine:
         self._consecutive_poll_errors: int = 0
         self._max_poll_errors_before_refresh: int = 5
 
+    def _disclosed_qty(self, qty: int) -> int:
+        """Compute disclosed quantity for iceberging."""
+        if self.config.disclosed_pct <= 0:
+            return 0
+        return max(1, round(qty * self.config.disclosed_pct / 100))
+
     def start(self):
         """
         Start the TollGate engine.
@@ -254,6 +260,7 @@ class TollGateEngine:
             exchange=self.config.exchange,
             product=self.config.product,
             order_unique_id=order_uid,
+            disclosed_qty=self._disclosed_qty(level.qty),
         )
 
         if order_id:
@@ -396,6 +403,7 @@ class TollGateEngine:
             exchange=self.config.exchange,
             product=self.config.product,
             order_unique_id=target_uid,
+            disclosed_qty=self._disclosed_qty(increment),
         )
 
         if target_order_id:
@@ -545,6 +553,7 @@ class TollGateEngine:
                 exchange=self.config.exchange,
                 product=self.config.product,
                 order_unique_id=next_uid,
+                disclosed_qty=self._disclosed_qty(target.get('qty', increment)),
             )
 
             if next_order_id:
@@ -769,6 +778,7 @@ class TollGateEngine:
                         exchange=self.config.exchange,
                         product=self.config.product,
                         order_unique_id=replace_uid,
+                        disclosed_qty=self._disclosed_qty(remainder),
                     )
                     if new_order_id:
                         new_target = {
@@ -841,6 +851,7 @@ class TollGateEngine:
                     exchange=self.config.exchange,
                     product=self.config.product,
                     order_unique_id=order_uid,
+                    disclosed_qty=self._disclosed_qty(entry_remainder),
                 )
                 if new_entry_id:
                     group.entry_order_id = new_entry_id

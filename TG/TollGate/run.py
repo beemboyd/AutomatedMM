@@ -42,6 +42,8 @@ def main():
     parser.add_argument('--poll-interval', type=float, help='Poll interval seconds')
     parser.add_argument('--max-reanchors', type=int, help='Max reanchors before stopping')
     parser.add_argument('--max-sub-depth', type=int, help='Max sub-target depth for partial fills (default: 5)')
+    parser.add_argument('--amount', type=float, help='Fixed amount per level (overrides --qty)')
+    parser.add_argument('--disclosed-pct', type=float, help='Disclosed qty percentage for iceberging (0-100)')
 
     # Credentials
     parser.add_argument('--interactive-key', type=str, help='XTS Interactive API key')
@@ -118,6 +120,10 @@ def main():
         config.max_reanchors = args.max_reanchors
     if args.max_sub_depth is not None:
         config.max_sub_depth = args.max_sub_depth
+    if args.amount is not None:
+        config.amount_per_level = args.amount
+    if args.disclosed_pct is not None:
+        config.disclosed_pct = args.disclosed_pct
     if args.interactive_key:
         config.interactive_key = args.interactive_key
     if args.interactive_secret:
@@ -158,8 +164,13 @@ def main():
     if args.dry_run:
         config.print_grid_layout()
         buy_levels, sell_levels = config.compute_levels()
-        print(f"\n  Total exposure per side: {config.levels_per_side * config.qty_per_level} shares")
+        total_buy_qty = sum(lv.qty for lv in buy_levels)
+        total_sell_qty = sum(lv.qty for lv in sell_levels)
+        print(f"\n  Total buy exposure: {total_buy_qty} shares")
+        print(f"  Total sell exposure: {total_sell_qty} shares")
         print(f"  Round-trip profit per cycle: {config.round_trip_profit}")
+        if config.disclosed_pct > 0:
+            print(f"  Disclosed qty: {config.disclosed_pct:.0f}% of order qty")
         print(f"  Dry run complete. No orders placed.\n")
         return
 

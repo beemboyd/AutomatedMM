@@ -37,6 +37,8 @@ _DEFAULT_CONFIG = {
     "round_trip_profit": 0.01,
     "levels_per_side": 10,
     "qty_per_level": 4000,
+    "amount_per_level": 0,
+    "disclosed_pct": 0,
     "max_reanchors": 100,
     "product": "CNC",
     "poll_interval": 2.0,
@@ -146,6 +148,11 @@ def _start_bot(config: dict) -> bool:
         '--poll-interval', str(config.get('poll_interval', 2.0)),
         '--max-reanchors', str(config.get('max_reanchors', 100)),
     ]
+
+    if config.get('amount_per_level', 0) > 0:
+        cmd.extend(['--amount', str(config['amount_per_level'])])
+    if config.get('disclosed_pct', 0) > 0:
+        cmd.extend(['--disclosed-pct', str(config['disclosed_pct'])])
 
     if config.get('auto_anchor'):
         cmd.append('--auto-anchor')
@@ -311,11 +318,13 @@ def create_app(mode: str = 'monitor') -> Flask:
     @app.route('/api/state')
     def api_state():
         state = _load_state()
+        config = _load_config()
         return jsonify({
             'state': state,
             'summary': _compute_summary(state),
             'running': _is_bot_running(),
             'pid': _get_bot_pid(),
+            'config': config,
         })
 
     @app.route('/api/bot/start', methods=['POST'])
@@ -547,15 +556,17 @@ function fmtTime(iso) {
     catch(e) { return iso; }
 }
 
-function computeGrid(anchor, spacing, profit, levels, qty) {
+function computeGrid(anchor, spacing, profit, levels, qty, amountPerLevel) {
     if (!anchor || anchor <= 0) return { buy: [], sell: [] };
     const buyLevels = [], sellLevels = [];
     for (let i = 0; i < levels; i++) {
         const dist = spacing * (i + 1);
         const bEntry = Math.round((anchor - dist) * 100) / 100;
         const sEntry = Math.round((anchor + dist) * 100) / 100;
-        buyLevels.push({ index: i, entry: bEntry, target: Math.round((bEntry + profit) * 100) / 100, qty });
-        sellLevels.push({ index: i, entry: sEntry, target: Math.round((sEntry - profit) * 100) / 100, qty });
+        const bQty = (amountPerLevel > 0 && bEntry > 0) ? Math.max(1, Math.round(amountPerLevel / bEntry)) : qty;
+        const sQty = (amountPerLevel > 0 && sEntry > 0) ? Math.max(1, Math.round(amountPerLevel / sEntry)) : qty;
+        buyLevels.push({ index: i, entry: bEntry, target: Math.round((bEntry + profit) * 100) / 100, qty: bQty });
+        sellLevels.push({ index: i, entry: sEntry, target: Math.round((sEntry - profit) * 100) / 100, qty: sQty });
     }
     return { buy: buyLevels, sell: sellLevels };
 }
@@ -759,7 +770,12 @@ function updateMonitor() {
             // Grid levels
             const anchor = s.anchor_price || 0;
             const spacing = s.current_spacing || 0.01;
-            const grid = computeGrid(anchor, spacing, 0.01, 10, 4000);
+            const cfg = data.config || {};
+            const profit = cfg.round_trip_profit || 0.01;
+            const levels = cfg.levels_per_side || 10;
+            const qty = cfg.qty_per_level || 4000;
+            const amtPerLevel = cfg.amount_per_level || 0;
+            const grid = computeGrid(anchor, spacing, profit, levels, qty, amtPerLevel);
 
             const og = state.open_groups || {};
             const groupByLevel = {};
@@ -975,6 +991,16 @@ def _build_config_html() -> str:
             <input id="cfg-qty" type="number">
         </div>
         <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">Amount Per Level</label>
+            <input id="cfg-amount" type="number" step="100">
+            <div class="field-hint">If > 0, overrides Qty. qty = round(amount/price)</div>
+        </div>
+        <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">Disclosed Pct</label>
+            <input id="cfg-disclosed" type="number" step="5" min="0" max="100">
+            <div class="field-hint">0 = show full qty, e.g. 25 = show 25%</div>
+        </div>
+        <div>
             <label class="block text-xs mb-1" style="color:var(--dim);">Max Reanchors</label>
             <input id="cfg-max-reanchors" type="number">
             <div class="field-hint">Stop bot after N reanchors</div>
@@ -1054,6 +1080,8 @@ function loadConfig() {
             document.getElementById('cfg-profit').value = cfg.round_trip_profit || 0.01;
             document.getElementById('cfg-levels').value = cfg.levels_per_side || 10;
             document.getElementById('cfg-qty').value = cfg.qty_per_level || 4000;
+            document.getElementById('cfg-amount').value = cfg.amount_per_level || 0;
+            document.getElementById('cfg-disclosed').value = cfg.disclosed_pct || 0;
             document.getElementById('cfg-max-reanchors').value = cfg.max_reanchors || 100;
             document.getElementById('cfg-product').value = cfg.product || 'NRML';
             document.getElementById('cfg-poll').value = cfg.poll_interval || 2.0;
@@ -1075,6 +1103,8 @@ function saveConfig() {
         round_trip_profit: parseFloat(document.getElementById('cfg-profit').value),
         levels_per_side: parseInt(document.getElementById('cfg-levels').value),
         qty_per_level: parseInt(document.getElementById('cfg-qty').value),
+        amount_per_level: parseFloat(document.getElementById('cfg-amount').value),
+        disclosed_pct: parseFloat(document.getElementById('cfg-disclosed').value),
         max_reanchors: parseInt(document.getElementById('cfg-max-reanchors').value),
         product: document.getElementById('cfg-product').value,
         poll_interval: parseFloat(document.getElementById('cfg-poll').value),

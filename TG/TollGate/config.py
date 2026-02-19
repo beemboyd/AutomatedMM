@@ -50,6 +50,10 @@ class TollGateConfig:
     levels_per_side: int = 10
     qty_per_level: int = 4000
 
+    # Amount-based sizing (overrides qty_per_level when > 0)
+    amount_per_level: float = 0.0       # If > 0, qty = round(amount / entry_price)
+    disclosed_pct: float = 0.0          # If > 0, disclosed qty = round(qty * pct / 100)
+
     # Sub-target cascading for partial fills
     max_sub_depth: int = 5              # Max depth for sub-target ping-pong (1=T, 2=ST, 3=TT, 4=FT, 5=FI)
 
@@ -92,18 +96,25 @@ class TollGateConfig:
 
             buy_entry = round(self.anchor_price - distance, 2)
             buy_target = round(buy_entry + self.round_trip_profit, 2)
+            sell_entry = round(self.anchor_price + distance, 2)
+            sell_target = round(sell_entry - self.round_trip_profit, 2)
+
+            if self.amount_per_level > 0:
+                buy_qty = max(1, round(self.amount_per_level / buy_entry)) if buy_entry > 0 else self.qty_per_level
+                sell_qty = max(1, round(self.amount_per_level / sell_entry)) if sell_entry > 0 else self.qty_per_level
+            else:
+                buy_qty = self.qty_per_level
+                sell_qty = self.qty_per_level
+
             buy_levels.append(GridLevel(
                 index=i, side="BUY",
                 entry_price=buy_entry, target_price=buy_target,
-                qty=self.qty_per_level,
+                qty=buy_qty,
             ))
-
-            sell_entry = round(self.anchor_price + distance, 2)
-            sell_target = round(sell_entry - self.round_trip_profit, 2)
             sell_levels.append(GridLevel(
                 index=i, side="SELL",
                 entry_price=sell_entry, target_price=sell_target,
-                qty=self.qty_per_level,
+                qty=sell_qty,
             ))
 
         return buy_levels, sell_levels
@@ -112,7 +123,8 @@ class TollGateConfig:
         """Print the grid layout for visual verification before trading."""
         space = spacing or self.base_spacing
         buy_levels, sell_levels = self.compute_levels(space)
-        total_qty = self.levels_per_side * self.qty_per_level
+        total_buy_qty = sum(lv.qty for lv in buy_levels)
+        total_sell_qty = sum(lv.qty for lv in sell_levels)
 
         print(f"\n{'='*60}")
         print(f"  TOLLGATE GRID — {self.symbol}")
@@ -122,7 +134,12 @@ class TollGateConfig:
         print(f"  Round-Trip Profit: {self.round_trip_profit} ({self.round_trip_profit*100:.0f} paisa)")
         print(f"  Current Spacing  : {space} ({space*100:.0f} paisa)")
         print(f"  Levels Per Side  : {self.levels_per_side}")
-        print(f"  Qty Per Level    : {self.qty_per_level}")
+        if self.amount_per_level > 0:
+            print(f"  Amount Per Level : {self.amount_per_level:.0f} (qty varies by price)")
+        else:
+            print(f"  Qty Per Level    : {self.qty_per_level}")
+        if self.disclosed_pct > 0:
+            print(f"  Disclosed Pct    : {self.disclosed_pct:.0f}%")
         print(f"  Max Sub-Depth    : {self.max_sub_depth}")
         print(f"  Max Reanchors    : {self.max_reanchors}")
         print(f"  Product          : {self.product}")
@@ -142,9 +159,9 @@ class TollGateConfig:
         for lv in sell_levels:
             print(f"  {lv.index:<8} {lv.entry_price:>10.2f} {lv.target_price:>10.2f} {lv.qty:>8}")
 
-        print(f"\n  Max buy exposure  : {total_qty} shares, "
+        print(f"\n  Max buy exposure  : {total_buy_qty} shares, "
               f"deepest at {buy_levels[-1].entry_price:.2f}")
-        print(f"  Max sell exposure : {total_qty} shares, "
+        print(f"  Max sell exposure : {total_sell_qty} shares, "
               f"deepest at {sell_levels[-1].entry_price:.2f}")
         print(f"  Effective spread  : {2 * space:.2f} "
               f"({2 * space * 100:.0f} paisa)")

@@ -1,6 +1,28 @@
 # Activity Log
 
 ## 2026-02-19 - Claude
+**TollGate: Amount-Based Sizing + Disclosed Quantity (Iceberging)**
+
+Added two new features to TollGate market-making engine:
+
+1. **Amount-based sizing**: New `amount_per_level` config (default 0). When > 0, qty per level is computed as `round(amount / entry_price)` instead of using fixed `qty_per_level`. Each level gets its own qty since prices differ.
+2. **Disclosed quantity (iceberging)**: New `disclosed_pct` config (default 0). When > 0, all orders (entries, targets, sub-targets) show only that percentage of total qty in the order book.
+
+### Modified Files
+1. **`TG/TollGate/config.py`** — Added `amount_per_level` and `disclosed_pct` dataclass fields. Updated `compute_levels()` for per-level qty calculation. Updated `print_grid_layout()` to show amount/disclosed info and per-level qty totals.
+2. **`TG/TollGate/client.py`** — Added `disclosed_qty` parameter to `place_order()`, passed through to XTS `disclosedQuantity`.
+3. **`TG/TollGate/engine.py`** — Added `_disclosed_qty()` helper method. Threaded `disclosed_qty` through all 5 `place_order()` call sites: entry orders, depth-1 targets, sub-target cascading, re-placed cancelled targets, and re-placed cancelled entries.
+4. **`TG/TollGate/run.py`** — Added `--amount` and `--disclosed-pct` CLI arguments wired to config. Updated dry-run output.
+5. **`TG/TollGate/dashboard.py`** — Config dashboard (7786): added Amount Per Level and Disclosed Pct form fields, wired to loadConfig/saveConfig JS and _start_bot cmd args. Monitor dashboard (7788): updated `computeGrid()` to accept `amountPerLevel` for per-level qty, reads actual config from `/api/state` response instead of hardcoded values (profit, levels, qty).
+
+### Impact
+- Consistent capital exposure per level regardless of price
+- Order book iceberging reduces market impact on all orders
+- Backwards compatible: default values (0) preserve existing behavior
+
+---
+
+## 2026-02-19 - Claude
 **TollGate: 5-Level Deep Sub-Target Cascading for Partial Fills**
 
 When an entry partially fills (e.g., 1893/4000), a target is placed for the filled qty. Previously, if the target filled, the group was stuck in ENTRY_PARTIAL status — the remaining entry may never fill, and the level was permanently occupied. Now, when a depth-1 target fills, the engine places a re-entry order at the original entry price, then another target, ping-ponging up to 5 levels deep (T→ST→TT→FT→FI), capturing the 1-cent spread repeatedly. After depth 5 fills, the sub-chain closes, the remaining original entry is cancelled, and the level re-enters fresh with full qty.
