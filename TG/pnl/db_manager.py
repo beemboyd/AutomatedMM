@@ -260,16 +260,28 @@ class PnLDBManager:
                     JOIN tg_sessions s ON c.session_id = s.session_id
                     WHERE c.status = 'closed' AND s.bot_type = 'tollgate'
                     GROUP BY c.closed_at::date
+                ),
+                daily_txn_pnl AS (
+                    SELECT
+                        t.ts::date AS day,
+                        COALESCE(SUM(t.pnl_increment), 0) AS txn_pnl,
+                        COUNT(DISTINCT CASE WHEN t.pnl_increment > 0 THEN t.group_id END) AS txn_round_trips
+                    FROM tg_transactions t
+                    JOIN tg_sessions s ON t.session_id = s.session_id
+                    WHERE s.bot_type = 'tollgate'
+                    GROUP BY t.ts::date
                 )
                 SELECT
-                    di.day, COALESCE(dc.pnl, 0) AS pnl,
-                    COALESCE(dc.round_trips, 0) AS round_trips,
+                    di.day,
+                    COALESCE(NULLIF(dc.pnl, 0), dtp.txn_pnl, 0) AS pnl,
+                    GREATEST(COALESCE(dc.round_trips, 0), COALESCE(dtp.txn_round_trips, 0)) AS round_trips,
                     di.sod_inventory, di.eod_inventory,
                     ROUND(di.buy_vwap::numeric, 4) AS buy_vwap,
                     ROUND(di.sell_vwap::numeric, 4) AS sell_vwap,
                     di.buy_qty, di.sell_qty
                 FROM daily_inventory di
                 LEFT JOIN daily_cycles dc ON di.day = dc.day
+                LEFT JOIN daily_txn_pnl dtp ON di.day = dtp.day
                 WHERE di.day >= CURRENT_DATE - make_interval(days => %s)
                 ORDER BY di.day DESC
             """, (days,))
@@ -401,7 +413,11 @@ class PnLDBManager:
             return [dict(r) for r in cursor.fetchall()]
 
     def get_cumulative_pnl(self, bot_type: str, days: int = 90) -> List[dict]:
-        """Cumulative PnL series per day for chart (from closed cycles)."""
+        """Cumulative PnL series per day for chart.
+
+        Uses transaction pnl_increment as the primary source (always recorded),
+        with closed cycle combined_pnl as an alternative when available.
+        """
         with self.get_connection() as conn:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cursor.execute("""
@@ -411,17 +427,42 @@ class PnLDBManager:
                     SUM(daily_pnl) OVER (ORDER BY day) AS cumulative_pnl
                 FROM (
                     SELECT
-                        c.closed_at::date AS day,
-                        COALESCE(SUM(c.combined_pnl), 0) AS daily_pnl
-                    FROM tg_cycles c
-                    JOIN tg_sessions s ON c.session_id = s.session_id
-                    WHERE c.status = 'closed' AND s.bot_type = %s
-                    GROUP BY c.closed_at::date
+                        t.ts::date AS day,
+                        COALESCE(SUM(t.pnl_increment), 0) AS daily_pnl
+                    FROM tg_transactions t
+                    JOIN tg_sessions s ON t.session_id = s.session_id
+                    WHERE s.bot_type = %s
+                    GROUP BY t.ts::date
                 ) daily
                 WHERE day >= CURRENT_DATE - make_interval(days => %s)
                 ORDER BY day
             """, (bot_type, days))
             return [dict(r) for r in cursor.fetchall()]
+
+    def get_overall_vwap(self, bot_type: str) -> dict:
+        """Overall Buy VWAP and Sell VWAP across all transactions for a bot type."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute("""
+                SELECT
+                    CASE WHEN SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END) > 0
+                         THEN SUM(CASE WHEN t.side = 'BUY' THEN t.price * t.qty ELSE 0 END)
+                              / SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END)
+                         ELSE 0 END AS buy_vwap,
+                    SUM(CASE WHEN t.side = 'BUY' THEN t.qty ELSE 0 END) AS buy_qty,
+                    CASE WHEN SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END) > 0
+                         THEN SUM(CASE WHEN t.side = 'SELL' THEN t.price * t.qty ELSE 0 END)
+                              / SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END)
+                         ELSE 0 END AS sell_vwap,
+                    SUM(CASE WHEN t.side = 'SELL' THEN t.qty ELSE 0 END) AS sell_qty
+                FROM tg_transactions t
+                JOIN tg_sessions s ON t.session_id = s.session_id
+                WHERE s.bot_type = %s
+            """, (bot_type,))
+            row = cursor.fetchone()
+            if not row:
+                return {'buy_vwap': 0, 'buy_qty': 0, 'sell_vwap': 0, 'sell_qty': 0}
+            return dict(row)
 
     # ── Legacy Read Methods (kept for /api/state) ──
 

@@ -157,6 +157,21 @@ class TollGateEngine:
                     qty=self.config.qty_per_level,
                     product=self.config.product)
 
+            # Register existing open groups as PnL cycles so close_cycle works
+            # after engine restarts with groups restored from state
+            if self._pnl_pair_id:
+                for gid, group in self.state.open_groups.items():
+                    cid = self.pnl.open_cycle(
+                        self._pnl_pair_id, self._pnl_session_id,
+                        group.group_id, group.bot, group.subset_index,
+                        group.cycle_number, group.entry_side,
+                        group.entry_price, group.target_price, group.qty)
+                    if cid:
+                        self._pnl_cycle_ids[gid] = cid
+                if self._pnl_cycle_ids:
+                    logger.info("Restored %d PnL cycle mappings for existing groups",
+                                len(self._pnl_cycle_ids))
+
         # Setup graceful shutdown
         signal.signal(signal.SIGINT, self._shutdown_handler)
         signal.signal(signal.SIGTERM, self._shutdown_handler)

@@ -1,5 +1,27 @@
 # Activity Log
 
+## 2026-02-19 23:30 IST - Claude
+**PnL Dashboard: Fix zero PnL and zero round trips for TollGate**
+
+The PnL tracker dashboard on port 9000 showed 0 PnL and 0 round trips for Feb 19 despite 360 transactions with 630.47 in realized PnL. Root cause: two separate bugs.
+
+### Bug 1: Dashboard queries relied exclusively on closed cycles
+The `get_daily_summary_tollgate()` and `get_cumulative_pnl()` queries only counted `tg_cycles WHERE status = 'closed'`. But `pnl_increment` on `tg_transactions` was always recorded correctly. Added transaction-based PnL as a fallback source.
+
+### Bug 2: Engine lost PnL cycle mappings on restart
+When the engine restarts and loads groups from JSON state, it creates a new PnL session but doesn't map existing group_ids to new cycle_ids. So `close_cycle()` receives `None` and silently returns. Added cycle registration for all existing open groups during PnL session init.
+
+### Modified Files
+1. **`TG/pnl/db_manager.py`** — `get_daily_summary_tollgate()`: Added `daily_txn_pnl` CTE using transaction `pnl_increment` as fallback when cycle PnL is 0. Round trips now uses `GREATEST(cycle_round_trips, txn_round_trips)`. `get_cumulative_pnl()`: Switched from closed-cycle-only to transaction-based PnL for accurate cumulative chart.
+2. **`TG/TollGate/engine.py`** — After PnL session/pair init, iterate existing `state.open_groups` and register each as a PnL cycle, populating `_pnl_cycle_ids` mapping so future `close_cycle()` calls succeed.
+
+### Impact
+- Dashboard now shows PnL: 630.47 and Round Trips: 19 for Feb 19
+- Cumulative PnL chart includes transaction-based PnL
+- Future engine restarts will correctly track PnL for restored groups
+
+---
+
 ## 2026-02-19 22:00 IST - Claude
 **AMM: New Ratio Mean-Reversion Stat-Arb Bot**
 
