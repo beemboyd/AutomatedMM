@@ -53,10 +53,10 @@ class TollGateGroup:
     # Target tracking — list of targets (one per partial fill increment)
     target_orders: List[dict] = field(default_factory=list)
     # Each: {order_id, qty, filled_qty, fill_price, placed_at, depth, tag, ref_price}
-    # depth: 1=T (initial target), 2=ST (sub re-entry), 3=TT, 4=FT, 5=FI
-    # tag: "T01", "ST01", "TT01", "FT01", "FI01"
+    # depth: 1=D1 (initial target), 2=D2 (sub re-entry), 3=D3, ... N=DN
+    # tag: "D101", "D201", "D301", ... (D{depth}{seq})
     # ref_price: cost basis for PnL calculation at this depth
-    target_seq: int = 0                 # Counter for target naming (T1, T2, T3...)
+    target_seq: int = 0                 # Counter for target naming (D101, D102, ...)
 
     # Timestamps
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())

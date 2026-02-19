@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Sub-target depth tag mapping: depth -> tag prefix
-DEPTH_TAGS = {1: "T", 2: "ST", 3: "TT", 4: "FT", 5: "FI"}
+def depth_tag(depth: int) -> str:
+    """Generate tag prefix for a given sub-target depth. D1, D2, D3, ..."""
+    return f"D{depth}"
 _DEFAULT_XTS_ROOT = 'https://xts.myfindoc.com'
 
 
@@ -55,7 +56,7 @@ class TollGateConfig:
     disclosed_pct: float = 0.0          # If > 0, disclosed qty = round(qty * pct / 100)
 
     # Sub-target cascading for partial fills
-    max_sub_depth: int = 5              # Max depth for sub-target ping-pong (1=T, 2=ST, 3=TT, 4=FT, 5=FI)
+    max_sub_depth: int = 5              # Max depth for sub-target ping-pong (D1, D2, D3, ...)
 
     # Reanchor limits
     max_reanchors: int = 100            # Stop bot after N total reanchors
@@ -177,11 +178,11 @@ def generate_order_id(role: str, side: str, level: int, cycle: int,
 
     Examples:
       EN-BL0C1-abc12345    Entry BUY level 0 cycle 1       (18 chars)
-      T01-BL0C1-abc12345   Target #1 level 0 cycle 1       (19 chars)
-      ST01-BL0C1-abc1234   Sub-target depth 2              (19 chars)
-      TT01-BL0C1-abc1234   Sub-target depth 3              (19 chars)
-      FT01-BL0C1-abc1234   Sub-target depth 4              (19 chars)
-      FI01-BL0C1-abc1234   Sub-target depth 5              (19 chars)
+      D101-BL0C1-abc1234   Depth 1 target #1 level 0 cycle 1 (19 chars)
+      D201-BL0C1-abc1234   Depth 2 sub-target              (19 chars)
+      D301-BL0C1-abc1234   Depth 3 sub-target              (19 chars)
+      D401-BL0C1-abc1234   Depth 4 sub-target              (19 chars)
+      D501-BL0C1-abc1234   Depth 5 sub-target              (19 chars)
     """
     if tag:
         label = tag

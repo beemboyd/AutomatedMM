@@ -72,6 +72,28 @@ Engine was not saving state after each ratio sample — only on fills or every 1
 
 ---
 
+## 2026-02-19 23:00 IST - Claude
+**TollGate: Expose max_sub_depth in config dashboard + dynamic depth naming**
+
+Two improvements to the TollGate sub-target cascading system:
+
+1. **Config dashboard field**: Added Max Sub-Depth input (1-10) to the TollGate config dashboard (7786) so the cascading depth is configurable from the UI without code changes or restarts.
+
+2. **Dynamic depth naming**: Replaced the fixed 5-level `DEPTH_TAGS` dict (`{1:"T", 2:"ST", 3:"TT", 4:"FT", 5:"FI"}`) with a dynamic `depth_tag(depth)` function that generates `D1, D2, D3, ...DN` for any depth. This removes the arbitrary 5-level naming limit — the system can now cascade to any depth set via `max_sub_depth`.
+
+### Modified Files
+1. **`TG/TollGate/config.py`** — Replaced `DEPTH_TAGS` dict with `depth_tag()` function. Updated `generate_order_id()` docstring examples to D1/D2/D3 format.
+2. **`TG/TollGate/engine.py`** — Changed import from `DEPTH_TAGS` to `depth_tag`. Updated two tag generation sites (initial target at depth 1, and sub-target cascading) to use `depth_tag()`.
+3. **`TG/TollGate/state.py`** — Updated target_orders schema comments to D1/D2/D3 naming.
+4. **`TG/TollGate/dashboard.py`** — Added `max_sub_depth` to `_DEFAULT_CONFIG`, `_start_bot()` cmd args, HTML form field, and JS load/save. Updated hint text to `(D1→D2→D3→...)`.
+
+### Impact
+- Depth naming is now unbounded: D1, D2, D3, ... D10, D11, etc.
+- Dashboard restart needed to pick up new form field
+- Order IDs now use format `D101-BL0C1-abc1234` instead of `T01-BL0C1-abc12345`
+
+---
+
 ## 2026-02-19 - Claude
 **TollGate: Amount-Based Sizing + Disclosed Quantity (Iceberging)**
 

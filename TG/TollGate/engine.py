@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 
-from .config import TollGateConfig, GridLevel, generate_order_id, DEPTH_TAGS
+from .config import TollGateConfig, GridLevel, generate_order_id, depth_tag
 from .state import TollGateState, TollGateGroup, TollGateStatus
 
 logger = logging.getLogger(__name__)
@@ -390,7 +390,7 @@ class TollGateEngine:
 
         # Place target for this increment (depth=1, closing position)
         group.target_seq += 1
-        tag = f"{DEPTH_TAGS[1]}{group.target_seq:02d}"
+        tag = f"{depth_tag(1)}{group.target_seq:02d}"
         target_uid = generate_order_id(
             "TP", group.target_side, group.subset_index,
             group.cycle_number, group.group_id, tag=tag,
@@ -537,9 +537,9 @@ class TollGateEngine:
                 # ref_price not used for PnL on even depths, but store fill_price for child
                 next_ref_price = None  # will be set on fill
 
-            # Build tag: e.g. "ST01", "TT01", reusing the sequence from parent
+            # Build tag: e.g. "D201", "D301", reusing the sequence from parent
             seq_str = tag[-2:] if len(tag) >= 2 and tag[-2:].isdigit() else f"{group.target_seq:02d}"
-            next_tag = f"{DEPTH_TAGS[next_depth]}{seq_str}"
+            next_tag = f"{depth_tag(next_depth)}{seq_str}"
 
             next_uid = generate_order_id(
                 "TP", next_side, group.subset_index,

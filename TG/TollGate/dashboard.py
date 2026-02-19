@@ -40,6 +40,7 @@ _DEFAULT_CONFIG = {
     "amount_per_level": 0,
     "disclosed_pct": 0,
     "max_reanchors": 100,
+    "max_sub_depth": 5,
     "product": "CNC",
     "poll_interval": 2.0,
     "interactive_key": "1d17edd135146be7572510",
@@ -147,6 +148,7 @@ def _start_bot(config: dict) -> bool:
         '--product', config.get('product', 'NRML'),
         '--poll-interval', str(config.get('poll_interval', 2.0)),
         '--max-reanchors', str(config.get('max_reanchors', 100)),
+        '--max-sub-depth', str(config.get('max_sub_depth', 5)),
     ]
 
     if config.get('amount_per_level', 0) > 0:
@@ -1006,6 +1008,11 @@ def _build_config_html() -> str:
             <div class="field-hint">Stop bot after N reanchors</div>
         </div>
         <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">Max Sub Depth</label>
+            <input id="cfg-max-sub-depth" type="number" min="1" max="5">
+            <div class="field-hint">Partial fill ping-pong depth (D1→D2→D3→...)</div>
+        </div>
+        <div>
             <label class="block text-xs mb-1" style="color:var(--dim);">Product</label>
             <select id="cfg-product">
                 <option value="CNC">CNC</option>
@@ -1083,6 +1090,7 @@ function loadConfig() {
             document.getElementById('cfg-amount').value = cfg.amount_per_level || 0;
             document.getElementById('cfg-disclosed').value = cfg.disclosed_pct || 0;
             document.getElementById('cfg-max-reanchors').value = cfg.max_reanchors || 100;
+            document.getElementById('cfg-max-sub-depth').value = cfg.max_sub_depth || 5;
             document.getElementById('cfg-product').value = cfg.product || 'NRML';
             document.getElementById('cfg-poll').value = cfg.poll_interval || 2.0;
             document.getElementById('cfg-anchor').value = cfg.anchor_price || 0;
@@ -1106,6 +1114,7 @@ function saveConfig() {
         amount_per_level: parseFloat(document.getElementById('cfg-amount').value),
         disclosed_pct: parseFloat(document.getElementById('cfg-disclosed').value),
         max_reanchors: parseInt(document.getElementById('cfg-max-reanchors').value),
+        max_sub_depth: parseInt(document.getElementById('cfg-max-sub-depth').value),
         product: document.getElementById('cfg-product').value,
         poll_interval: parseFloat(document.getElementById('cfg-poll').value),
         anchor_price: parseFloat(document.getElementById('cfg-anchor').value),
