@@ -775,6 +775,16 @@ class GridEngine:
                             del bot.level_groups[group.subset_index]
                         if group.group_id in self.state.open_groups:
                             del self.state.open_groups[group.group_id]
+                else:
+                    # Order not found in broker session — stale from previous run
+                    if group.status == GroupStatus.ENTRY_PENDING and group.entry_filled_so_far == 0:
+                        logger.info("Reconcile: stale entry order %s for group=%s (not in broker session, no fills) — removing",
+                                     group.entry_order_id, group.group_id)
+                        bot = self.buy_bot if group.bot == 'A' else self.sell_bot
+                        if group.subset_index in bot.level_groups:
+                            del bot.level_groups[group.subset_index]
+                        if group.group_id in self.state.open_groups:
+                            del self.state.open_groups[group.group_id]
 
             # Check target orders
             elif group.status in (GroupStatus.TARGET_PENDING, GroupStatus.ENTRY_PARTIAL):
