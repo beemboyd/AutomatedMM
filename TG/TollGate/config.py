@@ -58,7 +58,7 @@ class TollGateConfig:
     disclosed_pct: float = 0.0          # If > 0, disclosed qty = round(qty * pct / 100)
 
     # Sub-target cascading for partial fills
-    max_sub_depth: int = 10             # Max depth for sub-target ping-pong (D1, D2, D3, ...)
+    max_sub_depth: int = 100            # Max depth for sub-target ping-pong (D1, D2, D3, ...)
 
     # Reanchor limits
     max_reanchors: int = 100            # Stop bot after N total reanchors

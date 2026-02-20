@@ -850,11 +850,17 @@ function renderGridLevel(lv, g, secSym, gridId) {
         const eP = g.entry_fill_price ? g.entry_fill_price.toFixed(2) : lv.entry.toFixed(2);
         const tP = g.target_fill_price ? g.target_fill_price.toFixed(2) : lv.target.toFixed(2);
         priceDisplay = eP + ' → ' + tP;
+        const targets = g.target_orders || [];
+        const maxDepth = targets.length > 0 ? Math.max(...targets.map(t => t.depth || 1)) : 0;
+        const depthTag = maxDepth > 1 ? ' <span style="color:var(--yellow);font-size:0.75em;">D' + maxDepth + '</span>' : '';
         if (g.status === 'ENTRY_PENDING') {
             statusHTML = '<span class="status-badge badge-entry">ENTRY PENDING</span>';
             rowClass = 'grid-row-active';
+        } else if (g.status === 'ENTRY_PARTIAL') {
+            statusHTML = '<span class="status-badge badge-partial">PARTIAL ' + (g.entry_filled_so_far||0) + '/' + g.qty + '</span>' + depthTag;
+            rowClass = 'grid-row-filled';
         } else if (g.status === 'TARGET_PENDING') {
-            statusHTML = '<span class="status-badge badge-target">FILLED → TARGET</span>';
+            statusHTML = '<span class="status-badge badge-target">FILLED → TARGET</span>' + depthTag;
             rowClass = 'grid-row-filled';
         }
         // PnL
@@ -906,25 +912,48 @@ function renderGridLevel(lv, g, secSym, gridId) {
             '  <span class="grid-id-mono">OID:' + eOid + '</span>' +
             '</td></tr>';
 
-        // Target sub-row: show order price, then fill info
-        const tSide = eSide === 'BUY' ? 'SELL' : 'BUY';
-        const tPrice = g.target_price ? g.target_price.toFixed(2) : lv.target.toFixed(2);
-        const tQty = g.target_filled_so_far || 0;
-        const tOid = g.target_order_id ? g.target_order_id : '—';
-        let tDetail = '';
-        if (tQty >= g.qty) {
-            tDetail = '✓ filled' + (g.target_fill_price ? ' @ ' + g.target_fill_price.toFixed(2) : '');
-        } else if (tQty > 0) {
-            tDetail = 'partial ' + tQty + '/' + g.qty + (g.target_fill_price ? ' @ ' + g.target_fill_price.toFixed(2) : '');
+        // Target sub-rows: show each depth level from target_orders
+        const targets = g.target_orders || [];
+        if (targets.length > 0) {
+            targets.forEach(t => {
+                const depth = t.depth || 1;
+                const isClosing = (depth % 2 === 1);
+                const tSide = isClosing ? (eSide === 'BUY' ? 'SELL' : 'BUY') : eSide;
+                const tPrice = isClosing ? (g.target_price || lv.target).toFixed(2) : (g.entry_price || lv.entry).toFixed(2);
+                const tag = t.tag || ('D' + depth);
+                const tOid = t.order_id || '—';
+                const tFilled = t.filled_qty || 0;
+                const tQty = t.qty || 0;
+                let tDetail = '';
+                if (tFilled >= tQty && tQty > 0) {
+                    tDetail = '✓ filled' + (t.fill_price ? ' @ ' + t.fill_price.toFixed(2) : '');
+                } else if (tFilled > 0) {
+                    tDetail = 'partial ' + tFilled + '/' + tQty + (t.fill_price ? ' @ ' + t.fill_price.toFixed(2) : '');
+                } else {
+                    tDetail = 'pending';
+                }
+                const depthColor = isClosing ? 'color:var(--green);' : 'color:var(--yellow);';
+                const depthLabel = isClosing ? 'close' : 're-entry';
+                html += '<tr class="' + subVis + rid + '">' +
+                    '<td></td><td' + cs + '>' +
+                    '<span class="grid-sub-label target-label" style="' + depthColor + '">' + tag + '</span> ' +
+                    '<span style="opacity:0.5;font-size:0.75em;">(' + depthLabel + ')</span> ' +
+                    tSide + ' ' + tQty + ' @ ' + tPrice + '  <span style="opacity:0.6;">(' + tDetail + ')</span>' +
+                    '  <span class="grid-id-mono">OID:' + tOid + '</span>' +
+                    '</td></tr>';
+            });
         } else {
-            tDetail = 'pending';
+            // Legacy fallback: single target
+            const tSide = eSide === 'BUY' ? 'SELL' : 'BUY';
+            const tPrice = g.target_price ? g.target_price.toFixed(2) : lv.target.toFixed(2);
+            const tOid = g.target_order_id ? g.target_order_id : '—';
+            html += '<tr class="' + subVis + rid + '">' +
+                '<td></td><td' + cs + '>' +
+                '<span class="grid-sub-label target-label">Target</span> ' +
+                tSide + ' ' + g.qty + ' @ ' + tPrice + '  <span style="opacity:0.6;">(pending)</span>' +
+                '  <span class="grid-id-mono">OID:' + tOid + '</span>' +
+                '</td></tr>';
         }
-        html += '<tr class="' + subVis + rid + '">' +
-            '<td></td><td' + cs + '>' +
-            '<span class="grid-sub-label target-label">Target</span> ' +
-            tSide + ' ' + g.qty + ' @ ' + tPrice + '  <span style="opacity:0.6;">(' + tDetail + ')</span>' +
-            '  <span class="grid-id-mono">OID:' + tOid + '</span>' +
-            '</td></tr>';
 
         // Hedge sub-row (only if hedged)
         if (g.pair_hedged_qty && g.pair_hedged_qty > 0) {

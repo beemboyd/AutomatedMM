@@ -490,7 +490,11 @@ class GridEngine:
         max_depth = self.config.max_sub_depth
         target_fully_filled = (filled_qty >= target.get('qty', 0))
 
-        if target_fully_filled and depth < max_depth:
+        # Only cascade when entry was partial (depth 1) or already in a sub-chain (depth > 1).
+        # Complete entries should close on D1 fill without cascading.
+        should_cascade = (depth > 1) or (group.status == GroupStatus.ENTRY_PARTIAL)
+
+        if target_fully_filled and depth < max_depth and should_cascade:
             # Spawn next depth order
             next_depth = depth + 1
             next_is_closing = (next_depth % 2 == 1)

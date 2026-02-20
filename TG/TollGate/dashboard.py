@@ -531,28 +531,20 @@ def _build_monitor_html() -> str:
     </div>
 </div>
 
-<!-- PNL CHART -->
-<div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
-    <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Cumulative PnL</h2>
-    <div style="height:200px;position:relative;"><canvas id="pnl-chart"></canvas></div>
-</div>
-
 <!-- RECENT TRANSACTIONS -->
 <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
     <h2 class="text-sm font-semibold mb-3" style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">Recent Transactions</h2>
     <table>
         <thead><tr>
-            <th>Group</th><th>Side</th><th>Level</th><th>Cycle</th>
-            <th>Entry @</th><th>Target @</th><th>Qty</th><th>PnL</th><th>Time</th>
+            <th>Group</th><th>Level</th><th>Depth</th><th>Type</th>
+            <th>Side</th><th>Qty</th><th>Price</th><th>PnL</th><th>Time</th>
         </tr></thead>
-        <tbody id="closed-tbody"></tbody>
+        <tbody id="txn-tbody"></tbody>
     </table>
-    <div class="text-center py-3" style="color:var(--dim);font-style:italic;display:none;" id="closed-empty">No completed trades yet</div>
+    <div class="text-center py-3" style="color:var(--dim);font-style:italic;display:none;" id="txn-empty">No transactions yet</div>
 </div>
 
 <script>
-let pnlChart = null;
-
 function fmtPnl(v) {
     if (v == null || isNaN(v)) return '<span style="color:var(--dim);">—</span>';
     const cls = v >= 0 ? 'pnl-pos' : 'pnl-neg';
@@ -568,15 +560,15 @@ function fmtTime(iso) {
     catch(e) { return iso; }
 }
 
-function computeGrid(anchor, spacing, profit, levels, qty, amountPerLevel) {
+function computeGrid(anchor, spacing, profit, levels, qty, buyAmount, sellAmount) {
     if (!anchor || anchor <= 0) return { buy: [], sell: [] };
     const buyLevels = [], sellLevels = [];
     for (let i = 0; i < levels; i++) {
         const dist = spacing * (i + 1);
         const bEntry = Math.round((anchor - dist) * 100) / 100;
         const sEntry = Math.round((anchor + dist) * 100) / 100;
-        const bQty = (amountPerLevel > 0 && bEntry > 0) ? Math.max(1, Math.round(amountPerLevel / bEntry)) : qty;
-        const sQty = (amountPerLevel > 0 && sEntry > 0) ? Math.max(1, Math.round(amountPerLevel / sEntry)) : qty;
+        const bQty = (buyAmount > 0 && bEntry > 0) ? Math.max(1, Math.round(buyAmount / bEntry)) : qty;
+        const sQty = (sellAmount > 0 && sEntry > 0) ? Math.max(1, Math.round(sellAmount / sEntry)) : qty;
         buyLevels.push({ index: i, entry: bEntry, target: Math.round((bEntry + profit) * 100) / 100, qty: bQty });
         sellLevels.push({ index: i, entry: sEntry, target: Math.round((sEntry - profit) * 100) / 100, qty: sQty });
     }
@@ -787,7 +779,9 @@ function updateMonitor() {
             const levels = cfg.levels_per_side || 10;
             const qty = cfg.qty_per_level || 4000;
             const amtPerLevel = cfg.amount_per_level || 0;
-            const grid = computeGrid(anchor, spacing, profit, levels, qty, amtPerLevel);
+            const buyAmt = cfg.buy_amount_per_level || amtPerLevel;
+            const sellAmt = cfg.sell_amount_per_level || amtPerLevel;
+            const grid = computeGrid(anchor, spacing, profit, levels, qty, buyAmt, sellAmt);
 
             const og = state.open_groups || {};
             const groupByLevel = {};
@@ -805,76 +799,100 @@ function updateMonitor() {
                 return renderGridLevel(lv, groupByLevel['B:' + lv.index], 'sell');
             }).join('');
 
-            // Closed trades — today only
+            // Recent Transactions — live depth fills from open + closed groups
             const todayStr = new Date().toISOString().slice(0, 10);
-            const closed = (state.closed_groups || [])
-                .filter(g => (g.closed_at || g.created_at || '').slice(0, 10) === todayStr)
-                .sort((a,b) => (b.closed_at || '').localeCompare(a.closed_at || '')).slice(0, 30);
-            const closedTbody = document.getElementById('closed-tbody');
-            const closedEmpty = document.getElementById('closed-empty');
-            if (closed.length === 0) {
-                closedTbody.innerHTML = '';
-                closedEmpty.style.display = 'block';
+            const txns = [];
+            // Collect filled targets from open groups (og already declared above)
+            Object.values(og).forEach(g => {
+                if ((g.created_at || '').slice(0, 10) !== todayStr) return;
+                (g.target_orders || []).forEach(t => {
+                    if ((t.filled_qty || 0) <= 0) return;
+                    const depth = t.depth || 1;
+                    const isClosing = (depth % 2 === 1);
+                    const side = isClosing
+                        ? (g.entry_side === 'BUY' ? 'SELL' : 'BUY')
+                        : g.entry_side;
+                    const refPrice = t.ref_price || g.entry_fill_price || 0;
+                    let pnl = 0;
+                    if (isClosing && refPrice > 0 && t.fill_price > 0) {
+                        pnl = g.entry_side === 'BUY'
+                            ? (t.fill_price - refPrice) * t.filled_qty
+                            : (refPrice - t.fill_price) * t.filled_qty;
+                    }
+                    txns.push({
+                        gid: g.group_id, lvl: g.subset_index, tag: t.tag || ('D'+depth),
+                        depth, isClosing, side, qty: t.filled_qty, price: t.fill_price,
+                        pnl: Math.round(pnl * 100) / 100, time: t.placed_at || '', status: 'open'
+                    });
+                });
+                // Also show entry fill as a transaction
+                if (g.entry_filled_so_far > 0) {
+                    txns.push({
+                        gid: g.group_id, lvl: g.subset_index, tag: 'ENTRY',
+                        depth: 0, isClosing: false, side: g.entry_side,
+                        qty: g.entry_filled_so_far, price: g.entry_fill_price,
+                        pnl: 0, time: g.entry_filled_at || g.created_at || '', status: 'open'
+                    });
+                }
+            });
+            // Also include today's closed group entries + targets
+            (state.closed_groups || []).forEach(g => {
+                if ((g.closed_at || g.created_at || '').slice(0, 10) !== todayStr) return;
+                if (g.entry_filled_so_far > 0) {
+                    txns.push({
+                        gid: g.group_id, lvl: g.subset_index, tag: 'ENTRY',
+                        depth: 0, isClosing: false, side: g.entry_side,
+                        qty: g.entry_filled_so_far, price: g.entry_fill_price,
+                        pnl: 0, time: g.entry_filled_at || g.created_at || '', status: 'closed'
+                    });
+                }
+                (g.target_orders || []).forEach(t => {
+                    if ((t.filled_qty || 0) <= 0) return;
+                    const depth = t.depth || 1;
+                    const isClosing = (depth % 2 === 1);
+                    const side = isClosing
+                        ? (g.entry_side === 'BUY' ? 'SELL' : 'BUY')
+                        : g.entry_side;
+                    txns.push({
+                        gid: g.group_id, lvl: g.subset_index, tag: t.tag || ('D'+depth),
+                        depth, isClosing, side, qty: t.filled_qty, price: t.fill_price,
+                        pnl: 0, time: t.placed_at || '', status: 'closed'
+                    });
+                });
+            });
+            // Sort by time descending, limit to 50
+            txns.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+            const txnSlice = txns.slice(0, 50);
+            const txnTbody = document.getElementById('txn-tbody');
+            const txnEmpty = document.getElementById('txn-empty');
+            if (txnSlice.length === 0) {
+                txnTbody.innerHTML = '';
+                txnEmpty.style.display = 'block';
             } else {
-                closedEmpty.style.display = 'none';
-                closedTbody.innerHTML = closed.map(g => {
-                    const status = g.status || 'CLOSED';
-                    const typeLabel = status === 'CANCELLED'
-                        ? '<span class="status-badge badge-entry">CANCELLED</span>'
-                        : '<span class="status-badge badge-closed">CYCLE</span>';
-                    const sideBadge = g.entry_side === 'BUY'
+                txnEmpty.style.display = 'none';
+                txnTbody.innerHTML = txnSlice.map(tx => {
+                    const sideBadge = tx.side === 'BUY'
                         ? '<span class="status-badge badge-buy">BUY</span>'
                         : '<span class="status-badge badge-sell">SELL</span>';
-                    return '<tr>' +
-                        '<td style="font-size:11px;color:var(--dim);">' + g.group_id + '</td>' +
-                        '<td>' + sideBadge + '</td>' +
-                        '<td>L' + g.subset_index + '</td>' +
-                        '<td>C' + (g.cycle_number || 1) + ' ' + typeLabel + '</td>' +
-                        '<td>' + (g.entry_fill_price ? g.entry_fill_price.toFixed(2) : g.entry_price.toFixed(2)) + '</td>' +
-                        '<td>' + g.target_price.toFixed(2) + '</td>' +
-                        '<td>' + g.qty + '</td>' +
-                        '<td>' + fmtPnl(g.realized_pnl) + '</td>' +
-                        '<td>' + fmtTime(g.closed_at) + '</td></tr>';
-                }).join('');
-            }
-
-            // PnL chart — today only
-            const allClosed = (state.closed_groups || [])
-                .filter(g => g.status === 'CLOSED' && (g.closed_at || '').slice(0, 10) === todayStr)
-                .sort((a,b) => (a.closed_at || '').localeCompare(b.closed_at || ''));
-            if (allClosed.length > 0) {
-                let cum = 0;
-                const labels = [], pnlData = [];
-                allClosed.forEach((g, i) => {
-                    cum += g.realized_pnl || 0;
-                    labels.push(i + 1);
-                    pnlData.push(parseFloat(cum.toFixed(2)));
-                });
-                const ctx = document.getElementById('pnl-chart').getContext('2d');
-                if (pnlChart) pnlChart.destroy();
-                pnlChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Cumulative PnL',
-                            data: pnlData,
-                            borderColor: pnlData[pnlData.length-1] >= 0 ? '#00c853' : '#ff1744',
-                            backgroundColor: (pnlData[pnlData.length-1] >= 0 ? 'rgba(0,200,83,' : 'rgba(255,23,68,') + '0.1)',
-                            fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
-                        }]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            x: { display: true, title: { display: true, text: 'Cycle #', color: '#888' },
-                                 ticks: { color: '#888', maxTicksLimit: 15 }, grid: { color: 'rgba(42,45,58,0.5)' } },
-                            y: { display: true, title: { display: true, text: 'PnL', color: '#888' },
-                                 ticks: { color: '#888' }, grid: { color: 'rgba(42,45,58,0.5)' } }
-                        }
+                    let typeBadge;
+                    if (tx.tag === 'ENTRY') {
+                        typeBadge = '<span class="status-badge badge-entry">ENTRY</span>';
+                    } else if (tx.isClosing) {
+                        typeBadge = '<span class="status-badge badge-closed">CLOSE</span>';
+                    } else {
+                        typeBadge = '<span class="status-badge" style="background:rgba(255,215,0,0.15);color:#ffd700;">RE-ENTRY</span>';
                     }
-                });
+                    return '<tr>' +
+                        '<td style="font-size:11px;color:var(--dim);">' + tx.gid.slice(0,8) + '</td>' +
+                        '<td>L' + tx.lvl + '</td>' +
+                        '<td style="font-weight:600;">' + tx.tag + '</td>' +
+                        '<td>' + typeBadge + '</td>' +
+                        '<td>' + sideBadge + '</td>' +
+                        '<td>' + tx.qty + '</td>' +
+                        '<td>' + (tx.price ? tx.price.toFixed(2) : '—') + '</td>' +
+                        '<td>' + (tx.tag !== 'ENTRY' && tx.isClosing ? fmtPnl(tx.pnl) : '') + '</td>' +
+                        '<td>' + fmtTime(tx.time) + '</td></tr>';
+                }).join('');
             }
         })
         .catch(e => console.error('Monitor error:', e));
