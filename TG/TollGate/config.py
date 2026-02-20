@@ -68,12 +68,12 @@ class TollGateConfig:
     product: str = "CNC"
 
     # XTS Interactive credentials (separate account)
-    interactive_key: str = "1d17edd135146be7572510"
-    interactive_secret: str = "Htvy720#4K"
+    interactive_key: str = "YOUR_XTS_INTERACTIVE_KEY"
+    interactive_secret: str = "YOUR_XTS_INTERACTIVE_SECRET"
 
     # XTS Market Data credentials (shared read-only from main TG)
-    marketdata_key: str = "202e06ba0b421bf9e1e515"
-    marketdata_secret: str = "Payr544@nk"
+    marketdata_key: str = "YOUR_XTS_MARKETDATA_KEY"
+    marketdata_secret: str = "YOUR_XTS_MARKETDATA_SECRET"
 
     # XTS API root URL
     xts_root: str = _DEFAULT_XTS_ROOT

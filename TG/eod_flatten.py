@@ -29,8 +29,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from TG.hybrid_client import HybridClient
 
 # Default XTS credentials (same as run.py)
-_DEFAULT_INTERACTIVE_KEY = '59ec1c9e69270e5cd97108'
-_DEFAULT_INTERACTIVE_SECRET = 'Mjcd080@xT'
+_DEFAULT_INTERACTIVE_KEY = 'YOUR_XTS_INTERACTIVE_KEY'
+_DEFAULT_INTERACTIVE_SECRET = 'YOUR_XTS_INTERACTIVE_SECRET'
 _DEFAULT_XTS_ROOT = 'https://xts.myfindoc.com'
 
 logger = logging.getLogger('TG.eod_flatten')

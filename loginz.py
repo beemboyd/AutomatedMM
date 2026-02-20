@@ -1,8 +1,8 @@
 from kiteconnect import KiteConnect
 
 # Replace these with your actual credentials.
-KITE_API_KEY = "ms2m54xupkjzvbwj"
-KITE_API_SECRET = "84a716dpcnupceyrtk3rsuayzqxwems4"
+KITE_API_KEY = "YOUR_ZERODHA_API_KEY"
+KITE_API_SECRET = "YOUR_ZERODHA_API_SECRET"
 
 # Initialize the KiteConnect client.
 kite = KiteConnect(api_key=KITE_API_KEY)

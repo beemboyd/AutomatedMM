@@ -49,10 +49,10 @@ _DEFAULT_CONFIG = {
     "product": "CNC",
     "poll_interval": 2.0,
     "slippage": 0.05,
-    "interactive_key": "8971817fbc4b2ee3607278",
-    "interactive_secret": "Spit105$uM",
-    "marketdata_key": "562d110e40e3b820c95672",
-    "marketdata_secret": "Stlf310$q$",
+    "interactive_key": "YOUR_XTS_INTERACTIVE_KEY",
+    "interactive_secret": "YOUR_XTS_INTERACTIVE_SECRET",
+    "marketdata_key": "YOUR_XTS_MARKETDATA_KEY",
+    "marketdata_secret": "YOUR_XTS_MARKETDATA_SECRET",
     "xts_root": "https://xts.myfindoc.com",
 }
 

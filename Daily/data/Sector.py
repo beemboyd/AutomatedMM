@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 import os
 
-API_KEY = "67b45fd40b3488.78455022"  # 🔁 Replace with your real EODHD API key
+API_KEY = "YOUR_EODHD_API_KEY"  # Replace with your real EODHD API key
 
 def get_sector(ticker, retry_count=3):
     """Fetch sector information for a ticker with retry logic"""

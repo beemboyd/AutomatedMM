@@ -94,10 +94,10 @@ class AMMConfig:
     slippage: float = 0.05
 
     # XTS credentials (01MU07)
-    interactive_key: str = "8971817fbc4b2ee3607278"
-    interactive_secret: str = "Spit105$uM"
-    marketdata_key: str = "562d110e40e3b820c95672"
-    marketdata_secret: str = "Stlf310$q$"
+    interactive_key: str = "YOUR_XTS_INTERACTIVE_KEY"
+    interactive_secret: str = "YOUR_XTS_INTERACTIVE_SECRET"
+    marketdata_key: str = "YOUR_XTS_MARKETDATA_KEY"
+    marketdata_secret: str = "YOUR_XTS_MARKETDATA_SECRET"
     xts_root: str = _DEFAULT_XTS_ROOT
 
     def get_all_symbols(self) -> List[str]:
@@ -145,10 +145,10 @@ class AMMConfig:
             product=d.get('product', 'CNC'),
             poll_interval=d.get('poll_interval', 2.0),
             slippage=d.get('slippage', 0.05),
-            interactive_key=d.get('interactive_key', '8971817fbc4b2ee3607278'),
-            interactive_secret=d.get('interactive_secret', 'Spit105$uM'),
-            marketdata_key=d.get('marketdata_key', '562d110e40e3b820c95672'),
-            marketdata_secret=d.get('marketdata_secret', 'Stlf310$q$'),
+            interactive_key=d.get('interactive_key', 'YOUR_XTS_INTERACTIVE_KEY'),
+            interactive_secret=d.get('interactive_secret', 'YOUR_XTS_INTERACTIVE_SECRET'),
+            marketdata_key=d.get('marketdata_key', 'YOUR_XTS_MARKETDATA_KEY'),
+            marketdata_secret=d.get('marketdata_secret', 'YOUR_XTS_MARKETDATA_SECRET'),
             xts_root=d.get('xts_root', _DEFAULT_XTS_ROOT),
         )
 

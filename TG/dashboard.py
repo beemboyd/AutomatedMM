@@ -33,8 +33,8 @@ CONFIG_FILE = os.path.join(STATE_DIR, 'tg_config.json')
 # Default config template
 _DEFAULT_CONFIG = {
     "secondary_symbol": "SPCENET",
-    "xts_interactive_key": "59ec1c9e69270e5cd97108",
-    "xts_interactive_secret": "Mjcd080@xT",
+    "xts_interactive_key": "YOUR_XTS_INTERACTIVE_KEY",
+    "xts_interactive_secret": "YOUR_XTS_INTERACTIVE_SECRET",
     "xts_root": "https://xts.myfindoc.com",
     "zerodha_user": "Sai",
     "primaries": [

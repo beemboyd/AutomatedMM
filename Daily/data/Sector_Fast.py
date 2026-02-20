@@ -6,7 +6,7 @@ import os
 import sys
 import json
 
-API_KEY = "67b45fd40b3488.78455022"  # 🔁 Replace with your real EODHD API key
+API_KEY = "YOUR_EODHD_API_KEY"  # Replace with your real EODHD API key
 
 # Cache file to store already fetched sectors
 CACHE_FILE = "sector_cache.json"

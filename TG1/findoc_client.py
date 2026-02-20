@@ -71,8 +71,8 @@ _SESSION_MAX_AGE = 8 * 3600  # 8 hours
 
 # Map known XTS API keys to account IDs for session file naming
 _API_KEY_TO_ACCOUNT = {
-    '8971817fbc4b2ee3607278': '01MU07',
-    '59ec1c9e69270e5cd97108': '01MU06',
+    'YOUR_XTS_INTERACTIVE_KEY_01MU07': '01MU07',
+    'YOUR_XTS_INTERACTIVE_KEY_01MU06': '01MU06',
 }
 
 

@@ -76,10 +76,10 @@ def load_config() -> dict:
 
     # Fallback defaults
     return {
-        "interactive_key": "1d17edd135146be7572510",
-        "interactive_secret": "Htvy720#4K",
-        "marketdata_key": "202e06ba0b421bf9e1e515",
-        "marketdata_secret": "Payr544@nk",
+        "interactive_key": "YOUR_XTS_INTERACTIVE_KEY",
+        "interactive_secret": "YOUR_XTS_INTERACTIVE_SECRET",
+        "marketdata_key": "YOUR_XTS_MARKETDATA_KEY",
+        "marketdata_secret": "YOUR_XTS_MARKETDATA_SECRET",
         "xts_root": "https://xts.myfindoc.com",
         "auto_anchor": True,
     }
@@ -167,10 +167,10 @@ def fresh_xts_login(config: dict, dry_run: bool = False):
 
     Returns connected TollGateClient or None.
     """
-    interactive_key = config.get('interactive_key', '1d17edd135146be7572510')
-    interactive_secret = config.get('interactive_secret', 'Htvy720#4K')
-    marketdata_key = config.get('marketdata_key', '202e06ba0b421bf9e1e515')
-    marketdata_secret = config.get('marketdata_secret', 'Payr544@nk')
+    interactive_key = config.get('interactive_key', 'YOUR_XTS_INTERACTIVE_KEY')
+    interactive_secret = config.get('interactive_secret', 'YOUR_XTS_INTERACTIVE_SECRET')
+    marketdata_key = config.get('marketdata_key', 'YOUR_XTS_MARKETDATA_KEY')
+    marketdata_secret = config.get('marketdata_secret', 'YOUR_XTS_MARKETDATA_SECRET')
     xts_root = config.get('xts_root', 'https://xts.myfindoc.com')
 
     # Delete stale session file to force fresh login

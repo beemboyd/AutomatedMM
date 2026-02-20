@@ -419,7 +419,7 @@ Removed Zerodha dependency from TollGate — now fully self-contained on XTS. Ad
 ### Impact
 - TollGate no longer depends on Zerodha API/token for market data
 - Automated daily startup at 9:10 AM via launchd
-- XTS Market Data credentials: `202e06ba0b421bf9e1e515` / `Payr544@nk` (shared read-only from main TG)
+- XTS Market Data credentials: `YOUR_XTS_MARKETDATA_KEY` / `YOUR_XTS_MARKETDATA_SECRET` (shared read-only from main TG)
 
 ---
 
@@ -537,7 +537,7 @@ Root cause: When TollGate/TG bots restart with `--auto-anchor`, they used LTP wh
 - Reuses `HybridClient` from `TG.hybrid_client` — no code duplication
 - Custom `TollGateGroup` model (not `TG.Group`) — partial fills need `target_orders` list
 - Session isolated: TollGate session at `TG/TollGate/state/.xts_session.json`
-- XTS Account: Interactive Order Data (key: 1d17edd135146be7572510)
+- XTS Account: Interactive Order Data (key: YOUR_XTS_INTERACTIVE_KEY)
 
 ### Verification
 - `python -m TG.TollGate.run --anchor 5.42 --dry-run` — prints grid, no orders

@@ -20,8 +20,8 @@ nano config.ini
 
 # Update the access_token for your user (e.g., Sai)
 [API_CREDENTIALS_Sai]
-api_key = ms2m54xupkjzvbwj
-api_secret = 84a716dpcnupceyrtk3rsuayzqxwems4
+api_key = YOUR_ZERODHA_API_KEY
+api_secret = YOUR_ZERODHA_API_SECRET
 access_token = YOUR_NEW_ACCESS_TOKEN_HERE  # <-- Update this line
 ```
 
