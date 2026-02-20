@@ -8,10 +8,16 @@ Manages 3 separate XTS Interactive sessions:
 
 Shares a single Zerodha KiteConnect instance for instrument resolution.
 Zerodha exchange_token == XTS exchangeInstrumentID for NSE equity.
+
+Session sharing: sessions using the same XTS API key share a session file
+(under TG/state/) so multiple bots on the same account don't invalidate
+each other's tokens by calling interactive_login() independently.
 """
 
 import sys
 import os
+import json
+import time
 import configparser
 import logging
 from typing import Optional, Dict, Any, List
@@ -58,6 +64,25 @@ _PRODUCT_MAP = {
 _CONFIG_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Daily')
 
+# Shared XTS session directory (TG/state/) for cross-bot session sharing
+_SHARED_SESSION_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'TG', 'state')
+_SESSION_MAX_AGE = 8 * 3600  # 8 hours
+
+# Map known XTS API keys to account IDs for session file naming
+_API_KEY_TO_ACCOUNT = {
+    '8971817fbc4b2ee3607278': '01MU07',
+    '59ec1c9e69270e5cd97108': '01MU06',
+}
+
+
+def _session_file_for_key(api_key: str) -> Optional[str]:
+    """Return shared session file path for a known XTS API key."""
+    account_id = _API_KEY_TO_ACCOUNT.get(api_key)
+    if account_id:
+        return os.path.join(_SHARED_SESSION_DIR, f'.xts_session_{account_id}.json')
+    return None
+
 
 def _load_zerodha_credentials(user_name: str = "Sai") -> dict:
     """Load Zerodha API credentials from Daily/config.ini."""
@@ -84,10 +109,11 @@ def _load_zerodha_credentials(user_name: str = "Sai") -> dict:
 
 
 class _XTSSession:
-    """A single XTS Interactive session."""
+    """A single XTS Interactive session with optional shared session file."""
 
     def __init__(self, name: str, api_key: str, secret_key: str,
-                 root_url: str, source: str = 'WEBAPI'):
+                 root_url: str, source: str = 'WEBAPI',
+                 session_file: Optional[str] = None):
         self.name = name
         self.xt = XTSConnect(
             apiKey=api_key,
@@ -98,19 +124,97 @@ class _XTSSession:
         )
         self.client_id = None
         self.connected = False
+        self._session_file = session_file
+
+    def _try_reuse_session(self) -> bool:
+        """Try to reuse an existing XTS session from shared file."""
+        if not self._session_file:
+            return False
+        try:
+            if not os.path.exists(self._session_file):
+                return False
+            with open(self._session_file) as f:
+                session = json.load(f)
+            saved_time = session.get('timestamp', 0)
+            if time.time() - saved_time > _SESSION_MAX_AGE:
+                logger.info("[%s] Session file expired (age=%.0f hours)",
+                            self.name, (time.time() - saved_time) / 3600)
+                return False
+            token = session.get('token', '')
+            user_id = session.get('userID', '')
+            if not token or not user_id:
+                return False
+            is_investor = session.get('isInvestorClient', True)
+            self.xt._set_common_variables(token, user_id, is_investor)
+            self.client_id = user_id
+            resp = self.xt.get_order_book()
+            if isinstance(resp, str) or (isinstance(resp, dict) and resp.get('type') == 'error'):
+                logger.info("[%s] Session file token invalid, will re-login", self.name)
+                return False
+            return True
+        except Exception as e:
+            logger.debug("[%s] Session reuse failed: %s", self.name, e)
+            return False
+
+    def _save_session(self, token: str, user_id: str):
+        """Save XTS session token to shared file for other bots."""
+        if not self._session_file:
+            return
+        try:
+            os.makedirs(os.path.dirname(self._session_file), exist_ok=True)
+            session = {
+                'token': token,
+                'userID': user_id,
+                'isInvestorClient': getattr(self.xt, 'isInvestorClient', True),
+                'timestamp': time.time(),
+            }
+            tmp = self._session_file + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump(session, f)
+            os.replace(tmp, self._session_file)
+            logger.info("[%s] Session saved to %s", self.name, self._session_file)
+        except Exception as e:
+            logger.warning("[%s] Failed to save session: %s", self.name, e)
 
     def login(self) -> bool:
+        """Login to XTS — reuse shared session file first, fresh login if needed."""
         try:
+            if self._try_reuse_session():
+                self.connected = True
+                logger.info("[%s] XTS session reused from file: userID=%s",
+                            self.name, self.client_id)
+                return True
             resp = self.xt.interactive_login()
             if isinstance(resp, str) or resp.get('type') == 'error':
                 logger.error("[%s] XTS login failed: %s", self.name, resp)
                 return False
             self.client_id = resp['result']['userID']
             self.connected = True
-            logger.info("[%s] XTS login OK: userID=%s", self.name, self.client_id)
+            logger.info("[%s] XTS fresh login OK: userID=%s", self.name, self.client_id)
+            self._save_session(resp['result']['token'], self.client_id)
             return True
         except Exception as e:
             logger.error("[%s] XTS login exception: %s", self.name, e)
+            return False
+
+    def refresh_session(self) -> bool:
+        """Refresh session, checking shared file first to avoid ping-pong."""
+        try:
+            if self._try_reuse_session():
+                logger.info("[%s] Picked up refreshed session from shared file",
+                            self.name)
+                return True
+            resp = self.xt.interactive_login()
+            if isinstance(resp, str) or resp.get('type') == 'error':
+                logger.error("[%s] XTS session refresh failed: %s", self.name, resp)
+                return False
+            self.client_id = resp['result']['userID']
+            self._save_session(resp['result']['token'], self.client_id)
+            logger.info("[%s] XTS session refreshed (fresh login): userID=%s",
+                        self.name, self.client_id)
+            return True
+        except Exception as e:
+            logger.error("[%s] XTS session refresh error: %s", self.name, e)
             return False
 
     def place_order(self, instrument_id: int, side: str, qty: int,
@@ -218,23 +322,29 @@ class FindocMultiClient:
         self._instrument_token_cache: Dict[str, int] = {}
         self._tick_size_cache: Dict[str, float] = {}
 
-        # XTS sessions
+        # XTS sessions (with shared session files for known accounts)
+        trade_sf = _session_file_for_key(config.trade_key)
         self.trade_session = _XTSSession(
-            'Trade', config.trade_key, config.trade_secret, config.xts_root)
+            'Trade', config.trade_key, config.trade_secret, config.xts_root,
+            session_file=trade_sf)
 
         self.upside_oco_session: Optional[_XTSSession] = None
         self.downside_oco_session: Optional[_XTSSession] = None
 
         if config.has_oco:
+            upside_sf = _session_file_for_key(config.upside_oco_key)
             self.upside_oco_session = _XTSSession(
                 'UpsideOCO', config.upside_oco_key,
-                config.upside_oco_secret, config.xts_root)
+                config.upside_oco_secret, config.xts_root,
+                session_file=upside_sf)
             if config.same_oco_account:
                 self.downside_oco_session = self.upside_oco_session
             else:
+                downside_sf = _session_file_for_key(config.downside_oco_key)
                 self.downside_oco_session = _XTSSession(
                     'DownsideOCO', config.downside_oco_key,
-                    config.downside_oco_secret, config.xts_root)
+                    config.downside_oco_secret, config.xts_root,
+                    session_file=downside_sf)
 
     def connect(self) -> bool:
         """Login to all XTS sessions and initialize Zerodha."""

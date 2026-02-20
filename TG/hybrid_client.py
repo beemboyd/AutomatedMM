@@ -217,15 +217,25 @@ class HybridClient:
             return False
 
     def refresh_session(self) -> bool:
-        """Force a fresh XTS login and save the new session token."""
+        """Refresh XTS session, checking shared file first.
+
+        Another bot sharing the same account may have already refreshed.
+        Re-read the shared session file before doing a fresh login to
+        avoid invalidating another bot's active token (ping-pong).
+        """
         try:
+            # Step 1: Re-read shared file — another bot may have refreshed
+            if self._try_reuse_session():
+                logger.info("Picked up refreshed session from shared file")
+                return True
+            # Step 2: Shared file also invalid — we do the login
             resp = self.xt.interactive_login()
             if isinstance(resp, str) or resp.get('type') == 'error':
                 logger.error("XTS session refresh failed: %s", resp)
                 return False
             self.client_id = resp['result']['userID']
             self._save_session(resp['result']['token'], self.client_id)
-            logger.info("XTS session refreshed: userID=%s", self.client_id)
+            logger.info("XTS session refreshed (fresh login): userID=%s", self.client_id)
             return True
         except Exception as e:
             logger.error("XTS session refresh error: %s", e)

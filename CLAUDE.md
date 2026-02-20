@@ -49,6 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Testing**: Use mock_kiteconnect for testing instead of real API connections
 
 ## System Changes & Fixes
+- **2026-02-20**: Shared XTS session for 01MU07 across TG Grid, TG1, and AMM bots. All three share `TG/state/.xts_session_01MU07.json` — first bot to start does login and saves token, others reuse it. `refresh_session()` in all three clients now re-reads the shared file before calling `interactive_login()` to prevent session ping-pong. Files: `TG/AMM/client.py`, `TG1/findoc_client.py`, `TG/hybrid_client.py`.
 - **2026-02-20**: Fixed depth cascading bug in TG Grid engine — cascading was spawning D2→D3→D4... even on complete entry fills (100 qty filling in one shot), causing groups to never close. Fix: only cascade from D1 when entry was partial (`ENTRY_PARTIAL` status) or already in a sub-chain (depth > 1). Complete entries now close cycle normally on D1 fill. File: `TG/engine.py`.
 - **2026-02-20**: Added depth level display to Grid dashboard (7777). Expanded rows now show each target order with depth tag (D101, D201, D301...), close/re-entry labels in green/yellow, and fill status. Main row shows depth indicator (e.g. "D5") for groups with sub-chains. Added `ENTRY_PARTIAL` status badge. File: `TG/dashboard.py`.
 - **2026-02-20**: TollGate `max_sub_depth` changed from 10 to 100 for extended ping-pong cascading on partial fills. Files: `TG/TollGate/config.py`, `TG/TollGate/state/tollgate_config.json`.

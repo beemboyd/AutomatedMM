@@ -13,7 +13,7 @@ WebSocket design:
   - Fallback: if WebSocket data is stale (>30s), falls back to XTS REST get_quote().
   - Uses _instrument_id_to_symbol dict for reverse mapping in touchline events.
 
-Session file: TG/AMM/state/.xts_session.json
+Session file: TG/state/.xts_session_01MU07.json (shared with TG Grid and TG1)
 """
 
 import sys
@@ -63,8 +63,8 @@ _EXCHANGE_SEGMENT_NUM = {
 
 _PRODUCT_MAP = {'CNC': 'CNC', 'NRML': 'NRML', 'MIS': 'MIS'}
 
-_STATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'state')
-_SESSION_FILE = os.path.join(_STATE_DIR, '.xts_session.json')
+_STATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'state')
+_SESSION_FILE = os.path.join(_STATE_DIR, '.xts_session_01MU07.json')
 _SESSION_MAX_AGE = 8 * 3600
 
 _MARKET_DATA_STALE_SECONDS = 30
@@ -573,15 +573,25 @@ class AMMClient:
             logger.warning("Failed to save XTS session: %s", e)
 
     def refresh_session(self) -> bool:
-        """Force a fresh XTS Interactive login and save the new session token."""
+        """Refresh XTS Interactive session, checking shared file first.
+
+        Another bot sharing the same account may have already refreshed.
+        Re-read the shared session file before doing a fresh login to
+        avoid invalidating another bot's active token (ping-pong).
+        """
         try:
+            # Step 1: Re-read shared file — another bot may have refreshed
+            if self._try_reuse_session():
+                logger.info("Picked up refreshed session from shared file")
+                return True
+            # Step 2: Shared file also invalid — we do the login
             resp = self.xt.interactive_login()
             if isinstance(resp, str) or resp.get('type') == 'error':
                 logger.error("XTS session refresh failed: %s", resp)
                 return False
             self.client_id = resp['result']['userID']
             self._save_session(resp['result']['token'], self.client_id)
-            logger.info("XTS session refreshed: userID=%s", self.client_id)
+            logger.info("XTS session refreshed (fresh login): userID=%s", self.client_id)
             return True
         except Exception as e:
             logger.error("XTS session refresh error: %s", e)

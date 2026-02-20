@@ -1,5 +1,21 @@
 # Activity Log
 
+## 2026-02-20 16:00 IST - Claude
+**Shared XTS Session for 01MU07 across TG, TG1, AMM**
+
+Three bots (TG Grid, TG1 OCO Grid, AMM stat-arb) can run simultaneously on XTS account 01MU07. XTS allows only ONE active interactive session per API key. Previously, if multiple bots called `interactive_login()`, the second would invalidate the first's token (session ping-pong). Now all three share a single session file (`TG/state/.xts_session_01MU07.json`). When any bot needs to refresh, it first re-reads the shared file — if another bot already refreshed, it picks up that token without doing a fresh login.
+
+### Modified Files
+1. **`TG/AMM/client.py`** — Changed `_SESSION_FILE` from `TG/AMM/state/.xts_session.json` to `TG/state/.xts_session_01MU07.json`. Added check-before-login pattern to `refresh_session()`: re-reads shared file before calling `interactive_login()`.
+2. **`TG1/findoc_client.py`** — Added session file support to `_XTSSession` class: `_try_reuse_session()`, `_save_session()`, `refresh_session()` methods. Modified `login()` to try reuse from shared file first. `FindocMultiClient` passes shared session file paths based on API key mapping (`_API_KEY_TO_ACCOUNT` dict). Unknown API keys gracefully fall back to no session file (fresh login only).
+3. **`TG/hybrid_client.py`** — Added check-before-login to `refresh_session()`: re-reads shared session file before calling `interactive_login()`. Already had `_try_reuse_session()` and `_save_session()` from multi-account support.
+
+### Impact
+- No bot should ever invalidate another bot's active session on the same account
+- First bot to start does the login and saves the token; subsequent bots reuse it
+- Session refresh (30-min proactive or error-triggered) checks shared file first
+- Backward compatible: unknown API keys (not in the mapping) work as before with no session file
+
 ## 2026-02-20 11:30 IST - Claude
 **Multi-Account Support for TG Grid Bot (01MU06 + 01MU07)**
 
