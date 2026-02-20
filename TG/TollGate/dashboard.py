@@ -38,6 +38,8 @@ _DEFAULT_CONFIG = {
     "levels_per_side": 10,
     "qty_per_level": 4000,
     "amount_per_level": 0,
+    "buy_amount_per_level": 0,
+    "sell_amount_per_level": 0,
     "disclosed_pct": 0,
     "max_reanchors": 100,
     "max_sub_depth": 5,
@@ -153,6 +155,10 @@ def _start_bot(config: dict) -> bool:
 
     if config.get('amount_per_level', 0) > 0:
         cmd.extend(['--amount', str(config['amount_per_level'])])
+    if config.get('buy_amount_per_level', 0) > 0:
+        cmd.extend(['--buy-amount', str(config['buy_amount_per_level'])])
+    if config.get('sell_amount_per_level', 0) > 0:
+        cmd.extend(['--sell-amount', str(config['sell_amount_per_level'])])
     if config.get('disclosed_pct', 0) > 0:
         cmd.extend(['--disclosed-pct', str(config['disclosed_pct'])])
 
@@ -998,6 +1004,16 @@ def _build_config_html() -> str:
             <div class="field-hint">If > 0, overrides Qty. qty = round(amount/price)</div>
         </div>
         <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">Buy Amt/Level</label>
+            <input id="cfg-buy-amount" type="number" step="1000">
+            <div class="field-hint">Buy side override (0 = use Amount above)</div>
+        </div>
+        <div>
+            <label class="block text-xs mb-1" style="color:var(--dim);">Sell Amt/Level</label>
+            <input id="cfg-sell-amount" type="number" step="1000">
+            <div class="field-hint">Sell side override (0 = use Amount above)</div>
+        </div>
+        <div>
             <label class="block text-xs mb-1" style="color:var(--dim);">Disclosed Pct</label>
             <input id="cfg-disclosed" type="number" step="5" min="0" max="100">
             <div class="field-hint">0 = show full qty, e.g. 25 = show 25%</div>
@@ -1088,6 +1104,8 @@ function loadConfig() {
             document.getElementById('cfg-levels').value = cfg.levels_per_side || 10;
             document.getElementById('cfg-qty').value = cfg.qty_per_level || 4000;
             document.getElementById('cfg-amount').value = cfg.amount_per_level || 0;
+            document.getElementById('cfg-buy-amount').value = cfg.buy_amount_per_level || 0;
+            document.getElementById('cfg-sell-amount').value = cfg.sell_amount_per_level || 0;
             document.getElementById('cfg-disclosed').value = cfg.disclosed_pct || 0;
             document.getElementById('cfg-max-reanchors').value = cfg.max_reanchors || 100;
             document.getElementById('cfg-max-sub-depth').value = cfg.max_sub_depth || 5;
@@ -1112,6 +1130,8 @@ function saveConfig() {
         levels_per_side: parseInt(document.getElementById('cfg-levels').value),
         qty_per_level: parseInt(document.getElementById('cfg-qty').value),
         amount_per_level: parseFloat(document.getElementById('cfg-amount').value),
+        buy_amount_per_level: parseFloat(document.getElementById('cfg-buy-amount').value),
+        sell_amount_per_level: parseFloat(document.getElementById('cfg-sell-amount').value),
         disclosed_pct: parseFloat(document.getElementById('cfg-disclosed').value),
         max_reanchors: parseInt(document.getElementById('cfg-max-reanchors').value),
         max_sub_depth: parseInt(document.getElementById('cfg-max-sub-depth').value),

@@ -53,6 +53,8 @@ class TollGateConfig:
 
     # Amount-based sizing (overrides qty_per_level when > 0)
     amount_per_level: float = 0.0       # If > 0, qty = round(amount / entry_price)
+    buy_amount_per_level: float = 0.0   # Buy side override (0 = use amount_per_level)
+    sell_amount_per_level: float = 0.0  # Sell side override (0 = use amount_per_level)
     disclosed_pct: float = 0.0          # If > 0, disclosed qty = round(qty * pct / 100)
 
     # Sub-target cascading for partial fills
@@ -100,11 +102,17 @@ class TollGateConfig:
             sell_entry = round(self.anchor_price + distance, 2)
             sell_target = round(sell_entry - self.round_trip_profit, 2)
 
-            if self.amount_per_level > 0:
-                buy_qty = max(1, round(self.amount_per_level / buy_entry)) if buy_entry > 0 else self.qty_per_level
-                sell_qty = max(1, round(self.amount_per_level / sell_entry)) if sell_entry > 0 else self.qty_per_level
+            buy_amt = self.buy_amount_per_level or self.amount_per_level
+            sell_amt = self.sell_amount_per_level or self.amount_per_level
+
+            if buy_amt > 0:
+                buy_qty = max(1, round(buy_amt / buy_entry)) if buy_entry > 0 else self.qty_per_level
             else:
                 buy_qty = self.qty_per_level
+
+            if sell_amt > 0:
+                sell_qty = max(1, round(sell_amt / sell_entry)) if sell_entry > 0 else self.qty_per_level
+            else:
                 sell_qty = self.qty_per_level
 
             buy_levels.append(GridLevel(
@@ -135,7 +143,10 @@ class TollGateConfig:
         print(f"  Round-Trip Profit: {self.round_trip_profit} ({self.round_trip_profit*100:.0f} paisa)")
         print(f"  Current Spacing  : {space} ({space*100:.0f} paisa)")
         print(f"  Levels Per Side  : {self.levels_per_side}")
-        if self.amount_per_level > 0:
+        if self.buy_amount_per_level > 0 or self.sell_amount_per_level > 0:
+            print(f"  Buy Amt/Level    : {self.buy_amount_per_level or self.amount_per_level:.0f}")
+            print(f"  Sell Amt/Level   : {self.sell_amount_per_level or self.amount_per_level:.0f}")
+        elif self.amount_per_level > 0:
             print(f"  Amount Per Level : {self.amount_per_level:.0f} (qty varies by price)")
         else:
             print(f"  Qty Per Level    : {self.qty_per_level}")

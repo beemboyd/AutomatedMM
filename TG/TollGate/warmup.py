@@ -344,6 +344,8 @@ def start_engine(config: dict, dry_run: bool = False) -> int:
         '--profit', str(config.get('round_trip_profit', 0.01)),
         '--levels', str(config.get('levels_per_side', 10)),
         '--qty', str(config.get('qty_per_level', 4000)),
+        '--buy-amount', str(config.get('buy_amount_per_level', 0)),
+        '--sell-amount', str(config.get('sell_amount_per_level', 0)),
         '--product', config.get('product', 'CNC'),
         '--poll-interval', str(config.get('poll_interval', 2.0)),
         '--max-reanchors', str(config.get('max_reanchors', 100)),

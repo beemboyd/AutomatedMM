@@ -1,5 +1,17 @@
 # Activity Log
 
+## 2026-02-20 09:00 IST - Claude
+**TollGate: Add per-side amount configuration (buy_amount_per_level / sell_amount_per_level)**
+
+Added separate buy/sell amount-per-level overrides to TollGate. When set, they override the uniform `amount_per_level` for their respective side. Configured: Buy Bot (A) = Rs.45,000/level, Sell Bot (B) = Rs.35,000/level.
+
+### Modified Files
+1. **`TG/TollGate/config.py`** — Added `buy_amount_per_level` and `sell_amount_per_level` fields. Updated `compute_levels()` priority: per-side amount > uniform amount > qty_per_level. Updated `print_grid_layout()`.
+2. **`TG/TollGate/run.py`** — Added `--buy-amount` and `--sell-amount` CLI args.
+3. **`TG/TollGate/dashboard.py`** — Added default config fields, start command args, HTML inputs, JS load/save for buy/sell amounts.
+4. **`TG/TollGate/warmup.py`** — Passes `--buy-amount` and `--sell-amount` to start command.
+5. **`TG/TollGate/state/tollgate_config.json`** — Set `buy_amount_per_level: 45000`, `sell_amount_per_level: 35000`.
+
 ## 2026-02-20 01:00 IST - Claude
 **TG Grid Bot: Convert hedge_ratio from integer multiplier to percentage**
 

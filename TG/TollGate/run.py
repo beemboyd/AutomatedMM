@@ -43,6 +43,8 @@ def main():
     parser.add_argument('--max-reanchors', type=int, help='Max reanchors before stopping')
     parser.add_argument('--max-sub-depth', type=int, help='Max sub-target depth for partial fills (default: 5)')
     parser.add_argument('--amount', type=float, help='Fixed amount per level (overrides --qty)')
+    parser.add_argument('--buy-amount', type=float, help='Buy side amount per level (overrides --amount for buys)')
+    parser.add_argument('--sell-amount', type=float, help='Sell side amount per level (overrides --amount for sells)')
     parser.add_argument('--disclosed-pct', type=float, help='Disclosed qty percentage for iceberging (0-100)')
 
     # Credentials
@@ -122,6 +124,10 @@ def main():
         config.max_sub_depth = args.max_sub_depth
     if args.amount is not None:
         config.amount_per_level = args.amount
+    if args.buy_amount is not None:
+        config.buy_amount_per_level = args.buy_amount
+    if args.sell_amount is not None:
+        config.sell_amount_per_level = args.sell_amount
     if args.disclosed_pct is not None:
         config.disclosed_pct = args.disclosed_pct
     if args.interactive_key:
