@@ -322,19 +322,30 @@ class GridEngine:
                 depth = target.get('depth', 1)
                 is_closing = (depth % 2 == 1)
 
-                if increment > 0 and self.config.has_pair and is_closing:
-                    if is_complete:
-                        # Final fill: unwind to target ratio (%)
-                        target_unwind = round(filled_qty * self.config.hedge_ratio / 100)
-                        remaining = target_unwind - group.pair_unwound_qty
-                        if remaining > 0:
-                            bot.place_pair_unwind(group, remaining)
+                if increment > 0 and self.config.has_pair:
+                    if is_closing:
+                        # Odd depth (D1, D3, D5...): closing/selling → UNWIND hedge
+                        if is_complete:
+                            target_unwind = round(filled_qty * self.config.hedge_ratio / 100)
+                            remaining = target_unwind - group.pair_unwound_qty
+                            if remaining > 0:
+                                bot.place_pair_unwind(group, remaining)
+                        else:
+                            if self.config.partial_hedge_ratio > 0:
+                                pair_qty = round(increment * self.config.partial_hedge_ratio / 100)
+                                if pair_qty > 0:
+                                    bot.place_pair_unwind(group, pair_qty)
                     else:
-                        # Partial: unwind at partial ratio (%)
-                        if self.config.partial_hedge_ratio > 0:
-                            pair_qty = round(increment * self.config.partial_hedge_ratio / 100)
-                            if pair_qty > 0:
-                                bot.place_pair_unwind(group, pair_qty)
+                        # Even depth (D2, D4, D6...): re-entry/buying → RE-HEDGE
+                        if is_complete:
+                            target_hedge = round(filled_qty * self.config.hedge_ratio / 100)
+                            if target_hedge > 0:
+                                bot.place_pair_hedge(group, target_hedge)
+                        else:
+                            if self.config.partial_hedge_ratio > 0:
+                                pair_qty = round(increment * self.config.partial_hedge_ratio / 100)
+                                if pair_qty > 0:
+                                    bot.place_pair_hedge(group, pair_qty)
 
                 # Delegate to engine fill handler
                 return self._on_target_fill(group, target, order_id, fill_price, filled_qty, is_complete)
