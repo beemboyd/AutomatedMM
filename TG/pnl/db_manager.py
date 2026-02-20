@@ -83,17 +83,19 @@ class PnLDBManager:
 
     # ── Write Methods ──
 
-    def create_session(self, bot_type: str, config_snapshot: Optional[dict] = None) -> int:
+    def create_session(self, bot_type: str, config_snapshot: Optional[dict] = None,
+                       account_id: str = '') -> int:
         """Create a new session row. Returns session_id."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO tg_sessions (bot_type, config_snapshot)
-                VALUES (%s, %s)
+                INSERT INTO tg_sessions (bot_type, config_snapshot, account_id)
+                VALUES (%s, %s, %s)
                 RETURNING session_id
-            """, (bot_type, json.dumps(config_snapshot) if config_snapshot else None))
+            """, (bot_type, json.dumps(config_snapshot) if config_snapshot else None,
+                  account_id))
             session_id = cursor.fetchone()[0]
-            logger.info("Created session %d for %s", session_id, bot_type)
+            logger.info("Created session %d for %s (account=%s)", session_id, bot_type, account_id)
             return session_id
 
     def end_session(self, session_id: int, total_pnl: float = 0,
@@ -287,13 +289,20 @@ class PnLDBManager:
             """, (days,))
             return [dict(r) for r in cursor.fetchall()]
 
-    def get_daily_summary_grid(self, days: int = 90) -> dict:
-        """Day-by-day summary for 01MU06 (TG Grid): primaries per ticker + hedge summary."""
+    def get_daily_summary_grid(self, days: int = 90, account_id: Optional[str] = None) -> dict:
+        """Day-by-day summary for TG Grid: primaries per ticker + hedge summary.
+        Optionally filter by account_id (e.g. '01MU06', '01MU07')."""
+        acct_filter = "AND s.account_id = %s" if account_id else ""
         with self.get_connection() as conn:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
             # Primaries: per (day, ticker) with SOD/EOD inventory
-            cursor.execute("""
+            # account_id params appear in CTEs before the days param in final WHERE
+            params_primary = []
+            if account_id:
+                params_primary.extend([account_id, account_id])  # daily_net + daily_cycles CTEs
+            params_primary.append(days)
+            cursor.execute(f"""
                 WITH daily_net AS (
                     SELECT
                         t.ts::date AS day,
@@ -313,6 +322,7 @@ class PnLDBManager:
                     JOIN tg_sessions s ON t.session_id = s.session_id
                     WHERE s.bot_type = 'tg_grid'
                       AND t.txn_type IN ('ENTRY', 'TARGET')
+                      {acct_filter}
                     GROUP BY t.ts::date, t.ticker
                 ),
                 daily_inventory AS (
@@ -334,6 +344,7 @@ class PnLDBManager:
                     JOIN tg_sessions s ON c.session_id = s.session_id
                     JOIN tg_pairs p ON c.pair_id = p.pair_id
                     WHERE c.status = 'closed' AND s.bot_type = 'tg_grid'
+                      {acct_filter}
                     GROUP BY c.closed_at::date, p.primary_ticker
                 )
                 SELECT
@@ -350,11 +361,16 @@ class PnLDBManager:
                 LEFT JOIN daily_cycles dc ON di.day = dc.day AND di.ticker = dc.ticker
                 WHERE di.day >= CURRENT_DATE - make_interval(days => %s)
                 ORDER BY di.day DESC, di.ticker
-            """, (days,))
+            """, params_primary)
             primaries = [dict(r) for r in cursor.fetchall()]
 
             # Hedges: per day from PAIR_HEDGE/PAIR_UNWIND transactions
-            cursor.execute("""
+            # account_id params appear in CTEs before the days param in final WHERE
+            params_hedge = []
+            if account_id:
+                params_hedge.extend([account_id, account_id])  # hedge_txns + hedge_cost CTEs
+            params_hedge.append(days)
+            cursor.execute(f"""
                 WITH hedge_txns AS (
                     SELECT
                         t.ts::date AS day,
@@ -366,6 +382,7 @@ class PnLDBManager:
                     JOIN tg_sessions s ON t.session_id = s.session_id
                     WHERE s.bot_type = 'tg_grid'
                       AND t.txn_type IN ('PAIR_HEDGE', 'PAIR_UNWIND')
+                      {acct_filter}
                     GROUP BY t.ts::date
                 ),
                 hedge_cost AS (
@@ -375,6 +392,7 @@ class PnLDBManager:
                     FROM tg_cycles c
                     JOIN tg_sessions s ON c.session_id = s.session_id
                     WHERE c.status = 'closed' AND s.bot_type = 'tg_grid'
+                      {acct_filter}
                     GROUP BY c.closed_at::date
                 )
                 SELECT
@@ -386,7 +404,7 @@ class PnLDBManager:
                 LEFT JOIN hedge_cost hc ON ht.day = hc.day
                 WHERE ht.day >= CURRENT_DATE - make_interval(days => %s)
                 ORDER BY ht.day DESC
-            """, (days,))
+            """, params_hedge)
             hedges = [dict(r) for r in cursor.fetchall()]
 
             return {'primaries': primaries, 'hedges': hedges}
@@ -780,25 +798,37 @@ class PnLDBManager:
             return cycle_stats
 
     def get_active_session(self, bot_type: str,
-                           primary_ticker: Optional[str] = None) -> Optional[dict]:
+                           primary_ticker: Optional[str] = None,
+                           account_id: Optional[str] = None) -> Optional[dict]:
         """Find the last active session for a bot type (for restoration)."""
         with self.get_connection() as conn:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             if primary_ticker:
-                cursor.execute("""
+                acct_filter = "AND s.account_id = %s" if account_id else ""
+                params = [primary_ticker, bot_type]
+                if account_id:
+                    params.append(account_id)
+                cursor.execute(f"""
                     SELECT s.*, p.pair_id, p.primary_ticker
                     FROM tg_sessions s
                     LEFT JOIN tg_pairs p ON s.session_id = p.session_id
                         AND p.primary_ticker = %s
-                    WHERE s.bot_type = %s AND s.status = 'active'
+                    WHERE s.bot_type = %s AND s.status = 'active' {acct_filter}
                     ORDER BY s.started_at DESC LIMIT 1
-                """, (primary_ticker, bot_type))
+                """, params)
             else:
-                cursor.execute("""
-                    SELECT * FROM tg_sessions
-                    WHERE bot_type = %s AND status = 'active'
-                    ORDER BY started_at DESC LIMIT 1
-                """, (bot_type,))
+                if account_id:
+                    cursor.execute("""
+                        SELECT * FROM tg_sessions
+                        WHERE bot_type = %s AND status = 'active' AND account_id = %s
+                        ORDER BY started_at DESC LIMIT 1
+                    """, (bot_type, account_id))
+                else:
+                    cursor.execute("""
+                        SELECT * FROM tg_sessions
+                        WHERE bot_type = %s AND status = 'active'
+                        ORDER BY started_at DESC LIMIT 1
+                    """, (bot_type,))
             row = cursor.fetchone()
             return dict(row) if row else None
 

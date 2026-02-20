@@ -113,10 +113,14 @@ class HybridClient:
     def __init__(self, interactive_key: str, interactive_secret: str,
                  zerodha_user: str = "Sai",
                  root_url: str = 'https://xts.myfindoc.com',
-                 source: str = 'WEBAPI'):
+                 source: str = 'WEBAPI',
+                 account_id: str = ''):
         self.root_url = root_url
         self.source = source
         self.zerodha_user = zerodha_user
+        # Per-account session file
+        suffix = f"_{account_id}" if account_id else ""
+        self._session_file = os.path.join(_SESSION_DIR, f'.xts_session{suffix}.json')
 
         # XTS Interactive instance (trading only)
         self.xt = XTSConnect(
@@ -177,10 +181,10 @@ class HybridClient:
     def _try_reuse_session(self) -> bool:
         """Try to reuse an existing XTS session from shared file."""
         try:
-            if not os.path.exists(_SESSION_FILE):
+            if not os.path.exists(self._session_file):
                 return False
 
-            with open(_SESSION_FILE) as f:
+            with open(self._session_file) as f:
                 session = json.load(f)
 
             # Check age
@@ -237,11 +241,11 @@ class HybridClient:
                 'isInvestorClient': getattr(self.xt, 'isInvestorClient', True),
                 'timestamp': time.time(),
             }
-            tmp = _SESSION_FILE + '.tmp'
+            tmp = self._session_file + '.tmp'
             with open(tmp, 'w') as f:
                 json.dump(session, f)
-            os.replace(tmp, _SESSION_FILE)
-            logger.info("XTS session saved to %s", _SESSION_FILE)
+            os.replace(tmp, self._session_file)
+            logger.info("XTS session saved to %s", self._session_file)
         except Exception as e:
             logger.warning("Failed to save XTS session: %s", e)
 

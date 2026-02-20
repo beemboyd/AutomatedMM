@@ -91,6 +91,9 @@ class GridConfig:
     # Disclosed quantity (iceberg orders)
     disclosed_pct: float = 0.0      # If > 0, disclosed qty = round(qty * pct / 100)
 
+    # Account identifier (for multi-account state isolation)
+    account_id: str = ""            # XTS account ID, e.g. "01MU06"
+
     # Sub-target cascading for partial fills
     max_sub_depth: int = 10         # Max depth for sub-target ping-pong (D1, D2, D3, ...)
 
@@ -152,6 +155,7 @@ class GridConfig:
         interactive_secret = overrides.pop('interactive_secret', '')
         zerodha_user = overrides.pop('zerodha_user', 'Sai')
         xts_root = overrides.pop('xts_root', _DEFAULT_XTS_ROOT)
+        account_id = overrides.pop('account_id', '')
 
         if not interactive_key or not interactive_secret:
             raise ValueError("Missing XTS Interactive credentials "
@@ -164,6 +168,7 @@ class GridConfig:
             interactive_secret=interactive_secret,
             zerodha_user=zerodha_user,
             xts_root=xts_root,
+            account_id=account_id,
             **overrides,
         )
 

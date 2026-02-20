@@ -94,15 +94,21 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _load_config() -> dict:
-    """Load config from JSON file, or return defaults."""
+    """Load config from JSON file, auto-migrate old flat format to accounts structure."""
     os.makedirs(STATE_DIR, exist_ok=True)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE) as f:
-                return json.load(f)
+                cfg = json.load(f)
+            # Backward compat: old flat format -> accounts structure
+            if 'accounts' not in cfg and 'primaries' in cfg:
+                logger.info("Migrating flat config to multi-account structure")
+                cfg = {'accounts': {'01MU06': cfg}}
+                _save_config(cfg)
+            return cfg
         except Exception as e:
             logger.error("Failed to load config: %s", e)
-    return _DEFAULT_CONFIG.copy()
+    return {'accounts': {'01MU06': _DEFAULT_CONFIG.copy()}}
 
 
 def _save_config(config: dict):
@@ -115,66 +121,75 @@ def _save_config(config: dict):
     logger.info("Config saved to %s", CONFIG_FILE)
 
 
-def _load_state(symbol: str) -> dict:
-    """Load the latest state JSON for a symbol."""
-    path = os.path.join(STATE_DIR, f'{symbol}_grid_state.json')
+def _load_state(symbol: str, account_id: str = '') -> dict:
+    """Load the latest state JSON for an account/symbol."""
+    prefix = f"{account_id}_" if account_id else ""
+    path = os.path.join(STATE_DIR, f'{prefix}{symbol}_grid_state.json')
     if not os.path.exists(path):
         return {}
     try:
         with open(path) as f:
             return json.load(f)
     except Exception as e:
-        logger.error("Failed to load state for %s: %s", symbol, e)
+        logger.error("Failed to load state for %s/%s: %s", account_id, symbol, e)
         return {}
 
 
-def _get_primary_config(config: dict, symbol: str) -> Optional[dict]:
-    """Find primary config by symbol."""
-    for p in config.get('primaries', []):
+def _get_primary_config(account_config: dict, symbol: str) -> Optional[dict]:
+    """Find primary config by symbol within an account config."""
+    for p in account_config.get('primaries', []):
         if p.get('symbol') == symbol:
             return p
     return None
 
 
-def _is_bot_running(symbol: str) -> bool:
-    """Check if a bot process is running for a symbol (via shared PID file)."""
+def _bot_pid_key(account_id: str, symbol: str) -> str:
+    """Build PID key for account:symbol pair."""
+    return f"{account_id}:{symbol}" if account_id else symbol
+
+
+def _is_bot_running(symbol: str, account_id: str = '') -> bool:
+    """Check if a bot process is running for an account/symbol (via shared PID file)."""
     pids = _load_bot_pids()
-    pid = pids.get(symbol)
+    key = _bot_pid_key(account_id, symbol)
+    pid = pids.get(key)
     if pid is None:
         return False
     if _pid_alive(pid):
         return True
     # Stale PID — clean it up
-    pids.pop(symbol, None)
+    pids.pop(key, None)
     _save_bot_pids(pids)
     return False
 
 
-def _get_bot_pid(symbol: str) -> Optional[int]:
+def _get_bot_pid(symbol: str, account_id: str = '') -> Optional[int]:
     """Get the PID for a running bot, or None."""
     pids = _load_bot_pids()
-    pid = pids.get(symbol)
+    key = _bot_pid_key(account_id, symbol)
+    pid = pids.get(key)
     if pid and _pid_alive(pid):
         return pid
     return None
 
 
-def _start_bot(symbol: str, config: dict) -> bool:
-    """Launch TG.run as subprocess for a primary symbol."""
-    if _is_bot_running(symbol):
-        pid = _get_bot_pid(symbol)
-        logger.warning("Bot for %s is already running (PID=%s)", symbol, pid)
+def _start_bot(symbol: str, account_config: dict, account_id: str = '') -> bool:
+    """Launch TG.run as subprocess for a primary symbol on a specific account."""
+    if _is_bot_running(symbol, account_id):
+        pid = _get_bot_pid(symbol, account_id)
+        logger.warning("Bot for %s/%s is already running (PID=%s)", account_id, symbol, pid)
         return False
 
-    primary = _get_primary_config(config, symbol)
+    primary = _get_primary_config(account_config, symbol)
     if not primary:
-        logger.error("No config found for primary %s", symbol)
+        logger.error("No config found for primary %s in account %s", symbol, account_id)
         return False
 
     cmd = [
         sys.executable, '-m', 'TG.run',
         '--symbol', symbol,
-        '--pair-symbol', config.get('secondary_symbol', ''),
+        '--account', account_id,
+        '--pair-symbol', account_config.get('secondary_symbol', ''),
         '--hedge-ratio', str(primary.get('hedge_ratio', 0)),
         '--partial-hedge-ratio', str(primary.get('partial_hedge_ratio', 0)),
         '--grid-space', str(primary.get('grid_space', 0.01)),
@@ -183,10 +198,10 @@ def _start_bot(symbol: str, config: dict) -> bool:
         '--qty-per-level', str(primary.get('qty_per_level', 100)),
         '--holdings', str(primary.get('holdings_override', -1)),
         '--product', primary.get('product', 'NRML'),
-        '--interactive-key', config.get('xts_interactive_key', ''),
-        '--interactive-secret', config.get('xts_interactive_secret', ''),
-        '--user', config.get('zerodha_user', 'Sai'),
-        '--xts-root', config.get('xts_root', 'https://xts.myfindoc.com'),
+        '--interactive-key', account_config.get('xts_interactive_key', ''),
+        '--interactive-secret', account_config.get('xts_interactive_secret', ''),
+        '--user', account_config.get('zerodha_user', 'Sai'),
+        '--xts-root', account_config.get('xts_root', 'https://xts.myfindoc.com'),
         '--poll-interval', str(primary.get('poll_interval', 2.0)),
         '--reanchor-epoch', str(primary.get('reanchor_epoch', 100)),
         '--max-grid-levels', str(primary.get('max_grid_levels', 2000)),
@@ -205,7 +220,8 @@ def _start_bot(symbol: str, config: dict) -> bool:
 
     log_dir = os.path.join(os.path.dirname(__file__), 'logs')
     os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f'{symbol}_bot.log')
+    log_prefix = f"{account_id}_{symbol}" if account_id else symbol
+    log_file = os.path.join(log_dir, f'{log_prefix}_bot.log')
 
     with open(log_file, 'a') as lf:
         proc = subprocess.Popen(
@@ -213,24 +229,26 @@ def _start_bot(symbol: str, config: dict) -> bool:
             stdout=lf, stderr=subprocess.STDOUT,
         )
 
-    # Record PID in shared file
+    # Record PID in shared file with account:symbol key
+    key = _bot_pid_key(account_id, symbol)
     pids = _load_bot_pids()
-    pids[symbol] = proc.pid
+    pids[key] = proc.pid
     _save_bot_pids(pids)
 
-    logger.info("Started bot for %s: PID=%d, cmd=%s", symbol, proc.pid, ' '.join(cmd))
+    logger.info("Started bot for %s/%s: PID=%d, cmd=%s", account_id, symbol, proc.pid, ' '.join(cmd))
     return True
 
 
-def _stop_bot(symbol: str) -> bool:
+def _stop_bot(symbol: str, account_id: str = '') -> bool:
     """Stop a running bot process via shared PID file."""
     pids = _load_bot_pids()
-    pid = pids.get(symbol)
+    key = _bot_pid_key(account_id, symbol)
+    pid = pids.get(key)
     if pid is None:
         return False
     if not _pid_alive(pid):
         # Already dead, clean up
-        pids.pop(symbol, None)
+        pids.pop(key, None)
         _save_bot_pids(pids)
         return False
     try:
@@ -243,14 +261,14 @@ def _stop_bot(symbol: str) -> bool:
         else:
             # Force kill if still alive
             os.kill(pid, signal.SIGKILL)
-            logger.warning("Force-killed bot for %s (PID=%d)", symbol, pid)
-        logger.info("Stopped bot for %s (PID=%d)", symbol, pid)
+            logger.warning("Force-killed bot for %s/%s (PID=%d)", account_id, symbol, pid)
+        logger.info("Stopped bot for %s/%s (PID=%d)", account_id, symbol, pid)
     except ProcessLookupError:
         pass
     except Exception as e:
-        logger.error("Error stopping bot %s (PID=%d): %s", symbol, pid, e)
+        logger.error("Error stopping bot %s/%s (PID=%d): %s", account_id, symbol, pid, e)
 
-    pids.pop(symbol, None)
+    pids.pop(key, None)
     _save_bot_pids(pids)
     return True
 
@@ -352,18 +370,21 @@ def create_app(mode: str = 'monitor') -> Flask:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/bot/start/<symbol>', methods=['POST'])
-    def api_start_bot(symbol):
+    @app.route('/api/bot/start/<account_id>/<symbol>', methods=['POST'])
+    def api_start_bot(account_id, symbol):
         config = _load_config()
-        if _start_bot(symbol, config):
-            return jsonify({'status': 'started', 'symbol': symbol})
-        return jsonify({'error': f'Failed to start {symbol}'}), 400
+        account_config = config.get('accounts', {}).get(account_id)
+        if not account_config:
+            return jsonify({'error': f'Unknown account {account_id}'}), 400
+        if _start_bot(symbol, account_config, account_id):
+            return jsonify({'status': 'started', 'account_id': account_id, 'symbol': symbol})
+        return jsonify({'error': f'Failed to start {account_id}/{symbol}'}), 400
 
-    @app.route('/api/bot/stop/<symbol>', methods=['POST'])
-    def api_stop_bot(symbol):
-        if _stop_bot(symbol):
-            return jsonify({'status': 'stopped', 'symbol': symbol})
-        return jsonify({'error': f'{symbol} not running'}), 400
+    @app.route('/api/bot/stop/<account_id>/<symbol>', methods=['POST'])
+    def api_stop_bot(account_id, symbol):
+        if _stop_bot(symbol, account_id):
+            return jsonify({'status': 'stopped', 'account_id': account_id, 'symbol': symbol})
+        return jsonify({'error': f'{account_id}/{symbol} not running'}), 400
 
     @app.route('/api/bot/stop-all', methods=['POST'])
     def api_stop_all():
@@ -374,37 +395,40 @@ def create_app(mode: str = 'monitor') -> Flask:
     def api_state_all():
         config = _load_config()
         result = {}
-        for p in config.get('primaries', []):
-            sym = p['symbol']
-            state = _load_state(sym)
-            result[sym] = {
-                'state': state,
-                'summary': _compute_summary(state),
-                'running': _is_bot_running(sym),
-                'pid': _get_bot_pid(sym),
-                'config': {
-                    'grid_space': p.get('grid_space', 0.01),
-                    'target': p.get('target', 0.03),
-                    'levels_per_side': p.get('levels_per_side', 10),
-                    'qty_per_level': p.get('qty_per_level', 100),
-                    'hedge_ratio': p.get('hedge_ratio', 0),
-                    'partial_hedge_ratio': p.get('partial_hedge_ratio', 0),
-                    'product': p.get('product', 'NRML'),
-                    'reanchor_epoch': p.get('reanchor_epoch', 100),
-                    'max_grid_levels': p.get('max_grid_levels', 2000),
-                    'max_sub_depth': p.get('max_sub_depth', 10),
-                    'disclosed_pct': p.get('disclosed_pct', 0),
-                },
-            }
+        for acct_id, acct_cfg in config.get('accounts', {}).items():
+            acct_result = {}
+            for p in acct_cfg.get('primaries', []):
+                sym = p['symbol']
+                state = _load_state(sym, acct_id)
+                acct_result[sym] = {
+                    'state': state,
+                    'summary': _compute_summary(state),
+                    'running': _is_bot_running(sym, acct_id),
+                    'pid': _get_bot_pid(sym, acct_id),
+                    'config': {
+                        'grid_space': p.get('grid_space', 0.01),
+                        'target': p.get('target', 0.03),
+                        'levels_per_side': p.get('levels_per_side', 10),
+                        'qty_per_level': p.get('qty_per_level', 100),
+                        'hedge_ratio': p.get('hedge_ratio', 0),
+                        'partial_hedge_ratio': p.get('partial_hedge_ratio', 0),
+                        'product': p.get('product', 'NRML'),
+                        'reanchor_epoch': p.get('reanchor_epoch', 100),
+                        'max_grid_levels': p.get('max_grid_levels', 2000),
+                        'max_sub_depth': p.get('max_sub_depth', 10),
+                        'disclosed_pct': p.get('disclosed_pct', 0),
+                    },
+                }
+            result[acct_id] = acct_result
         return jsonify(result)
 
-    @app.route('/api/state/<symbol>')
-    def api_state_symbol(symbol):
-        state = _load_state(symbol)
+    @app.route('/api/state/<account_id>/<symbol>')
+    def api_state_symbol(account_id, symbol):
+        state = _load_state(symbol, account_id)
         return jsonify({
             'state': state,
             'summary': _compute_summary(state),
-            'running': _is_bot_running(symbol),
+            'running': _is_bot_running(symbol, account_id),
         })
 
     @app.route('/api/processes')
@@ -532,10 +556,15 @@ def _build_html() -> str:
         <h1 class="text-lg font-bold">TG GRID BOT MONITOR PANEL</h1>
         <span style="color:var(--dim);font-size:12px;" id="hdr-secondary">Secondary: —</span>
     </div>
-    <div class="text-right" style="font-size:12px;">
-        <span class="pulse pulse-green" id="status-pulse"></span>
-        <span id="status-text">Loading...</span><br>
-        <span style="color:var(--dim);" id="hdr-time">—</span>
+    <div class="flex items-center gap-3">
+        <select id="account-select" onchange="switchAccount(this.value)"
+            style="background:#0f1117;border:1px solid var(--border);color:var(--blue);padding:4px 10px;border-radius:4px;font-family:inherit;font-size:12px;font-weight:600;">
+        </select>
+        <div class="text-right" style="font-size:12px;">
+            <span class="pulse pulse-green" id="status-pulse"></span>
+            <span id="status-text">Loading...</span><br>
+            <span style="color:var(--dim);" id="hdr-time">—</span>
+        </div>
     </div>
 </div>
 
@@ -618,11 +647,14 @@ let pnlChart = null;
 let secondarySymbol = '';
 const expandedGridRows = new Set();
 let botStatuses = {};
-let allStatesCache = {};
+let allStatesCache = {};  // flat {symbol: data} for current account
+let allRawStatesCache = {};  // full nested {account_id: {symbol: data}}
 let activeTab = 'monitor';
 let knownPrimaries = [];
 let allCyclesCache = [];
 let allSecOrdersCache = [];
+let currentAccount = '';
+let knownAccounts = [];
 
 // --- Helpers ---
 function fmtPnl(v) {
@@ -1355,18 +1387,55 @@ function renderRoundTrips() {
     }
 }
 
+// --- Account switching ---
+function switchAccount(acctId) {
+    currentAccount = acctId;
+    const accounts = currentConfig.accounts || {};
+    const acctCfg = accounts[acctId] || {};
+    secondarySymbol = acctCfg.secondary_symbol || 'SPCENET';
+    document.getElementById('hdr-secondary').textContent = acctId + ' | Secondary: ' + secondarySymbol;
+    const primaries = (acctCfg.primaries || []).map(p => p.symbol).filter(Boolean);
+    buildTabs(primaries);
+    switchTab('monitor');
+    // Re-render with cached data
+    if (allRawStatesCache[acctId]) {
+        allStatesCache = allRawStatesCache[acctId];
+        updateMonitorFromCache();
+    }
+}
+
+function populateAccountDropdown(accounts) {
+    const sel = document.getElementById('account-select');
+    const ids = Object.keys(accounts);
+    if (JSON.stringify(ids) === JSON.stringify(knownAccounts)) return;
+    knownAccounts = ids;
+    sel.innerHTML = '';
+    ids.forEach(id => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = (accounts[id].label || id);
+        sel.appendChild(opt);
+    });
+    if (!currentAccount && ids.length > 0) {
+        currentAccount = ids[0];
+    }
+    sel.value = currentAccount;
+}
+
 // --- Config load ---
 function loadConfig() {
     fetch('/api/config')
         .then(r => r.json())
         .then(cfg => {
             currentConfig = cfg;
-            secondarySymbol = cfg.secondary_symbol || 'SPCENET';
-            document.getElementById('hdr-secondary').textContent = 'Secondary: ' + secondarySymbol;
-            const primaries = (cfg.primaries || []).map(p => p.symbol).filter(Boolean);
+            const accounts = cfg.accounts || {};
+            populateAccountDropdown(accounts);
+            const acctCfg = accounts[currentAccount] || {};
+            secondarySymbol = acctCfg.secondary_symbol || 'SPCENET';
+            document.getElementById('hdr-secondary').textContent = currentAccount + ' | Secondary: ' + secondarySymbol;
+            const primaries = (acctCfg.primaries || []).map(p => p.symbol).filter(Boolean);
             if (JSON.stringify(primaries) !== JSON.stringify(knownPrimaries)) {
                 buildTabs(primaries);
-                // Restore active tab
                 if (primaries.includes(activeTab)) switchTab(activeTab);
             }
         })
@@ -1390,13 +1459,15 @@ function updateStatusIndicator() {
         {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 }
 
-// --- Main update ---
-function updateMonitor() {
-    fetch('/api/state')
-        .then(r => r.json())
-        .then(allStates => {
-            allStatesCache = allStates;
-            let aggPrimary = 0, aggPair = 0, aggCycles = 0, aggOpen = 0;
+// --- Render from cache ---
+function updateMonitorFromCache() {
+    const allStates = allStatesCache;
+    if (!allStates || Object.keys(allStates).length === 0) return;
+    renderMonitorData(allStates);
+}
+
+function renderMonitorData(allStates) {
+    let aggPrimary = 0, aggPair = 0, aggCycles = 0, aggOpen = 0;
             const breakdownRows = [];
             let allClosed = [];
 
@@ -1512,6 +1583,17 @@ function updateMonitor() {
             }
 
             updateStatusIndicator();
+}
+
+// --- Main update ---
+function updateMonitor() {
+    fetch('/api/state')
+        .then(r => r.json())
+        .then(rawStates => {
+            allRawStatesCache = rawStates;
+            // Extract current account data
+            allStatesCache = rawStates[currentAccount] || {};
+            renderMonitorData(allStatesCache);
         })
         .catch(e => console.error('Monitor error:', e));
 }
@@ -1599,10 +1681,15 @@ def _build_config_html() -> str:
         <h1 class="text-lg font-bold">TG GRID BOT CONFIG PANEL</h1>
         <span style="color:var(--dim);font-size:12px;">Manage primaries, parameters, and bot processes</span>
     </div>
-    <div class="text-right" style="font-size:12px;">
-        <span class="pulse pulse-green" id="status-pulse"></span>
-        <span id="status-text">Loading...</span><br>
-        <span style="color:var(--dim);" id="hdr-time">--</span>
+    <div class="flex items-center gap-3">
+        <select id="account-select" onchange="switchAccount(this.value)"
+            style="background:#0f1117;border:1px solid var(--border);color:var(--blue);padding:4px 10px;border-radius:4px;font-family:inherit;font-size:12px;font-weight:600;">
+        </select>
+        <div class="text-right" style="font-size:12px;">
+            <span class="pulse pulse-green" id="status-pulse"></span>
+            <span id="status-text">Loading...</span><br>
+            <span style="color:var(--dim);" id="hdr-time">--</span>
+        </div>
     </div>
 </div>
 
@@ -1746,6 +1833,8 @@ let currentConfig = {};
 let editingIdx = -1;
 let botStatuses = {};
 let botPids = {};
+let currentAccount = '';
+let knownAccounts = [];
 
 function showToast(msg, color) {
     const t = document.getElementById('toast');
@@ -1755,26 +1844,63 @@ function showToast(msg, color) {
     setTimeout(() => { t.style.display = 'none'; }, 2000);
 }
 
+function populateAccountDropdown(accounts) {
+    const sel = document.getElementById('account-select');
+    const ids = Object.keys(accounts);
+    if (JSON.stringify(ids) === JSON.stringify(knownAccounts)) return;
+    knownAccounts = ids;
+    sel.innerHTML = '';
+    ids.forEach(id => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = (accounts[id].label || id);
+        sel.appendChild(opt);
+    });
+    if (!currentAccount && ids.length > 0) currentAccount = ids[0];
+    sel.value = currentAccount;
+}
+
+function switchAccount(acctId) {
+    currentAccount = acctId;
+    populateGlobalFields();
+    renderPrimaries();
+    updateProcesses();
+}
+
+function getAccountConfig() {
+    return (currentConfig.accounts || {})[currentAccount] || {};
+}
+
+function populateGlobalFields() {
+    const acct = getAccountConfig();
+    document.getElementById('cfg-secondary').value = acct.secondary_symbol || '';
+    document.getElementById('cfg-zerodha-user').value = acct.zerodha_user || 'Sai';
+    document.getElementById('cfg-xts-key').value = acct.xts_interactive_key || '';
+    document.getElementById('cfg-xts-root').value = acct.xts_root || '';
+}
+
 // --- Config ---
 function loadConfig() {
     fetch('/api/config')
         .then(r => r.json())
         .then(cfg => {
             currentConfig = cfg;
-            document.getElementById('cfg-secondary').value = cfg.secondary_symbol || '';
-            document.getElementById('cfg-zerodha-user').value = cfg.zerodha_user || 'Sai';
-            document.getElementById('cfg-xts-key').value = cfg.xts_interactive_key || '';
-            document.getElementById('cfg-xts-root').value = cfg.xts_root || '';
+            populateAccountDropdown(cfg.accounts || {});
+            populateGlobalFields();
             renderPrimaries();
         })
         .catch(e => console.error('Load config error:', e));
 }
 
 function saveConfig() {
-    currentConfig.secondary_symbol = document.getElementById('cfg-secondary').value.trim();
-    currentConfig.zerodha_user = document.getElementById('cfg-zerodha-user').value.trim();
-    currentConfig.xts_interactive_key = document.getElementById('cfg-xts-key').value.trim();
-    currentConfig.xts_root = document.getElementById('cfg-xts-root').value.trim();
+    // Save global fields into current account
+    const acct = getAccountConfig();
+    acct.secondary_symbol = document.getElementById('cfg-secondary').value.trim();
+    acct.zerodha_user = document.getElementById('cfg-zerodha-user').value.trim();
+    acct.xts_interactive_key = document.getElementById('cfg-xts-key').value.trim();
+    acct.xts_root = document.getElementById('cfg-xts-root').value.trim();
+    if (!currentConfig.accounts) currentConfig.accounts = {};
+    currentConfig.accounts[currentAccount] = acct;
     fetch('/api/config', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -1791,15 +1917,17 @@ function saveConfig() {
 // --- Primaries ---
 function renderPrimaries() {
     const container = document.getElementById('primaries-container');
-    const primaries = currentConfig.primaries || [];
+    const acct = getAccountConfig();
+    const primaries = acct.primaries || [];
     if (primaries.length === 0) {
         container.innerHTML = '<div style="color:var(--dim);text-align:center;padding:20px;">No primaries configured. Click "+ Add Primary" to get started.</div>';
         return;
     }
     container.innerHTML = primaries.map((p, i) => {
         const sym = p.symbol || 'UNNAMED';
-        const running = botStatuses[sym] || false;
-        const pid = botPids[sym] || '';
+        const pidKey = currentAccount + ':' + sym;
+        const running = botStatuses[pidKey] || false;
+        const pid = botPids[pidKey] || '';
         const statusBadge = running
             ? '<span class="status-badge badge-running">Running' + (pid ? ' (PID ' + pid + ')' : '') + '</span>'
             : '<span class="status-badge badge-stopped">Stopped</span>';
@@ -1839,28 +1967,31 @@ function renderPrimaries() {
 }
 
 function addPrimary() {
-    if (!currentConfig.primaries) currentConfig.primaries = [];
-    currentConfig.primaries.push({
+    const acct = getAccountConfig();
+    if (!acct.primaries) acct.primaries = [];
+    acct.primaries.push({
         symbol: '', enabled: true, auto_anchor: true, anchor_price: 0,
         grid_space: 0.01, target: 0.03, levels_per_side: 10, qty_per_level: 100,
         hedge_ratio: 40, partial_hedge_ratio: 40, holdings_override: 2000,
         product: 'NRML', poll_interval: 2.0, reanchor_epoch: 100, max_grid_levels: 2000,
         max_sub_depth: 10,
     });
-    editPrimary(currentConfig.primaries.length - 1);
+    editPrimary(acct.primaries.length - 1);
 }
 
 function removePrimary(idx) {
-    const sym = currentConfig.primaries[idx].symbol || 'this primary';
+    const acct = getAccountConfig();
+    const sym = acct.primaries[idx].symbol || 'this primary';
     if (confirm('Remove ' + sym + '?')) {
-        currentConfig.primaries.splice(idx, 1);
+        acct.primaries.splice(idx, 1);
         renderPrimaries();
     }
 }
 
 function editPrimary(idx) {
     editingIdx = idx;
-    const p = currentConfig.primaries[idx];
+    const acct = getAccountConfig();
+    const p = acct.primaries[idx];
     document.getElementById('modal-title').textContent = p.symbol ? 'Edit ' + p.symbol : 'New Primary';
     document.getElementById('m-symbol').value = p.symbol || '';
     document.getElementById('m-product').value = p.product || 'NRML';
@@ -1887,7 +2018,8 @@ function closeModal() {
 
 function saveModal() {
     if (editingIdx < 0) return;
-    const p = currentConfig.primaries[editingIdx];
+    const acct = getAccountConfig();
+    const p = acct.primaries[editingIdx];
     p.symbol = document.getElementById('m-symbol').value.toUpperCase().trim();
     p.product = document.getElementById('m-product').value;
     p.grid_space = parseFloat(document.getElementById('m-grid-space').value);
@@ -1909,10 +2041,10 @@ function saveModal() {
 
 // --- Bot control ---
 function startBot(symbol) {
-    fetch('/api/bot/start/' + symbol, {method: 'POST'})
+    fetch('/api/bot/start/' + currentAccount + '/' + symbol, {method: 'POST'})
         .then(r => r.json())
         .then(r => {
-            if (r.status === 'started') showToast(symbol + ' started');
+            if (r.status === 'started') showToast(currentAccount + '/' + symbol + ' started');
             else showToast(r.error || 'Failed', 'var(--red)');
             updateProcesses();
         })
@@ -1920,10 +2052,10 @@ function startBot(symbol) {
 }
 
 function stopBot(symbol) {
-    fetch('/api/bot/stop/' + symbol, {method: 'POST'})
+    fetch('/api/bot/stop/' + currentAccount + '/' + symbol, {method: 'POST'})
         .then(r => r.json())
         .then(r => {
-            if (r.status === 'stopped') showToast(symbol + ' stopped');
+            if (r.status === 'stopped') showToast(currentAccount + '/' + symbol + ' stopped');
             else showToast(r.error || 'Not running', 'var(--orange)');
             updateProcesses();
         })

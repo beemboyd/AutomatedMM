@@ -91,13 +91,14 @@ def create_app(db_config=None) -> Flask:
 
     @app.route('/api/grid/daily')
     def api_grid_daily():
-        """01MU06 day-by-day summaries (primaries + hedges)."""
+        """TG Grid day-by-day summaries (primaries + hedges). Optional ?account_id= filter."""
         mgr = get_db()
         if not mgr:
             return jsonify({'error': 'DB unavailable'}), 503
         try:
             days = request.args.get('days', 90, type=int)
-            data = mgr.get_daily_summary_grid(days)
+            account_id = request.args.get('account_id', None, type=str)
+            data = mgr.get_daily_summary_grid(days, account_id=account_id)
             return Response(
                 json.dumps(data, default=_json_serial),
                 mimetype='application/json')
@@ -123,6 +124,24 @@ def create_app(db_config=None) -> Flask:
                 mimetype='application/json')
         except Exception as e:
             logger.error("day-transactions error: %s", e)
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/overall-vwap')
+    def api_overall_vwap():
+        """Overall Buy/Sell VWAP across all transactions for a bot type."""
+        mgr = get_db()
+        if not mgr:
+            return jsonify({'error': 'DB unavailable'}), 503
+        try:
+            bot_type = request.args.get('bot_type')
+            if not bot_type:
+                return jsonify({'error': 'bot_type required'}), 400
+            data = mgr.get_overall_vwap(bot_type)
+            return Response(
+                json.dumps(data, default=_json_serial),
+                mimetype='application/json')
+        except Exception as e:
+            logger.error("overall-vwap error: %s", e)
             return jsonify({'error': str(e)}), 500
 
     @app.route('/api/cumulative-pnl')
@@ -248,7 +267,7 @@ def _build_html() -> str:
     <div class="card" style="padding:12px 16px;">
         <div class="chart-wrap"><canvas id="chart-tollgate"></canvas></div>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="kpi-tollgate"></div>
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-4" id="kpi-tollgate"></div>
     <div id="days-tollgate"><div class="loading">Loading...</div></div>
 </div>
 
@@ -400,13 +419,15 @@ async function load01MU01() {
     const daysEl = document.getElementById('days-tollgate');
     const kpiEl = document.getElementById('kpi-tollgate');
 
-    // Fetch both in parallel
-    const [dailyResp, cumResp] = await Promise.all([
+    // Fetch all in parallel
+    const [dailyResp, cumResp, vwapResp] = await Promise.all([
         fetch('/api/tollgate/daily?days=90'),
-        fetch('/api/cumulative-pnl?bot_type=tollgate&days=90')
+        fetch('/api/cumulative-pnl?bot_type=tollgate&days=90'),
+        fetch('/api/overall-vwap?bot_type=tollgate')
     ]);
     const daily = await dailyResp.json();
     const cumData = await cumResp.json();
+    const overallVwap = await vwapResp.json();
 
     // Chart
     renderCumulativeChart('chart-tollgate', cumData);
@@ -418,11 +439,23 @@ async function load01MU01() {
     const totalRTs = daily.reduce((s, d) => s + d.round_trips, 0);
     const currentInv = todayRow ? todayRow.eod_inventory : 0;
 
+    const oBuyVwap = overallVwap.buy_vwap || 0;
+    const oSellVwap = overallVwap.sell_vwap || 0;
+    const oBuyQty = overallVwap.buy_qty || 0;
+    const oSellQty = overallVwap.sell_qty || 0;
+    const oSpread = (oBuyVwap > 0 && oSellVwap > 0) ? (oSellVwap - oBuyVwap) : null;
+
     kpiEl.innerHTML = [
         {label: 'All-Time PnL', value: fmtPnl(allTimePnl)},
         {label: 'Today PnL', value: fmtPnl(todayPnl)},
         {label: 'Total Round Trips', value: `<span style="color:var(--blue)">${totalRTs}</span>`},
         {label: 'Current Inventory', value: fmtInv(currentInv)},
+        {label: 'Overall Buy VWAP', value: oBuyVwap > 0
+            ? `<span style="color:var(--green)">${oBuyVwap.toFixed(4)}</span><div class="kpi-label" style="margin-top:2px;">${fmtQty(oBuyQty)} shares</div>` : '<span class="dim">--</span>'},
+        {label: 'Overall Sell VWAP', value: oSellVwap > 0
+            ? `<span style="color:var(--red)">${oSellVwap.toFixed(4)}</span><div class="kpi-label" style="margin-top:2px;">${fmtQty(oSellQty)} shares</div>` : '<span class="dim">--</span>'},
+        {label: 'Overall Spread', value: oSpread != null
+            ? `<span class="${oSpread >= 0 ? 'pnl-pos' : 'pnl-neg'}">${oSpread >= 0 ? '+' : ''}${oSpread.toFixed(4)}</span>` : '<span class="dim">--</span>'},
     ].map(k => `<div class="card kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div></div>`).join('');
 
     // Day cards

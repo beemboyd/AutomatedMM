@@ -62,8 +62,9 @@ class GridEngine:
             interactive_secret=config.interactive_secret,
             zerodha_user=config.zerodha_user,
             root_url=config.xts_root,
+            account_id=config.account_id,
         )
-        self.state = StateManager(config.symbol)
+        self.state = StateManager(config.symbol, account_id=config.account_id)
         self.grid = GridCalculator(config)
 
         # Current spacing for each side (may increase over epochs)
@@ -163,8 +164,10 @@ class GridEngine:
                 'grid_space': self.current_buy_spacing,
                 'levels': self.config.levels_per_side,
                 'qty': self.config.qty_per_level, 'product': self.config.product,
+                'account_id': self.config.account_id,
             }
-            self._pnl_session_id = self.pnl.start_session('tg_grid', config_snap)
+            self._pnl_session_id = self.pnl.start_session(
+                'tg_grid', config_snap, account_id=self.config.account_id)
             if self._pnl_session_id:
                 self._pnl_pair_id = self.pnl.register_pair(
                     self._pnl_session_id,

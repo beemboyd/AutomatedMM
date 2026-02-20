@@ -38,13 +38,14 @@ class PnLTracker:
     # ── Session Lifecycle ──
 
     def start_session(self, bot_type: str,
-                      config_snapshot: Optional[dict] = None) -> Optional[int]:
+                      config_snapshot: Optional[dict] = None,
+                      account_id: str = '') -> Optional[int]:
         """Create a new session. Returns session_id or None."""
         if not self.db:
             return None
         try:
             # Mark any previous active sessions for this bot as crashed
-            prev = self.db.get_active_session(bot_type)
+            prev = self.db.get_active_session(bot_type, account_id=account_id or None)
             if prev:
                 self.db.end_session(
                     prev['session_id'],
@@ -53,7 +54,7 @@ class PnLTracker:
                     status='crashed')
                 logger.info("Marked previous session %d as crashed", prev['session_id'])
 
-            return self.db.create_session(bot_type, config_snapshot)
+            return self.db.create_session(bot_type, config_snapshot, account_id=account_id)
         except Exception as e:
             logger.warning("PnL start_session error (non-fatal): %s", e)
             return None
@@ -157,12 +158,13 @@ class PnLTracker:
     # ── Session Restoration ──
 
     def get_last_active_session(self, bot_type: str,
-                                primary_ticker: Optional[str] = None) -> Optional[dict]:
+                                primary_ticker: Optional[str] = None,
+                                account_id: Optional[str] = None) -> Optional[dict]:
         """Get the last active session for restoration check."""
         if not self.db:
             return None
         try:
-            return self.db.get_active_session(bot_type, primary_ticker)
+            return self.db.get_active_session(bot_type, primary_ticker, account_id=account_id)
         except Exception as e:
             logger.warning("PnL get_last_active_session error (non-fatal): %s", e)
             return None

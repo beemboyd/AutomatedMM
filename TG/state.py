@@ -29,11 +29,14 @@ class StateManager:
     - Cumulative PnL
     """
 
-    def __init__(self, symbol: str, state_dir: str = None):
+    def __init__(self, symbol: str, account_id: str = '', state_dir: str = None):
         if state_dir is None:
             state_dir = os.path.join(os.path.dirname(__file__), 'state')
         os.makedirs(state_dir, exist_ok=True)
-        self.state_file = os.path.join(state_dir, f'{symbol}_grid_state.json')
+        self.account_id = account_id
+        prefix = f"{account_id}_" if account_id else ""
+        self.state_file = os.path.join(state_dir, f'{prefix}{symbol}_grid_state.json')
+        self._state_dir = state_dir
         self.symbol = symbol
 
         # In-memory state
@@ -122,6 +125,12 @@ class StateManager:
 
     def load(self) -> bool:
         """Load state from JSON. Returns True if state was loaded."""
+        # Migration: if prefixed file doesn't exist but old unprefixed file does, rename
+        if not os.path.exists(self.state_file) and self.account_id:
+            old_path = os.path.join(self._state_dir, f'{self.symbol}_grid_state.json')
+            if os.path.exists(old_path):
+                logger.info("Migrating state file: %s -> %s", old_path, self.state_file)
+                os.rename(old_path, self.state_file)
         if not os.path.exists(self.state_file):
             logger.info("No existing state file for %s", self.symbol)
             return False

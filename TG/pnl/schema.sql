@@ -12,8 +12,15 @@ CREATE TABLE IF NOT EXISTS tg_sessions (
     config_snapshot JSONB,
     total_pnl       DOUBLE PRECISION DEFAULT 0,
     total_cycles    INTEGER DEFAULT 0,
-    notes           TEXT
+    notes           TEXT,
+    account_id      TEXT DEFAULT ''
 );
+
+-- Migration: add account_id column if missing (existing installs)
+DO $$ BEGIN
+    ALTER TABLE tg_sessions ADD COLUMN IF NOT EXISTS account_id TEXT DEFAULT '';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 -- Table 2: Pairs — one row per primary-secondary combination per session
 CREATE TABLE IF NOT EXISTS tg_pairs (
@@ -100,3 +107,4 @@ CREATE INDEX IF NOT EXISTS idx_tg_txn_ticker ON tg_transactions (ticker, ts DESC
 CREATE INDEX IF NOT EXISTS idx_tg_txn_type ON tg_transactions (txn_type);
 CREATE INDEX IF NOT EXISTS idx_tg_txn_date ON tg_transactions (ts);
 CREATE INDEX IF NOT EXISTS idx_tg_txn_group ON tg_transactions (group_id);
+CREATE INDEX IF NOT EXISTS idx_tg_sessions_account ON tg_sessions (account_id);

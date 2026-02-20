@@ -115,6 +115,10 @@ def parse_args():
     parser.add_argument('--product', default='NRML',
                         help='Product type: NRML (carry-forward) or MIS (default: NRML)')
 
+    # Account
+    parser.add_argument('--account', default='',
+                        help='XTS account ID for state namespacing (e.g., 01MU06)')
+
     # Credentials
     parser.add_argument('--interactive-key', default=_DEFAULT_INTERACTIVE_KEY,
                         help='XTS Interactive API key')
@@ -219,6 +223,7 @@ def main():
         auto_reenter=not args.no_reenter,
         auto_reanchor=not args.no_reanchor,
         poll_interval=args.poll_interval,
+        account_id=args.account,
     )
 
     # Dry run: just print the grid and exit

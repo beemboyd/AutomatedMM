@@ -1,5 +1,40 @@
 # Activity Log
 
+## 2026-02-20 11:30 IST - Claude
+**Multi-Account Support for TG Grid Bot (01MU06 + 01MU07)**
+
+Added second XTS account (01MU07) support to TG Grid bot. Both accounts can now trade the same symbols (e.g., YESBANK) simultaneously with full state, session, and PnL isolation by account_id. Dashboards (7777 monitor, 7779 config) have account dropdown to switch between accounts. PnL dashboard (9000) supports per-account filtering.
+
+### Modified Files
+1. **`TG/config.py`** — Added `account_id: str` field to GridConfig dataclass.
+2. **`TG/state.py`** — StateManager now prefixes state files with account_id (`01MU06_TATSILV_grid_state.json`). Auto-migrates old unprefixed files.
+3. **`TG/hybrid_client.py`** — Per-account XTS session files (`.xts_session_01MU06.json`, `.xts_session_01MU07.json`).
+4. **`TG/engine.py`** — Passes `account_id` to HybridClient, StateManager, and PnL tracker.
+5. **`TG/run.py`** — Added `--account` CLI argument.
+6. **`TG/state/tg_config.json`** — Restructured to multi-account format: `{"accounts": {"01MU06": {...}, "01MU07": {...}}}`.
+7. **`TG/dashboard.py`** — Account-aware helpers, API routes (`/api/bot/start/<account_id>/<symbol>`), account dropdown in both monitor and config HTML, `{account_id}:{symbol}` PID key scheme.
+8. **`TG/pnl/schema.sql`** — Added `account_id` column to `tg_sessions` with migration.
+9. **`TG/pnl/db_manager.py`** — `create_session()`, `get_active_session()`, `get_daily_summary_grid()` all accept `account_id` filter.
+10. **`TG/pnl/tracker.py`** — `start_session()` and `get_last_active_session()` pass through `account_id`.
+11. **`TG/pnl/dashboard.py`** — `/api/grid/daily` accepts `?account_id=` query param.
+
+### State File Migration
+- `TATSILV_grid_state.json` → `01MU06_TATSILV_grid_state.json`
+- `TATAGOLD_grid_state.json` → `01MU06_TATAGOLD_grid_state.json`
+- `YESBANK_grid_state.json` → `01MU06_YESBANK_grid_state.json`
+- `IDEA_grid_state.json` → `01MU06_IDEA_grid_state.json`
+
+### Account Configuration
+- **01MU06**: TATSILV (enabled), TATAGOLD (disabled), YESBANK (enabled), IDEA (disabled)
+- **01MU07**: YESBANK (enabled, 2000 qty), TATAGOLD (enabled, 5000 qty)
+
+### Impact
+- Both accounts can run simultaneously with isolated state, PID tracking, XTS sessions, and PnL
+- Dashboards support account switching via dropdown
+- Backward compatible: old flat config auto-migrates, old state files auto-renamed
+
+---
+
 ## 2026-02-20 10:00 IST - Claude
 **Fix depth cascading bug, dashboard improvements, config updates**
 
