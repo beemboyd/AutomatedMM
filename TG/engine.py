@@ -500,9 +500,15 @@ class GridEngine:
         max_depth = self.config.max_sub_depth
         target_fully_filled = (filled_qty >= target.get('qty', 0))
 
-        # Only cascade when entry was partial (depth 1) or already in a sub-chain (depth > 1).
-        # Complete entries should close on D1 fill without cascading.
-        should_cascade = (depth > 1) or (group.status == GroupStatus.ENTRY_PARTIAL)
+        # Cascade when:
+        # 1. Already in a sub-chain (depth > 1), OR
+        # 2. Entry is still partial (ENTRY_PARTIAL), OR
+        # 3. Entry completed but had partial fills (multiple D1 targets exist)
+        # Case 3 catches the scenario where entry fills in chunks, status transitions
+        # to TARGET_PENDING, but the D1 targets from those chunks should still cascade.
+        # Single D1 target = complete entry fill → closes normally without cascading.
+        d1_count = sum(1 for t in group.target_orders if t.get('depth', 1) == 1)
+        should_cascade = (depth > 1) or (group.status == GroupStatus.ENTRY_PARTIAL) or (d1_count > 1)
 
         if target_fully_filled and depth < max_depth and should_cascade:
             # Spawn next depth order
