@@ -97,6 +97,10 @@ class GridConfig:
     # Sub-target cascading for partial fills
     max_sub_depth: int = 10         # Max depth for sub-target ping-pong (D1, D2, D3, ...)
 
+    # Circuit breaker: max net accumulated position per side (0 = no limit)
+    # When net open qty on one side exceeds this, no new entries placed on that side
+    max_position_per_side: int = 0
+
     # Operational parameters
     auto_reenter: bool = True       # re-place entry after target fills
     auto_reanchor: bool = True      # re-anchor grid when all levels exhausted

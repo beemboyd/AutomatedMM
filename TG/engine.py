@@ -626,24 +626,29 @@ class GridEngine:
         # Close the group
         self.state.close_group(group.group_id)
 
-        # Re-enter if configured
+        # Re-enter if configured (circuit breaker applies)
         if self.config.auto_reenter:
-            levels = self.buy_levels if group.bot == 'A' else self.sell_levels
-            for level in levels:
-                if level.subset_index == group.subset_index:
-                    if group.bot == 'A':
-                        logger.info("BuyBot RE-ENTERING: subset=%d", level.subset_index)
-                        self.buy_bot._place_entry(level)
-                    else:
-                        available = self.client.get_available_qty(self.config.symbol)
-                        if available >= level.qty:
-                            logger.info("SellBot RE-ENTERING: subset=%d", level.subset_index)
-                            self.sell_bot._place_entry(level)
+            side = 'buy' if group.bot == 'A' else 'sell'
+            if self._circuit_breaker_hit(side):
+                logger.info("Skipping re-entry for %s L%d — circuit breaker",
+                            side.upper(), group.subset_index)
+            else:
+                levels = self.buy_levels if group.bot == 'A' else self.sell_levels
+                for level in levels:
+                    if level.subset_index == group.subset_index:
+                        if group.bot == 'A':
+                            logger.info("BuyBot RE-ENTERING: subset=%d", level.subset_index)
+                            self.buy_bot._place_entry(level)
                         else:
-                            logger.warning("SellBot: cannot re-enter subset=%d, "
-                                           "insufficient holdings (%d < %d)",
-                                           level.subset_index, available, level.qty)
-                    break
+                            available = self.client.get_available_qty(self.config.symbol)
+                            if available >= level.qty:
+                                logger.info("SellBot RE-ENTERING: subset=%d", level.subset_index)
+                                self.sell_bot._place_entry(level)
+                            else:
+                                logger.warning("SellBot: cannot re-enter subset=%d, "
+                                               "insufficient holdings (%d < %d)",
+                                               level.subset_index, available, level.qty)
+                        break
 
     def _complete_partial_cycle(self, group: Group, fill_price: float):
         """
@@ -690,24 +695,29 @@ class GridEngine:
         # Close group
         self.state.close_group(group.group_id)
 
-        # Re-enter at same grid level with full qty
+        # Re-enter at same grid level with full qty (circuit breaker applies)
         if self.config.auto_reenter:
-            levels = self.buy_levels if group.bot == 'A' else self.sell_levels
-            for level in levels:
-                if level.subset_index == group.subset_index:
-                    if group.bot == 'A':
-                        logger.info("BuyBot RE-ENTERING (after partial): subset=%d", level.subset_index)
-                        self.buy_bot._place_entry(level)
-                    else:
-                        available = self.client.get_available_qty(self.config.symbol)
-                        if available >= level.qty:
-                            logger.info("SellBot RE-ENTERING (after partial): subset=%d", level.subset_index)
-                            self.sell_bot._place_entry(level)
+            side = 'buy' if group.bot == 'A' else 'sell'
+            if self._circuit_breaker_hit(side):
+                logger.info("Skipping re-entry for %s L%d after partial — circuit breaker",
+                            side.upper(), group.subset_index)
+            else:
+                levels = self.buy_levels if group.bot == 'A' else self.sell_levels
+                for level in levels:
+                    if level.subset_index == group.subset_index:
+                        if group.bot == 'A':
+                            logger.info("BuyBot RE-ENTERING (after partial): subset=%d", level.subset_index)
+                            self.buy_bot._place_entry(level)
                         else:
-                            logger.warning("SellBot: cannot re-enter subset=%d after partial, "
-                                           "insufficient holdings (%d < %d)",
-                                           level.subset_index, available, level.qty)
-                    break
+                            available = self.client.get_available_qty(self.config.symbol)
+                            if available >= level.qty:
+                                logger.info("SellBot RE-ENTERING (after partial): subset=%d", level.subset_index)
+                                self.sell_bot._place_entry(level)
+                            else:
+                                logger.warning("SellBot: cannot re-enter subset=%d after partial, "
+                                               "insufficient holdings (%d < %d)",
+                                               level.subset_index, available, level.qty)
+                        break
 
     # ── Order event handlers ─────────────────────────────────────────────
 
@@ -848,20 +858,53 @@ class GridEngine:
         else:
             return max(g.entry_fill_price for g in candidates)
 
+    def _get_side_position(self, side: str) -> int:
+        """
+        Get net accumulated position on one side across all open groups.
+
+        Returns sum of net_open_qty for all open groups on the given side.
+        This counts entry fills + even-depth re-entry fills - odd-depth close fills.
+        """
+        bot_id = 'A' if side == 'buy' else 'B'
+        return sum(g.net_open_qty for g in self.state.open_groups.values()
+                   if g.bot == bot_id)
+
+    def _circuit_breaker_hit(self, side: str) -> bool:
+        """
+        Check if circuit breaker is triggered for the given side.
+
+        Returns True if max_position_per_side > 0 and current net position
+        on that side exceeds the limit.
+        """
+        limit = self.config.max_position_per_side
+        if limit <= 0:
+            return False
+        pos = self._get_side_position(side)
+        if pos >= limit:
+            logger.warning("CIRCUIT BREAKER: %s side position %d >= limit %d — "
+                           "no new entries on this side", side.upper(), pos, limit)
+            return True
+        return False
+
     def _reanchor_grid(self, exhausted_side: str):
         """
-        Epoch-based re-anchor when all levels on one side are exhausted.
+        Soft re-anchor when all levels on one side are exhausted.
 
-        Sequence:
-        1. Find last filled price on exhausted side → new sub_anchor
+        Key principle: filled groups stay alive with their pending targets.
+        Pair hedges accumulate naturally (no forced flattening).
+        Only unfilled entries are cancelled and refreshed at new grid prices.
+
+        Steps:
+        1. Find last filled price on exhausted side → new anchor
         2. Increment grid level counter for exhausted side
         3. Check epoch: increase spacing every reanchor_epoch reanchors
         4. Check stop: halt if max_grid_levels reached
-        5. Cancel all open orders (both sides)
-        6. Flatten SPCENET pair position
-        7. Close all open groups as CANCELLED
-        8. Recompute grid at new sub_anchor with current spacings
-        9. Place fresh entries on both sides
+        5. Cancel unfilled entry orders (ENTRY_PENDING with 0 fills) + stale
+           entry orders on non-exhausted side
+        6. Remove cancelled groups from state; detach filled groups from
+           level_groups (so new entries get free level slots)
+        7. Recompute grid at new anchor with current spacings
+        8. Place fresh entries at free levels (circuit breaker applies)
         """
         old_anchor = self.config.anchor_price
 
@@ -869,7 +912,7 @@ class GridEngine:
         new_anchor = round(self._get_last_filled_price(exhausted_side), 2)
 
         logger.info("=" * 60)
-        logger.info("REANCHORING GRID (%s exhausted): %.2f -> %.2f",
+        logger.info("SOFT REANCHOR (%s exhausted): %.2f -> %.2f",
                      exhausted_side.upper(), old_anchor, new_anchor)
         logger.info("=" * 60)
 
@@ -905,29 +948,48 @@ class GridEngine:
             self.running = False
             return
 
-        # Step 5: Cancel all open orders
-        logger.info("Step 5: Cancelling all orders...")
-        self.cancel_all()
+        # Step 5 & 6: Cancel unfilled entries and detach filled groups from level_groups
+        cancelled_count = 0
+        removed_groups = []
+        kept_groups = 0
 
-        # Step 6: Flatten SPCENET pair position
-        if self.config.has_pair:
-            self._flatten_pair_position()
-
-        # Step 7: Close all open groups as CANCELLED
-        logger.info("Step 7: Closing %d open groups as CANCELLED...",
-                     len(self.state.open_groups))
         for group in list(self.state.open_groups.values()):
-            group.status = GroupStatus.CANCELLED
-            group.realized_pnl = 0.0  # primary PnL not realized (shares still held)
-            group.closed_at = datetime.now().isoformat()
-            self.state.closed_groups.append(group)
+            if group.status == GroupStatus.ENTRY_PENDING and group.entry_filled_so_far == 0:
+                # Unfilled entry — cancel order and remove group
+                if group.entry_order_id:
+                    if self.client.cancel_order(group.entry_order_id):
+                        cancelled_count += 1
+                removed_groups.append(group.group_id)
+            else:
+                # Filled group (TARGET_PENDING, ENTRY_PARTIAL, etc.) — keep alive
+                # but detach from level_groups so new entries can use those slots
+                kept_groups += 1
 
-        # Step 8: Clear state and recompute grid
-        logger.info("Step 8: Clearing bot state, recomputing grid at anchor=%.2f...", new_anchor)
-        self.state.open_groups = {}
-        self.state.order_to_group = {}
+        # Remove cancelled groups from state
+        for gid in removed_groups:
+            group = self.state.open_groups.get(gid)
+            if group:
+                # Remove from order_to_group mapping
+                if group.entry_order_id and group.entry_order_id in self.state.order_to_group:
+                    del self.state.order_to_group[group.entry_order_id]
+                del self.state.open_groups[gid]
+
+        # Detach ALL groups from level_groups (filled groups stay in open_groups
+        # and order_to_group, but no longer block level slots)
         self.buy_bot.level_groups = {}
         self.sell_bot.level_groups = {}
+
+        logger.info("Step 5-6: Cancelled %d unfilled entries, removed %d groups, "
+                     "kept %d filled groups alive (detached from level slots)",
+                     cancelled_count, len(removed_groups), kept_groups)
+
+        # Log accumulated positions
+        buy_pos = self._get_side_position('buy')
+        sell_pos = self._get_side_position('sell')
+        logger.info("Accumulated positions: BUY=%d, SELL=%d", buy_pos, sell_pos)
+
+        # Step 7: Recompute grid at new anchor
+        logger.info("Step 7: Recomputing grid at anchor=%.2f...", new_anchor)
         self._order_status_cache = {}
 
         self.config.anchor_price = new_anchor
@@ -940,11 +1002,19 @@ class GridEngine:
         self.buy_bot.levels = self.buy_levels
         self.sell_bot.levels = self.sell_levels
 
-        # Step 9: Place fresh entries
-        logger.info("Step 9: Placing fresh entries (buy_space=%.4f, sell_space=%.4f)...",
+        # Step 8: Place fresh entries at free levels (circuit breaker applies)
+        logger.info("Step 8: Placing fresh entries (buy_space=%.4f, sell_space=%.4f)...",
                      self.current_buy_spacing, self.current_sell_spacing)
-        self.buy_bot.place_entries()
-        self.sell_bot.place_entries()
+
+        if not self._circuit_breaker_hit('buy'):
+            self.buy_bot.place_entries()
+        else:
+            logger.info("Skipping BUY entries due to circuit breaker")
+
+        if not self._circuit_breaker_hit('sell'):
+            self.sell_bot.place_entries()
+        else:
+            logger.info("Skipping SELL entries due to circuit breaker")
 
         # Save state and update cooldown
         self.state.save()
@@ -952,75 +1022,12 @@ class GridEngine:
         self.state.print_summary()
 
         logger.info("=" * 60)
-        logger.info("REANCHOR COMPLETE: %.2f -> %.2f | Side: %s | Open groups: %d",
+        logger.info("SOFT REANCHOR COMPLETE: %.2f -> %.2f | Side: %s | "
+                     "Open groups: %d (kept=%d, new=%d)",
                      old_anchor, new_anchor, exhausted_side.upper(),
-                     len(self.state.open_groups))
+                     len(self.state.open_groups), kept_groups,
+                     len(self.state.open_groups) - kept_groups)
         logger.info("=" * 60)
-
-    def _flatten_pair_position(self):
-        """
-        Flatten net SPCENET position from open groups before re-anchor.
-
-        Computes net pair qty from all open groups:
-        - BuyBot (A) hedges = SELL secondary → net negative
-        - SellBot (B) hedges = BUY secondary → net positive
-        Net = sum(hedged - unwound) per group, signed by direction.
-        """
-        net_pair_qty = 0
-        for g in self.state.open_groups.values():
-            remaining = g.pair_hedged_qty - g.pair_unwound_qty
-            if remaining <= 0:
-                continue
-            if g.bot == 'A':
-                # BuyBot hedged by SELLING secondary → we are short
-                net_pair_qty -= remaining
-            else:
-                # SellBot hedged by BUYING secondary → we are long
-                net_pair_qty += remaining
-
-        if net_pair_qty == 0:
-            logger.info("No net %s position to flatten", self.config.pair_symbol)
-            return
-
-        # Flatten: positive = long → SELL, negative = short → BUY
-        if net_pair_qty > 0:
-            side = "SELL"
-            qty = net_pair_qty
-        else:
-            side = "BUY"
-            qty = abs(net_pair_qty)
-
-        logger.info("Flattening %s: %s %d (net=%d)",
-                     self.config.pair_symbol, side, qty, net_pair_qty)
-        order_id, price = self.client.place_market_order(
-            self.config.pair_symbol, side, qty,
-            self.config.exchange, self.config.product,
-            order_unique_id=f"RA_{self.config.symbol}",
-            slippage=0.05,
-        )
-        if order_id:
-            logger.info("Pair flatten order placed: %s %s %d @ %.2f, order=%s",
-                         side, self.config.pair_symbol, qty, price, order_id)
-            # Record pair PnL on each group being closed
-            for g in self.state.open_groups.values():
-                remaining = g.pair_hedged_qty - g.pair_unwound_qty
-                if remaining > 0:
-                    g.pair_unwound_qty = g.pair_hedged_qty
-                    g.pair_unwind_total += price * remaining
-                    # PnL on fully matched qty (all unwound now)
-                    if g.bot == 'A':
-                        g.pair_pnl = round(g.pair_hedged_qty * (g.pair_hedge_vwap - g.pair_unwind_vwap), 2)
-                    else:
-                        g.pair_pnl = round(g.pair_hedged_qty * (g.pair_unwind_vwap - g.pair_hedge_vwap), 2)
-                    g.pair_orders.append({
-                        'xts_id': order_id, 'custom_id': f"RA_{self.config.symbol}",
-                        'side': side, 'qty': remaining, 'price': price,
-                        'role': 'REANCHOR_FLATTEN',
-                        'ts': datetime.now().isoformat(),
-                    })
-        else:
-            logger.error("Pair flatten FAILED: %s %s %d",
-                         side, self.config.pair_symbol, qty)
 
     def cancel_all(self):
         """Cancel all open orders for both bots."""

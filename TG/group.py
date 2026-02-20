@@ -122,6 +122,28 @@ class Group:
         return sum(t.get('filled_qty', 0) for t in self.target_orders)
 
     @property
+    def net_open_qty(self) -> int:
+        """
+        Net open position for this group.
+
+        For BuyBot: entry BUY fills + even-depth (re-entry BUY) fills
+                    - odd-depth (close SELL) fills.
+        For SellBot: same structure — entry SELL fills + even-depth (re-entry SELL)
+                     - odd-depth (close BUY) fills.
+
+        Result is always >= 0: how many shares this group is still holding.
+        """
+        net = self.entry_filled_so_far
+        for t in self.target_orders:
+            depth = t.get('depth', 1)
+            filled = t.get('filled_qty', 0)
+            if depth % 2 == 1:   # odd = close (reduces position)
+                net -= filled
+            else:                # even = re-entry (adds to position)
+                net += filled
+        return max(net, 0)
+
+    @property
     def max_target_depth(self) -> int:
         """Highest depth among target orders (0 if no targets)."""
         if not self.target_orders:

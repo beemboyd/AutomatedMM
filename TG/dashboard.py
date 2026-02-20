@@ -206,6 +206,7 @@ def _start_bot(symbol: str, account_config: dict, account_id: str = '') -> bool:
         '--reanchor-epoch', str(primary.get('reanchor_epoch', 100)),
         '--max-grid-levels', str(primary.get('max_grid_levels', 2000)),
         '--max-sub-depth', str(primary.get('max_sub_depth', 10)),
+        '--max-position-per-side', str(primary.get('max_position_per_side', 0)),
         '--disclosed-pct', str(primary.get('disclosed_pct', 0)),
     ]
 
