@@ -21,6 +21,7 @@ Fill handling architecture (ported from TollGate):
 - Pair hedge/unwind still delegated to bots
 """
 
+import re
 import time
 import signal
 import logging
@@ -721,8 +722,15 @@ class GridEngine:
 
     # ── Order event handlers ─────────────────────────────────────────────
 
+    # Regex patterns for parsing rejection messages
+    _RE_MARGIN = re.compile(
+        r'Margin Shortfall\[([0-9.]+)\].*Available Margin\[([0-9.]+)\]', re.IGNORECASE)
+    _RE_HOLDINGS = re.compile(
+        r'Required Holding:\[([0-9]+)\].*Total Holding:\[([0-9]+)\]', re.IGNORECASE)
+    _RE_DISCLOSED = re.compile(r'disclosed', re.IGNORECASE)
+
     def _handle_rejection(self, order: dict):
-        """Log rejected orders. Do not auto-retry — let operator decide."""
+        """Log rejected orders, parse margin/holdings issues into alerts."""
         order_id = str(order.get('order_id', ''))
         reason = order.get('status_message', 'unknown')
         group = self.state.get_group_by_order(order_id)
@@ -730,6 +738,8 @@ class GridEngine:
         if group:
             logger.error("ORDER REJECTED: order=%s, group=%s, bot=%s, reason=%s",
                          order_id, group.group_id, group.bot, reason)
+            side = 'BUY' if group.bot == 'A' else 'SELL'
+            self._parse_rejection_alert(reason, side)
             # Free the level if entry was rejected
             if order_id == group.entry_order_id:
                 bot = self.buy_bot if group.bot == 'A' else self.sell_bot
@@ -741,6 +751,31 @@ class GridEngine:
         else:
             logger.warning("REJECTED (untracked): order=%s, reason=%s",
                            order_id, reason)
+
+    def _parse_rejection_alert(self, reason: str, side: str):
+        """Parse rejection reason and store as alert in state."""
+        m = self._RE_MARGIN.search(reason)
+        if m:
+            shortfall = float(m.group(1))
+            available = float(m.group(2))
+            msg = f"Margin shortfall ₹{shortfall:,.0f} (available ₹{available:,.0f})"
+            self.state.add_alert('MARGIN_SHORTFALL', msg, side)
+            return
+
+        m = self._RE_HOLDINGS.search(reason)
+        if m:
+            required = int(m.group(1))
+            total = int(m.group(2))
+            msg = f"Holdings insufficient — need {required:,}, have {total:,}"
+            self.state.add_alert('HOLDINGS_INSUFFICIENT', msg, side)
+            return
+
+        if self._RE_DISCLOSED.search(reason):
+            self.state.add_alert('DISCLOSED_QTY', reason.strip(), side)
+            return
+
+        # Generic rejection
+        self.state.add_alert('REJECTED', reason[:120], side)
 
     def _handle_cancellation(self, order: dict):
         """Log cancelled orders."""

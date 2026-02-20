@@ -10,7 +10,7 @@ State is keyed by symbol — one state file per symbol.
 import json
 import os
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from .group import Group, GroupStatus
@@ -53,6 +53,35 @@ class StateManager:
         self.sell_grid_levels: int = 0               # cumulative sell-side reanchors
         self.current_buy_spacing: float = 0.0        # current buy grid spacing
         self.current_sell_spacing: float = 0.0       # current sell grid spacing
+
+        # Alerts (rejections, margin issues, etc.)
+        self.alerts: List[Dict] = []                 # [{type, message, side, count, ts}]
+
+    def add_alert(self, alert_type: str, message: str, side: str = ''):
+        """
+        Add or update an alert. Deduplicates by type+side — increments count
+        if the same type+side already exists, otherwise appends.
+        Keeps max 20 alerts.
+        """
+        for a in self.alerts:
+            if a['type'] == alert_type and a.get('side', '') == side:
+                a['count'] = a.get('count', 1) + 1
+                a['message'] = message  # update with latest message
+                a['ts'] = datetime.now().isoformat()
+                return
+        self.alerts.append({
+            'type': alert_type,
+            'message': message,
+            'side': side,
+            'count': 1,
+            'ts': datetime.now().isoformat(),
+        })
+        if len(self.alerts) > 20:
+            self.alerts = self.alerts[-20:]
+
+    def clear_alerts(self):
+        """Clear all alerts (e.g., on successful restart)."""
+        self.alerts = []
 
     def add_group(self, group: Group):
         """Register a new group and its entry order."""
@@ -115,6 +144,7 @@ class StateManager:
             'open_groups': {gid: g.to_dict() for gid, g in self.open_groups.items()},
             'closed_groups': [g.to_dict() for g in self.closed_groups[-200:]],
             'order_to_group': self.order_to_group,
+            'alerts': self.alerts,
         }
         tmp = self.state_file + '.tmp'
         with open(tmp, 'w') as f:
@@ -159,6 +189,7 @@ class StateManager:
                 for d in state.get('closed_groups', [])
             ]
             self.order_to_group = state.get('order_to_group', {})
+            self.alerts = state.get('alerts', [])
 
             logger.info("State loaded for %s: %d open groups, PnL=%.2f, cycles=%d",
                          self.symbol, len(self.open_groups),

@@ -1,5 +1,38 @@
 # Activity Log
 
+## 2026-02-20 19:30 IST - Claude
+**Soft Reanchor, Circuit Breaker, Margin Alert Dashboard**
+
+### Changes:
+1. **Soft Reanchor** (`TG/engine.py`): Replaced hard reanchor (cancel all orders, flatten pair position, close all groups) with soft reanchor. Filled groups stay alive with pending targets. Pair hedges accumulate/distribute naturally — no forced SPCENET flattening. Only unfilled ENTRY_PENDING entries are cancelled and refreshed at the new anchor price. Removed `_flatten_pair_position()` method entirely.
+
+2. **Circuit Breaker** (`TG/config.py`, `TG/engine.py`, `TG/run.py`, `TG/dashboard.py`): Added `max_position_per_side` config parameter (default 0 = no limit). When net accumulated position on one side exceeds the limit, no new entries are placed on that side. Checked during reanchor, re-entry after cycle close, and re-entry after partial cycle close. Uses `Group.net_open_qty` property to compute net position (entry fills + even-depth re-entries - odd-depth closes).
+
+3. **Group net_open_qty** (`TG/group.py`): New property that computes net open position per group accounting for depth cascading. Entry fills + even-depth (re-entry) fills - odd-depth (close) fills. Used by circuit breaker.
+
+4. **Margin/Holdings Alert Banner** (`TG/engine.py`, `TG/state.py`, `TG/dashboard.py`): Engine now parses order rejection messages (margin shortfall, holdings insufficient, disclosed qty errors) and stores them as alerts in state. Dashboard 7777 renders alert banners per-symbol — red for margin shortfall, amber for holdings issues. Alerts are deduped by type+side with count (e.g., "x10"). Includes timestamp.
+
+5. **TATAGOLD qty reduction** (`TG/state/tg_config.json`): Reduced TATAGOLD qty_per_level from 1500 to 100 on 01MU07 to resolve margin contention with YESBANK on the same account.
+
+### Files Modified:
+- `TG/engine.py` — Soft reanchor, circuit breaker checks, rejection alert parsing
+- `TG/config.py` — Added `max_position_per_side` field
+- `TG/group.py` — Added `net_open_qty` property
+- `TG/state.py` — Added `alerts` list, `add_alert()`, `clear_alerts()` methods
+- `TG/run.py` — Added `--max-position-per-side` CLI arg
+- `TG/dashboard.py` — Alert banner CSS/JS/HTML, pass `max_position_per_side` to bot CLI
+- `TG/state/tg_config.json` — Added `max_position_per_side: 0` to all primaries, TATAGOLD qty 1500→100
+
+### Running Bots:
+| Account | Symbol | Qty/Level | PID | Status |
+|---------|--------|-----------|-----|--------|
+| 01MU06 | TATSILV | 1000 | 34991 | 20 entries (10+10) |
+| 01MU06 | YESBANK | 2000 | 35019 | All rejected (margin/holdings) |
+| 01MU07 | YESBANK | 2000 | 35045 | 16 entries (5+10) |
+| 01MU07 | TATAGOLD | 100 | 35776 | 20 entries (10+10) |
+
+---
+
 ## 2026-02-20 17:45 IST - Claude
 **Grid Bot Bug Fixes: PnL calculation, depth cascading, re-hedging, stale order cleanup**
 

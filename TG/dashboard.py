@@ -349,6 +349,7 @@ def _compute_summary(state: dict) -> dict:
         'today_combined_pnl': today_combined_pnl,
         'today_cycles': today_cycles,
         'today_win_rate': round(today_win_rate, 1),
+        'alerts': state.get('alerts', []),
     }
 
 
@@ -547,6 +548,12 @@ def _build_html() -> str:
     .grid-id-mono { font-family: monospace; font-size: 10px; color: var(--dim); opacity: 0.7; }
     .grid-pnl-pos { color: var(--green); }
     .grid-pnl-neg { color: var(--red); }
+    .alert-banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .alert-margin { background: rgba(255,82,82,0.12); border: 1px solid rgba(255,82,82,0.3); color: #ff5252; }
+    .alert-holdings { background: rgba(255,171,0,0.12); border: 1px solid rgba(255,171,0,0.3); color: #ffab00; }
+    .alert-generic { background: rgba(255,171,0,0.12); border: 1px solid rgba(255,171,0,0.3); color: #ffab00; }
+    .alert-icon { font-size: 16px; }
+    .alert-count { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: bold; }
 </style>
 </head>
 <body class="p-4">
@@ -795,6 +802,9 @@ function buildBotPanelHTML(sym) {
             <div class="text-base font-bold" style="color:var(--red);" id="${sym}-sell-spacing">—</div>
         </div>
     </div>
+
+    <!-- Alert Banner -->
+    <div id="${sym}-alerts" style="display:none;" class="mb-4"></div>
 
     <!-- Grid Levels -->
     <div class="rounded-lg p-4 mb-4" style="background:var(--card);border:1px solid var(--border);">
@@ -1215,6 +1225,32 @@ function renderBotPanel(sym, data) {
     if (sellLvlEl) sellLvlEl.textContent = s.sell_grid_levels || 0;
     const sellSpcEl = document.getElementById(sym + '-sell-spacing');
     if (sellSpcEl) sellSpcEl.textContent = (s.current_sell_spacing || cfg.grid_space || 0.01).toFixed(4);
+
+    // Alerts
+    const alertEl = document.getElementById(sym + '-alerts');
+    if (alertEl) {
+        const alerts = s.alerts || [];
+        if (alerts.length > 0) {
+            alertEl.style.display = 'block';
+            alertEl.innerHTML = alerts.map(a => {
+                let cls = 'alert-generic';
+                let icon = '\u26A0';
+                if (a.type === 'MARGIN_SHORTFALL') { cls = 'alert-margin'; icon = '\u274C'; }
+                else if (a.type === 'HOLDINGS_INSUFFICIENT') { cls = 'alert-holdings'; icon = '\u26A0'; }
+                const countBadge = a.count > 1 ? ' <span class="alert-count">x' + a.count + '</span>' : '';
+                const side = a.side ? ' [' + a.side + ']' : '';
+                const ts = a.ts ? a.ts.substring(11, 19) : '';
+                return '<div class="alert-banner ' + cls + '">' +
+                    '<span class="alert-icon">' + icon + '</span>' +
+                    '<span><strong>' + a.type.replace(/_/g, ' ') + '</strong>' + side + ': ' + a.message + countBadge + '</span>' +
+                    '<span style="margin-left:auto;font-size:11px;opacity:0.6;">' + ts + '</span>' +
+                    '</div>';
+            }).join('');
+        } else {
+            alertEl.style.display = 'none';
+            alertEl.innerHTML = '';
+        }
+    }
 
     // Grid levels
     const gridSpace = cfg.grid_space || 0.01;
