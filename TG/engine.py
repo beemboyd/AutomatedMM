@@ -980,10 +980,11 @@ class GridEngine:
                 if remaining > 0:
                     g.pair_unwound_qty = g.pair_hedged_qty
                     g.pair_unwind_total += price * remaining
+                    # PnL on fully matched qty (all unwound now)
                     if g.bot == 'A':
-                        g.pair_pnl = round(g.pair_hedge_total - g.pair_unwind_total, 2)
+                        g.pair_pnl = round(g.pair_hedged_qty * (g.pair_hedge_vwap - g.pair_unwind_vwap), 2)
                     else:
-                        g.pair_pnl = round(g.pair_unwind_total - g.pair_hedge_total, 2)
+                        g.pair_pnl = round(g.pair_hedged_qty * (g.pair_unwind_vwap - g.pair_hedge_vwap), 2)
                     g.pair_orders.append({
                         'xts_id': order_id, 'custom_id': f"RA_{self.config.symbol}",
                         'side': side, 'qty': remaining, 'price': price,

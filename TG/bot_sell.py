@@ -209,8 +209,9 @@ class SellBot:
         if pair_id:
             group.pair_unwound_qty += pair_qty
             group.pair_unwind_total += pair_price * pair_qty
-            # Pair PnL: bought at hedge, sold back at unwind
-            group.pair_pnl = round(group.pair_unwind_total - group.pair_hedge_total, 2)
+            # Pair PnL: only on matched (unwound) qty — bought at hedge_vwap, sold back at unwind_vwap
+            matched = min(group.pair_hedged_qty, group.pair_unwound_qty)
+            group.pair_pnl = round(matched * (group.pair_unwind_vwap - group.pair_hedge_vwap), 2)
             group.pair_orders.append({
                 'xts_id': pair_id, 'custom_id': pair_oid,
                 'side': 'SELL', 'qty': pair_qty, 'price': pair_price,
