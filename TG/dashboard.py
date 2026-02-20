@@ -1467,6 +1467,7 @@ function updateMonitorFromCache() {
 }
 
 function renderMonitorData(allStates) {
+    botStatuses = {};  // clear stale entries from previous account
     let aggPrimary = 0, aggPair = 0, aggCycles = 0, aggOpen = 0;
             const breakdownRows = [];
             let allClosed = [];
