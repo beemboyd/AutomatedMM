@@ -230,8 +230,13 @@ def _compute_summary(state: dict) -> dict:
     bot_b_pa = sum(1 for g in open_groups.values() if g.get('bot') == 'B' and g.get('status') == 'ENTRY_PARTIAL')
     bot_b_tp = sum(1 for g in open_groups.values() if g.get('bot') == 'B' and g.get('status') == 'TARGET_PENDING')
 
-    wins = sum(1 for g in closed_groups if g.get('realized_pnl', 0) > 0)
-    win_rate = (wins / len(closed_groups) * 100) if closed_groups else 0.0
+    # Filter to today only
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    today_closed = [g for g in closed_groups
+                    if (g.get('closed_at') or g.get('created_at', ''))[:10] == today_str]
+
+    wins = sum(1 for g in today_closed if g.get('realized_pnl', 0) > 0)
+    win_rate = (wins / len(today_closed) * 100) if today_closed else 0.0
 
     # Compute Buy VWAP and Sell VWAP for today only
     # Filter groups by created_at date to today
@@ -272,20 +277,19 @@ def _compute_summary(state: dict) -> dict:
     sell_vwap = round(sell_cost / sell_qty, 4) if sell_qty > 0 else None
     spread = round(sell_vwap - buy_vwap, 4) if (buy_vwap and sell_vwap) else None
 
-    # Compute realized PnL including partial fills from open groups
-    # total_pnl only counts fully completed cycles; we add open group realized_pnl
-    engine_pnl = state.get('total_pnl', 0)
+    # Today-only PnL: closed today + open group partial fills
+    today_closed_pnl = sum(g.get('realized_pnl', 0) or 0 for g in today_closed)
     open_partial_pnl = sum(g.get('realized_pnl', 0) or 0 for g in open_groups.values())
-    closed_partial_pnl = sum(g.get('realized_pnl', 0) or 0
-                             for g in closed_groups if g.get('status') != 'CLOSED')
-    total_realized_pnl = round(engine_pnl + open_partial_pnl + closed_partial_pnl, 2)
+    total_realized_pnl = round(today_closed_pnl + open_partial_pnl, 2)
+    engine_pnl = state.get('total_pnl', 0)
+    today_cycles = sum(1 for g in today_closed if g.get('status') == 'CLOSED')
 
     return {
         'symbol': state.get('symbol', 'SPCENET'),
         'anchor_price': state.get('anchor_price', 0),
         'total_pnl': total_realized_pnl,
         'engine_pnl': round(engine_pnl, 2),
-        'total_cycles': state.get('total_cycles', 0),
+        'total_cycles': today_cycles,
         'current_spacing': state.get('current_spacing', 0),
         'net_inventory': state.get('net_inventory', 0),
         'buy_reanchor_count': state.get('buy_reanchor_count', 0),
@@ -801,9 +805,11 @@ function updateMonitor() {
                 return renderGridLevel(lv, groupByLevel['B:' + lv.index], 'sell');
             }).join('');
 
-            // Closed trades
-            const closed = (state.closed_groups || []).slice().sort((a,b) =>
-                (b.closed_at || '').localeCompare(a.closed_at || '')).slice(0, 30);
+            // Closed trades — today only
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const closed = (state.closed_groups || [])
+                .filter(g => (g.closed_at || g.created_at || '').slice(0, 10) === todayStr)
+                .sort((a,b) => (b.closed_at || '').localeCompare(a.closed_at || '')).slice(0, 30);
             const closedTbody = document.getElementById('closed-tbody');
             const closedEmpty = document.getElementById('closed-empty');
             if (closed.length === 0) {
@@ -832,9 +838,9 @@ function updateMonitor() {
                 }).join('');
             }
 
-            // PnL chart
+            // PnL chart — today only
             const allClosed = (state.closed_groups || [])
-                .filter(g => g.status === 'CLOSED')
+                .filter(g => g.status === 'CLOSED' && (g.closed_at || '').slice(0, 10) === todayStr)
                 .sort((a,b) => (a.closed_at || '').localeCompare(b.closed_at || ''));
             if (allClosed.length > 0) {
                 let cum = 0;

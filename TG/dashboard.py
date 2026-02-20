@@ -291,9 +291,12 @@ def _compute_summary(state: dict) -> dict:
     pair_pnl += open_pair_pnl
     combined_pnl = round(total_pnl + pair_pnl, 2)
 
-    # Today-only metrics: filter closed_groups by closed_at date + open group pair PnL
+    # Today-only metrics: filter closed_groups by closed_at date + open group PnL
     today_closed = [g for g in closed_groups if (g.get('closed_at') or '').startswith(today_str)]
-    today_primary_pnl = round(sum(g.get('realized_pnl', 0.0) for g in today_closed), 2)
+    today_closed_primary = round(sum(g.get('realized_pnl', 0.0) for g in today_closed), 2)
+    # Include realized PnL from open groups (depth targets filled but cycle still open)
+    open_primary_pnl = round(sum(g.get('realized_pnl', 0.0) for g in open_groups.values()), 2)
+    today_primary_pnl = round(today_closed_primary + open_primary_pnl, 2)
     today_pair_pnl = round(sum(g.get('pair_pnl', 0.0) for g in today_closed) + open_pair_pnl, 2)
     today_combined_pnl = round(today_primary_pnl + today_pair_pnl, 2)
     today_cycles = len(today_closed)
