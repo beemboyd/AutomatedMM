@@ -1,5 +1,26 @@
 # Activity Log
 
+## 2026-02-20 10:00 IST - Claude
+**Fix depth cascading bug, dashboard improvements, config updates**
+
+Fixed critical depth cascading bug in TG Grid engine where D1→D2→D3... cascading triggered even on complete entry fills (100 qty filling in one shot), preventing groups from ever closing. Added depth level display to Grid dashboard (7777) and live transaction feed to TollGate dashboard (7788). Updated TollGate max_sub_depth to 100. Changed Grid qty to 500 and disabled IDEA bot.
+
+### Modified Files
+1. **`TG/engine.py`** — Added `should_cascade` guard: only cascade from D1 when `group.status == ENTRY_PARTIAL` or `depth > 1`. Complete entries close cycle on D1 fill.
+2. **`TG/dashboard.py`** — Replaced single target sub-row with loop over `target_orders` showing D101/D201/D301 tags with close (green) / re-entry (yellow) labels. Added max depth indicator to main row status. Added `ENTRY_PARTIAL` status badge.
+3. **`TG/TollGate/config.py`** — Changed `max_sub_depth` default from 10 to 100.
+4. **`TG/TollGate/dashboard.py`** — Fixed `computeGrid()` to accept per-side buy/sell amounts. Replaced closed-groups-only "Recent Transactions" with live depth fills table (entries, closes with PnL, re-entries). Removed Cumulative PnL chart section.
+5. **`TG/TollGate/state/tollgate_config.json`** — Added `max_sub_depth: 100`.
+6. **`TG/state/tg_config.json`** — Updated TATSILV/TATAGOLD `qty_per_level` from 100 to 500. Set IDEA `enabled: false`.
+
+### Impact
+- Grid bots now correctly close cycles on D1 fill for complete entries
+- TollGate cascading extends to 100 depth levels for partial fills
+- Grid bots trade 500 qty/level for better partial fill probability
+- All dashboards restarted to reflect changes
+
+---
+
 ## 2026-02-20 09:00 IST - Claude
 **TollGate: Add per-side amount configuration (buy_amount_per_level / sell_amount_per_level)**
 
