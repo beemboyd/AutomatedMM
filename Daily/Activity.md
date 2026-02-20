@@ -1,5 +1,52 @@
 # Activity Log
 
+## 2026-02-20 17:45 IST - Claude
+**Grid Bot Bug Fixes: PnL calculation, depth cascading, re-hedging, stale order cleanup**
+
+Five fixes applied to the TG Grid engine during live trading session. All fixes committed, pushed, and bots restarted.
+
+### Fix 1: Pair PnL calculation bug (commit 9da36bf9)
+**Problem:** `pair_pnl` was computed as `unwind_total - hedge_total` on the ENTIRE position, not just matched qty. When 500 shares hedged at 5.24 and only 5 shares unwound at 5.18, PnL showed -2594.10 instead of correct -0.30.
+**Fix:** Changed to `matched_qty * (vwap_diff)` where `matched_qty = min(hedged, unwound)`. Applied in `TG/bot_buy.py`, `TG/bot_sell.py`, and `TG/engine.py` (reanchor path).
+
+### Fix 2: Depth cascading not triggering after partial fills (commit 4888b53c)
+**Problem:** `should_cascade` guard was `(depth > 1) or (status == ENTRY_PARTIAL)` which blocked D1→D2 cascading when entry eventually completed (TARGET_PENDING) even though it had multiple partial fill chunks.
+**Fix:** Added `d1_count > 1` condition — groups with multiple D1 targets (evidence of partial fills) now cascade even after entry completes. File: `TG/engine.py`.
+
+### Fix 3: Re-hedging on depth cascading re-entries (commit 452f0f7c)
+**Problem:** Even-depth (D2/D4/D6) re-entry fills had NO hedge action, leaving re-entered positions unhedged.
+**Fix:** Even depths now trigger RE-HEDGE (pair hedge), odd depths trigger UNWIND (pair unwind). Supports both complete and partial fill increments with appropriate ratio calculations. File: `TG/engine.py`.
+
+### Fix 4: Stale order reconciliation (commit 9bd28be2)
+**Problem:** On bot restart, groups restored from state with order IDs from a previous XTS session were not cleaned up if those orders weren't found in the broker's current order list. This blocked new entries on all occupied levels.
+**Fix:** Reconciliation now removes ENTRY_PENDING groups with 0 fills when their order is not found in the broker session. File: `TG/engine.py`.
+
+### Fix 5: TATAGOLD qty_per_level reduced (commit 9bd28be2)
+**Problem:** 01MU07 account had insufficient margin for TATAGOLD BUY orders at 5000 qty/level (~₹74k/level vs ₹24k available). Buy-back targets on sell cycles also failed.
+**Fix:** Reduced `qty_per_level` from 5000 to 1500 (~₹22k/level). Cancelled all old 5000-qty orders via `--cancel-all`, cleared state, restarted fresh. File: `TG/state/tg_config.json`.
+
+### Fix 6: Dashboard bot status leak between accounts
+**Problem:** `botStatuses` JS object wasn't cleared when switching accounts — stale entries from 01MU06 showed as "running" in 01MU07 view.
+**Fix:** Added `botStatuses = {};` at start of `renderMonitorData()`. File: `TG/dashboard.py`.
+
+### Modified Files
+1. **`TG/engine.py`** — PnL fix (reanchor), cascade guard (`d1_count > 1`), re-hedging on even-depth fills, stale order reconciliation
+2. **`TG/bot_buy.py`** — PnL: `matched * (hedge_vwap - unwind_vwap)` instead of gross totals
+3. **`TG/bot_sell.py`** — PnL: `matched * (unwind_vwap - hedge_vwap)` instead of gross totals
+4. **`TG/dashboard.py`** — Clear `botStatuses` on account switch
+5. **`TG/state/tg_config.json`** — TATAGOLD qty 5000→1500
+
+### Running Bots After Fixes
+| Account | Symbol | PID | Status |
+|---------|--------|-----|--------|
+| 01MU06 | TATSILV | 5761 | Running (grid + depth cascade + hedging) |
+| 01MU06 | YESBANK | 5788 | Running (PnL: ₹80, 1 cycle) |
+| 01MU07 | YESBANK | 5816 | Running (active fills) |
+| 01MU07 | TATAGOLD | 30883 | Running (qty=1500, first fill at 14.88) |
+| 01MU07 | AMM | 31580 | Running (warmup 15/30) |
+
+---
+
 ## 2026-02-20 16:00 IST - Claude
 **Shared XTS Session for 01MU07 across TG, TG1, AMM**
 
