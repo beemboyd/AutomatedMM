@@ -196,7 +196,8 @@ class XTSClient:
     def place_order(self, symbol: str, transaction_type: str, qty: int,
                     price: float, exchange: str = "NSE",
                     product: str = "NRML",
-                    order_unique_id: str = "") -> Optional[str]:
+                    order_unique_id: str = "",
+                    disclosed_qty: int = 0) -> Optional[str]:
         """
         Place a LIMIT order.
 
@@ -228,7 +229,7 @@ class XTSClient:
                 orderType=XTSConnect.ORDER_TYPE_LIMIT,
                 orderSide=transaction_type,
                 timeInForce=XTSConnect.VALIDITY_DAY,
-                disclosedQuantity=0,
+                disclosedQuantity=disclosed_qty,
                 orderQuantity=qty,
                 limitPrice=price,
                 stopPrice=0,

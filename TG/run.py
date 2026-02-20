@@ -96,6 +96,8 @@ def parse_args():
                         help='Stop bot after N grid levels on one side (default: 2000)')
     parser.add_argument('--max-sub-depth', type=int, default=10,
                         help='Max depth for sub-target ping-pong cascading (default: 10)')
+    parser.add_argument('--disclosed-pct', type=float, default=0,
+                        help='Disclosed qty as %% of order qty for iceberg orders (10 = 10%%, 0 = disabled)')
 
     # Pair trading
     parser.add_argument('--pair-symbol', default='',
@@ -203,6 +205,7 @@ def main():
         reanchor_epoch=args.reanchor_epoch,
         max_grid_levels=args.max_grid_levels,
         max_sub_depth=args.max_sub_depth,
+        disclosed_pct=args.disclosed_pct,
         pair_symbol=args.pair_symbol,
         hedge_ratio=args.hedge_ratio,
         partial_hedge_ratio=args.partial_hedge_ratio,

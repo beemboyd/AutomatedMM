@@ -91,6 +91,12 @@ class GridEngine:
         self._last_reanchor_time: Optional[datetime] = None
         self._reanchor_cooldown = timedelta(seconds=60)
 
+    def _disclosed_qty(self, qty: int) -> int:
+        """Compute disclosed quantity for iceberg orders."""
+        if self.config.disclosed_pct <= 0:
+            return 0
+        return max(1, round(qty * self.config.disclosed_pct / 100))
+
     def start(self):
         """
         Start the grid engine.
@@ -382,6 +388,7 @@ class GridEngine:
             exchange=self.config.exchange,
             product=self.config.product,
             order_unique_id=target_uid,
+            disclosed_qty=self._disclosed_qty(increment),
         )
 
         if target_order_id:
@@ -526,6 +533,7 @@ class GridEngine:
                 exchange=self.config.exchange,
                 product=self.config.product,
                 order_unique_id=next_uid,
+                disclosed_qty=self._disclosed_qty(target.get('qty', increment)),
             )
 
             if next_order_id:

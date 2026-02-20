@@ -55,6 +55,7 @@ _DEFAULT_CONFIG = {
             "reanchor_epoch": 100,
             "max_grid_levels": 2000,
             "max_sub_depth": 10,
+            "disclosed_pct": 0,
         }
     ],
 }
@@ -190,6 +191,7 @@ def _start_bot(symbol: str, config: dict) -> bool:
         '--reanchor-epoch', str(primary.get('reanchor_epoch', 100)),
         '--max-grid-levels', str(primary.get('max_grid_levels', 2000)),
         '--max-sub-depth', str(primary.get('max_sub_depth', 10)),
+        '--disclosed-pct', str(primary.get('disclosed_pct', 0)),
     ]
 
     if primary.get('auto_anchor'):
@@ -391,6 +393,7 @@ def create_app(mode: str = 'monitor') -> Flask:
                     'reanchor_epoch': p.get('reanchor_epoch', 100),
                     'max_grid_levels': p.get('max_grid_levels', 2000),
                     'max_sub_depth': p.get('max_sub_depth', 10),
+                    'disclosed_pct': p.get('disclosed_pct', 0),
                 },
             }
         return jsonify(result)

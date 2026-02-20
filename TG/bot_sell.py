@@ -111,6 +111,7 @@ class SellBot:
         entry_oid = generate_order_id(
             self.config.symbol, self.config.pair_symbol or "NONE",
             level.subset_index, "EN", "B", group.group_id)
+        disc_qty = max(1, round(level.qty * self.config.disclosed_pct / 100)) if self.config.disclosed_pct > 0 else 0
         order_id = self.client.place_order(
             symbol=self.config.symbol,
             transaction_type="SELL",
@@ -119,6 +120,7 @@ class SellBot:
             exchange=self.config.exchange,
             product=self.config.product,
             order_unique_id=entry_oid,
+            disclosed_qty=disc_qty,
         )
 
         if order_id:

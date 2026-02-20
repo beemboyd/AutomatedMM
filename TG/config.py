@@ -88,6 +88,9 @@ class GridConfig:
     # Holdings override (bypasses XTS holdings API which may return empty)
     holdings_override: int = -1     # -1 = use API, 0+ = override with this qty
 
+    # Disclosed quantity (iceberg orders)
+    disclosed_pct: float = 0.0      # If > 0, disclosed qty = round(qty * pct / 100)
+
     # Sub-target cascading for partial fills
     max_sub_depth: int = 10         # Max depth for sub-target ping-pong (D1, D2, D3, ...)
 
